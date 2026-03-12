@@ -144,28 +144,25 @@ def fetch_daily_kline(
 # 本地 SQLite 数据库管理
 # ============================================================
 
-def _get_conn(db_path: str) -> sqlite3.Connection:
+def _get_conn() -> sqlite3.Connection:
     """
     打开（或创建）指定路径的 SQLite 数据库并返回连接对象。
     同时启用 WAL 模式以提升并发读写性能。
     """
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.row_factory = sqlite3.Row   # 使列可按名称访问
     return conn
 
 
-def init_db(db_path: str) -> None:
+def init_db() -> None:
     """
     初始化本地 SQLite 数据库，创建 stock_basic 和 daily_kline 表（若不存在）。
-
-    参数:
-        db_path  数据库文件路径，如 "./data/stock.db" 或绝对路径
 
     示例:
         init_db("/tmp/stock_data.db")
     """
-    conn = _get_conn(db_path)
+    conn = _get_conn()
     try:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS stock_basic (
@@ -210,14 +207,13 @@ def init_db(db_path: str) -> None:
 # 数据写入接口（HTTP → SQLite）
 # ============================================================
 
-def save_stock_basic(records: List[StockBasic], db_path: str) -> int:
+def save_stock_basic(records: List[StockBasic]) -> int:
     """
     将 StockBasic 对象列表批量写入本地 SQLite stock_basic 表。
     使用 INSERT OR REPLACE 保证重复执行时幂等（按主键 code 覆盖旧数据）。
 
     参数:
         records  StockBasic 对象列表
-        db_path  目标数据库文件路径
 
     返回:
         int  实际写入（插入或替换）的记录数
@@ -229,7 +225,7 @@ def save_stock_basic(records: List[StockBasic], db_path: str) -> int:
     if not records:
         return 0
 
-    conn = _get_conn(db_path)
+    conn = _get_conn()
     try:
         rows = [
             (r.code, r.code_name, r.pinyin, r.ipoDate, r.outDate,
@@ -248,14 +244,13 @@ def save_stock_basic(records: List[StockBasic], db_path: str) -> int:
         conn.close()
 
 
-def save_daily_kline(records: List[DailyKline], db_path: str) -> int:
+def save_daily_kline(records: List[DailyKline]) -> int:
     """
     将 DailyKline 对象列表批量写入本地 SQLite daily_kline 表。
     使用 INSERT OR REPLACE 保证重复执行时幂等（按主键 (date, code) 覆盖旧数据）。
 
     参数:
         records  DailyKline 对象列表
-        db_path  目标数据库文件路径
 
     返回:
         int  实际写入（插入或替换）的记录数
@@ -267,7 +262,7 @@ def save_daily_kline(records: List[DailyKline], db_path: str) -> int:
     if not records:
         return 0
 
-    conn = _get_conn(db_path)
+    conn = _get_conn()
     try:
         rows = [
             (r.date, r.code, r.open, r.high, r.low, r.close,
@@ -293,7 +288,6 @@ def save_daily_kline(records: List[DailyKline], db_path: str) -> int:
 # ============================================================
 
 def sync_stock_basic(
-    db_path: str,
     code: Optional[str] = None,
     status: Optional[str] = None,
     limit: int = 100,
@@ -304,7 +298,6 @@ def sync_stock_basic(
     若数据库或表不存在则自动初始化。
 
     参数:
-        db_path  本地数据库文件路径
         code     可选，按股票代码过滤
         status   可选，按上市状态过滤（"1"=上市，"0"=退市）
         limit    单次请求返回的最大记录数，默认 100
@@ -319,15 +312,14 @@ def sync_stock_basic(
         # 分页同步
         sync_stock_basic("/tmp/stock_data.db", limit=200, offset=400)
     """
-    init_db(db_path)
+    init_db()
     records = fetch_stock_basic(code=code, status=status, limit=limit, offset=offset)
-    syn_count = save_stock_basic(records, db_path)
+    syn_count = save_stock_basic(records)
     print("股票基础信息已经同步")
     return syn_count
 
 
 def sync_daily_kline(
-    db_path: str,
     code: Optional[str] = None,
     date: Optional[str] = None,
     limit: int = 100,
@@ -338,7 +330,6 @@ def sync_daily_kline(
     若数据库或表不存在则自动初始化。
 
     参数:
-        db_path  本地数据库文件路径
         code     可选，按股票代码过滤
         date     可选，按具体日期过滤
         limit    单次请求返回的最大记录数，默认 100
@@ -353,9 +344,9 @@ def sync_daily_kline(
         # 同步某天全市场行情，分页
         sync_daily_kline("/tmp/stock_data.db", date="2024-06-03", limit=200, offset=0)
     """
-    init_db(db_path)
+    init_db()
     records = fetch_daily_kline(code=code, date=date, limit=limit, offset=offset)
-    syn_count = save_daily_kline(records, db_path)
+    syn_count = save_daily_kline(records)
     print("股票日线行情信息已经同步条")
     return syn_count
 
@@ -365,7 +356,6 @@ def sync_daily_kline(
 # ============================================================
 
 def query_stock_basic(
-    db_path: str,
     code: Optional[str] = None,
     status: Optional[str] = None,
     industry: Optional[str] = None,
@@ -378,7 +368,6 @@ def query_stock_basic(
     从本地 SQLite 数据库查询 stock_basic 表，返回 StockBasic 对象列表。
 
     参数:
-        db_path   数据库文件路径
         code      按股票代码精确过滤
         status    按上市状态过滤（"1"=上市，"0"=退市）
         industry  按行业名称精确过滤
@@ -421,7 +410,7 @@ def query_stock_basic(
     if limit is not None:
         sql += f" LIMIT {int(limit)} OFFSET {int(offset)}"
 
-    conn = _get_conn(db_path)
+    conn = _get_conn()
     try:
         cursor = conn.execute(sql, params)
         rows = cursor.fetchall()
@@ -432,8 +421,7 @@ def query_stock_basic(
 
 
 def query_daily_kline(
-    db_path: str,
-    code: Optional[str] = None,
+    codes: List[str] = [],
     date: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
@@ -445,7 +433,6 @@ def query_daily_kline(
     从本地 SQLite 数据库查询 daily_kline 表，返回 DailyKline 对象列表。
 
     参数:
-        db_path     数据库文件路径
         code        按股票代码精确过滤
         date        按具体交易日期精确过滤，格式 "YYYY-MM-DD"
         start_date  按日期范围过滤下限（含），格式 "YYYY-MM-DD"
@@ -459,32 +446,33 @@ def query_daily_kline(
 
     示例:
         # 查询某只股票全部历史行情（按日期升序）
-        klines = query_daily_kline("/tmp/stock_data.db", code="sz.000001")
+        klines = query_daily_kline(code=["sz.000001"])
 
         # 查询某只股票某段时间行情，最新的 30 条
-        klines = query_daily_kline("/tmp/stock_data.db", code="sz.000001",
+        klines = query_daily_kline(code=["sz.000001"],
                                    start_date="2024-01-01", end_date="2024-12-31",
                                    limit=30, order_by="date DESC")
 
         # 查询某天全市场行情
-        klines = query_daily_kline("/tmp/stock_data.db", date="2024-06-03")
+        klines = query_daily_kline(date="2024-06-03")
     """
     conditions = []
     params: list = []
 
-    if code is not None:
-        conditions.append("code = ?")
-        params.append(code)
+    if len(codes) != 0:
+        placeholders = ",".join("?" * len(codes))
+        conditions.append(f"code IN ({placeholders})")
+        params.extend(codes)
     if date is not None:
-        conditions.append("date = ?")
+        conditions.append("DATE(date) = ?")
         params.append(date)
     else:
         if start_date is not None:
-            conditions.append("date >= ?")
-            params.append("'DATE({0})'".format(start_date))
-        elif end_date is not None:
-            conditions.append("date <= ?")
-            params.append("'DATE({0})'".format(end_date))
+            conditions.append("DATE(date) >= DATE('{0}')".format(start_date))
+            
+        if end_date is not None:
+            conditions.append("DATE(date) <= DATE('{0}')".format(end_date))
+      
 
     sql = "SELECT * FROM daily_kline"
     if conditions:
@@ -493,16 +481,17 @@ def query_daily_kline(
     if limit is not None:
         sql += f" LIMIT {int(limit)} OFFSET {int(offset)}"
 
-    conn = _get_conn(db_path)
+    conn = _get_conn()
     try:
         cursor = conn.execute(sql, params)
         rows = cursor.fetchall()
-        # print("[query_daily_kline] sql:",sql, "params:",params, "rows:", len(rows))
+        print("[query_daily_kline] sql:",sql, "params:",params, "rows:", len(rows))
         return [DailyKline.from_dict(dict(row)) for row in rows]
     finally:
         conn.close()
 
 if __name__ == "__main__":
     print("数据库路径:",DB_PATH)
-    sync_stock_basic(DB_PATH,offset=0, limit=10000)
-    sync_daily_kline(DB_PATH, offset=0, limit=10000)
+    # query_daily_kline(codes=['000004.SZ','000006.SZ'], start_date="2016-03-09", end_date="2016-03-15")
+    sync_stock_basic(offset=0, limit=10000)
+    sync_daily_kline(offset=0, limit=10000)

@@ -10,7 +10,7 @@ from datetime import date, timedelta
 from typing import Optional, List
 
 from data_fetcher import query_stock_basic, query_daily_kline
-from define import DB_PATH
+from define import DB_PATH,DailyKline
 
 
 # ─────────────────────────────────────────────
@@ -31,16 +31,16 @@ def get_all_symbols(status: str = None) -> List[str]:
 # 价格类接口
 # ─────────────────────────────────────────────
 
-def get_close_price(symbol: str, start_date: str, end_date: str) -> List[float]:
+def get_kline(symbols: List[str], start_date: str, end_date: str) -> List[List[DailyKline]]:
     """
-    获取指定日期范围内的每日收盘价列表（按日期升序）。
-    :param symbol: 股票代码，如 '600519' 或 'sh.600519'
-    :param start_date: 起始日期，格式 YYYY-MM-DD（含）
-    :param end_date: 结束日期，格式 YYYY-MM-DD（含）
+    获取指定日期范围内的股票行情（按日期升序）。
+    :param symbols: 股票代码列表,可以为空，空表示获取所有股票行情
+    :param start_date: 起始日期，格式 YYYY-MM-DD
+    :param end_date: 结束日期，格式 YYYY-MM-DD
     :return: 收盘价列表，无数据返回空列表
     """
     klines = query_daily_kline(
-        DB_PATH, code=symbol,
+        codes=symbols,
         start_date=start_date, end_date=end_date,
         order_by="date ASC",
     )
