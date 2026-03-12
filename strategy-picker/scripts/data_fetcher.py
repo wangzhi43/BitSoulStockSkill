@@ -12,6 +12,7 @@ HTTP API 基准地址: http://139.224.210.110:80
 """
 
 import json
+import datetime
 import sqlite3
 import urllib.error
 import urllib.parse
@@ -68,76 +69,45 @@ def _fetch_page(table_name: str, filters: dict,
 # 远程 HTTP 数据拉取接口
 # ============================================================
 
-def fetch_stock_basic(
-    code: Optional[str] = None,
-    status: Optional[str] = None,
-    limit: int = 100,
-    offset: int = 0,
-) -> List[StockBasic]:
+def fetch_stock_basic() -> List[StockBasic]:
     """
     从远程 API 拉取 stock_basic（股票基础信息）数据，返回 StockBasic 对象列表。
 
     参数:
-        code    按股票代码精确过滤，如 "sz.000001"；为 None 时拉取全部
-        status  按上市状态过滤，"1" 表示上市，"0" 表示退市；为 None 时不过滤
-        limit   单次请求返回的最大记录数，默认 100
-        offset  分页偏移量，默认 0
+        无
 
     返回:
         List[StockBasic]  股票基础信息对象列表
-
-    示例:
-        records = fetch_stock_basic()                          # 全量
-        record  = fetch_stock_basic(code="sz.000001")          # 单只
-        listed  = fetch_stock_basic(status="1")                # 仅上市股票
-        page2   = fetch_stock_basic(limit=100, offset=100)     # 第二页
     """
-    filters: dict = {}
-    if code is not None:
-        filters["code"] = code
-    if status is not None:
-        filters["status"] = status
-
-    raw_rows = _fetch_page("stock_basic", filters, limit=limit, offset=offset)
-    return [StockBasic.from_dict(row) for row in raw_rows]
+     
+    url = f"{BASE_URL}/api/stock_basic/all"
+    with urllib.request.urlopen(url, timeout=HTTP_TIMEOUT) as resp:
+        raw = resp.read().decode("utf-8")
+        raw_json = json.loads(raw)
+    return [StockBasic.from_dict(row) for row in raw_json.get("data", [])]
 
 
 def fetch_daily_kline(
-    code: Optional[str] = None,
-    date: Optional[str] = None,
-    limit: int = 100,
-    offset: int = 0,
+    start_date: str,
+    end_date: str
 ) -> List[DailyKline]:
     """
-    从远程 API 拉取 daily_kline（日线行情）数据，返回 DailyKline 对象列表。
+    从远程 API 拉取指定日期范围内的daily_kline（日线行情）数据，返回 DailyKline 对象列表。
 
     参数:
-        code    按股票代码精确过滤，如 "sz.000001"；为 None 时不限
-        date    按具体交易日期精确过滤，格式 "YYYY-MM-DD"；为 None 时不限
-        limit   单次请求返回的最大记录数，默认 100
-        offset  分页偏移量，默认 0
+        start_date 必选，起始日期，yyyy-mm-dd格式
+        end_date 必选，结束日期，yyyy-mm-dd格式
 
     返回:
         List[DailyKline]  日线行情对象列表
-
-    示例:
-        # 拉取某只股票全部历史行情
-        klines = fetch_daily_kline(code="sz.000001")
-
-        # 拉取某天全市场行情
-        klines = fetch_daily_kline(date="2024-01-02")
-
-        # 分页拉取
-        klines = fetch_daily_kline(code="sz.000001", limit=50, offset=100)
     """
-    filters: dict = {}
-    if code is not None:
-        filters["code"] = code
-    if date is not None:
-        filters["date"] = date
+     
+    url = f"{BASE_URL}/api/export/daily_kline?{urllib.parse.urlencode({'start_date': start_date, 'end_date': end_date})}"
+    with urllib.request.urlopen(url, timeout=HTTP_TIMEOUT) as resp:
+        raw = resp.read().decode("utf-8")
+        raw_json = json.loads(raw)
 
-    raw_rows = _fetch_page("daily_kline", filters, limit=limit, offset=offset)
-    return [DailyKline.from_dict(row) for row in raw_rows]
+    return [DailyKline.from_dict(row) for row in raw_json.get("data", [])]
 
 
 # ============================================================
@@ -147,35 +117,55 @@ def fetch_daily_kline(
 def _get_conn() -> sqlite3.Connection:
     """
     打开（或创建）指定路径的 SQLite 数据库并返回连接对象。
-    同时启用 WAL 模式以提升并发读写性能。
     """
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA journal_mode=WAL")
     conn.row_factory = sqlite3.Row   # 使列可按名称访问
     return conn
+
+
+def _db_schema_is_outdated() -> bool:
+    """检查 stock_basic 表是否使用旧字段（code 而非 ts_code）。"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.execute("PRAGMA table_info(stock_basic)")
+        cols = {row[1] for row in cursor.fetchall()}
+        conn.close()
+        return bool(cols) and "ts_code" not in cols
+    except Exception:
+        return False
 
 
 def init_db() -> None:
     """
     初始化本地 SQLite 数据库，创建 stock_basic 和 daily_kline 表（若不存在）。
-
-    示例:
-        init_db("/tmp/stock_data.db")
+    若检测到旧版本表结构（字段不匹配），自动删除旧库重建。
     """
+    import os
+    # 若旧库字段已过期，删除后重建
+    if os.path.exists(DB_PATH) and _db_schema_is_outdated():
+        os.remove(DB_PATH)
+        for ext in ("-wal", "-shm"):
+            p = DB_PATH + ext
+            if os.path.exists(p):
+                os.remove(p)
     conn = _get_conn()
     try:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS stock_basic (
-                code        TEXT PRIMARY KEY,
-                code_name   TEXT,
-                pinyin      TEXT,
-                ipoDate     TEXT,
-                outDate     TEXT,
-                type        TEXT,
-                status      TEXT,
-                industry    TEXT,
+                ts_code     TEXT PRIMARY KEY,
+                symbol      TEXT,
+                name        TEXT,
                 area        TEXT,
-                market      TEXT
+                industry    TEXT,
+                fullname    TEXT,
+                enname      TEXT,
+                cnspell     TEXT,
+                market      TEXT,
+                exchange    TEXT,
+                curr_type   TEXT,
+                list_date   TEXT,
+                delist_date TEXT,
+                is_hs       TEXT
             );
 
             CREATE TABLE IF NOT EXISTS daily_kline (
@@ -228,14 +218,16 @@ def save_stock_basic(records: List[StockBasic]) -> int:
     conn = _get_conn()
     try:
         rows = [
-            (r.code, r.code_name, r.pinyin, r.ipoDate, r.outDate,
-             r.type, r.status, r.industry, r.area, r.market)
+            (r.ts_code, r.symbol, r.name, r.area, r.industry,
+             r.fullname, r.enname, r.cnspell, r.market, r.exchange,
+             r.curr_type, r.list_date, r.delist_date, r.is_hs)
             for r in records
         ]
         conn.executemany(
             """INSERT OR REPLACE INTO stock_basic
-               (code, code_name, pinyin, ipoDate, outDate, type, status, industry, area, market)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               (ts_code, symbol, name, area, industry, fullname, enname,
+                cnspell, market, exchange, curr_type, list_date, delist_date, is_hs)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             rows,
         )
         conn.commit()
@@ -287,67 +279,79 @@ def save_daily_kline(records: List[DailyKline]) -> int:
 # 一键同步接口（fetch + save 组合）
 # ============================================================
 
-def sync_stock_basic(
-    code: Optional[str] = None,
-    status: Optional[str] = None,
-    limit: int = 100,
-    offset: int = 0,
-) -> int:
+def sync_all_stock_basic() -> int:
     """
     从远程 API 拉取 stock_basic 数据并同步到本地 SQLite。
     若数据库或表不存在则自动初始化。
 
     参数:
-        code     可选，按股票代码过滤
-        status   可选，按上市状态过滤（"1"=上市，"0"=退市）
-        limit    单次请求返回的最大记录数，默认 100
-        offset   分页偏移量，默认 0
+        无
 
     返回:
         int  写入记录数
-
-    示例:
-        # 全量同步所有上市股票基础信息
-        sync_stock_basic("/tmp/stock_data.db", status="1")
-        # 分页同步
-        sync_stock_basic("/tmp/stock_data.db", limit=200, offset=400)
     """
     init_db()
-    records = fetch_stock_basic(code=code, status=status, limit=limit, offset=offset)
+    conn = _get_conn()
+    try:
+        row = conn.execute("SELECT COUNT(*) FROM stock_basic").fetchone()
+        count = row[0] if row else 0
+    finally:
+        conn.close()
+    if count > 0:
+        print(f"同步股票基础信息:已有 {count} 条数据，跳过同步")
+        return 0
+    records = fetch_stock_basic()
     syn_count = save_stock_basic(records)
-    print("股票基础信息已经同步")
+    print(f"同步股票基础信息:已同步{syn_count}条数据")
     return syn_count
 
-
-def sync_daily_kline(
-    code: Optional[str] = None,
-    date: Optional[str] = None,
-    limit: int = 100,
-    offset: int = 0,
-) -> int:
+def sync_recent_daily_kline(days: int = 30) -> int:
     """
-    从远程 API 拉取 daily_kline 数据并同步到本地 SQLite。
-    若数据库或表不存在则自动初始化。
+    同步最近 N 天的日线行情数据到本地数据库。
+
+    若数据库中已有数据且最新日期在 10 天以内，则从该日期起增量拉取；
+    否则从今天往前推 days 天全量拉取。
 
     参数:
-        code     可选，按股票代码过滤
-        date     可选，按具体日期过滤
-        limit    单次请求返回的最大记录数，默认 100
-        offset   分页偏移量，默认 0
+        days  往前追溯的天数，默认 30
 
     返回:
         int  写入记录数
 
     示例:
-        # 同步某只股票行情
-        sync_daily_kline("/tmp/stock_data.db", code="sz.000001")
-        # 同步某天全市场行情，分页
-        sync_daily_kline("/tmp/stock_data.db", date="2024-06-03", limit=200, offset=0)
+        # 同步最近30天数据，若本地数据较新则自动增量
+        sync_recent_daily_kline(30)
     """
+    
     init_db()
-    records = fetch_daily_kline(code=code, date=date, limit=limit, offset=offset)
+
+    today = datetime.date.today()
+    today_str = today.strftime("%Y-%m-%d")
+
+    # 查询本地最新日期
+    fetch_from = None
+    try:
+        conn = _get_conn()
+        cursor = conn.execute("SELECT MAX(date) FROM daily_kline")
+        row = cursor.fetchone()
+        conn.close()
+        latest_str = row[0] if row and row[0] else None
+        if latest_str:
+            latest_date = datetime.date.fromisoformat(latest_str)
+            gap_days = (today - latest_date).days
+            if gap_days <= 10:
+                fetch_from = latest_str
+    except Exception:
+        pass
+
+    if fetch_from is None:
+        start_str = (today - datetime.timedelta(days=days)).strftime("%Y-%m-%d")
+    else:
+        start_str = fetch_from
+
+    records = fetch_daily_kline(start_date=start_str, end_date=today_str)
     syn_count = save_daily_kline(records)
-    print("股票日线行情信息已经同步条")
+    print(f"同步股票日线行情: 已同步 {syn_count} 条（{start_str} ~ {today_str}）")
     return syn_count
 
 
@@ -356,8 +360,7 @@ def sync_daily_kline(
 # ============================================================
 
 def query_stock_basic(
-    code: Optional[str] = None,
-    status: Optional[str] = None,
+    ts_code: Optional[str] = None,
     industry: Optional[str] = None,
     area: Optional[str] = None,
     market: Optional[str] = None,
@@ -368,8 +371,7 @@ def query_stock_basic(
     从本地 SQLite 数据库查询 stock_basic 表，返回 StockBasic 对象列表。
 
     参数:
-        code      按股票代码精确过滤
-        status    按上市状态过滤（"1"=上市，"0"=退市）
+        ts_code   按股票代码精确过滤
         industry  按行业名称精确过滤
         area      按地区精确过滤
         market    按市场精确过滤
@@ -380,20 +382,17 @@ def query_stock_basic(
         List[StockBasic]  符合条件的股票基础信息对象列表
 
     示例:
-        all_stocks   = query_stock_basic("/tmp/stock_data.db")
-        bank_stocks  = query_stock_basic("/tmp/stock_data.db", industry="银行")
-        single_stock = query_stock_basic("/tmp/stock_data.db", code="sz.000001")
+        all_stocks   = query_stock_basic()
+        bank_stocks  = query_stock_basic(industry="银行")
+        single_stock = query_stock_basic(ts_code="000001.SZ")
     """
-    
+
     conditions = []
     params: list = []
 
-    if code is not None:
-        conditions.append("code = ?")
-        params.append(code)
-    if status is not None:
-        conditions.append("status = ?")
-        params.append(status)
+    if ts_code is not None:
+        conditions.append("ts_code = ?")
+        params.append(ts_code)
     if industry is not None:
         conditions.append("industry = ?")
         params.append(industry)
@@ -492,6 +491,5 @@ def query_daily_kline(
 
 if __name__ == "__main__":
     print("数据库路径:",DB_PATH)
-    # query_daily_kline(codes=['000004.SZ','000006.SZ'], start_date="2016-03-09", end_date="2016-03-15")
-    sync_stock_basic(offset=0, limit=10000)
-    sync_daily_kline(offset=0, limit=10000)
+    sync_all_stock_basic()
+    sync_recent_daily_kline(10)

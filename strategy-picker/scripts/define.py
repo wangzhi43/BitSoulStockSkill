@@ -17,53 +17,67 @@ class StockBasic:
     股票基础信息，对应远程 stock_basic 表及本地同名表。
 
     字段说明:
-        code        股票代码，如 sz.000001
-        code_name   股票名称，如 平安银行
-        pinyin      股票名称拼音首字母
-        ipoDate     上市日期
-        outDate     退市日期（未退市则为空）
-        type        股票类型
-        status      上市状态：L=上市，0=退市
-        industry    所属行业
+        ts_code     股票代码，如 000001.SZ
+        symbol      股票符号，如 000001
+        name        股票名称，如 平安银行
         area        所在地区
-        market      所在市场
+        industry    所属行业
+        fullname    股票全称
+        enname      英文名称
+        cnspell     拼音
+        market      市场类型（主板/创业板/科创板等）
+        exchange    交易所代码
+        curr_type   交易货币
+        list_date   上市日期
+        delist_date 退市日期（未退市则为空）
+        is_hs       是否沪深港通标的（N=否, H=沪股通, S=深股通）
     """
 
-    __slots__ = ("code", "code_name", "pinyin", "ipoDate", "outDate",
-                 "type", "status", "industry", "area", "market")
+    __slots__ = ("ts_code", "symbol", "name", "area", "industry",
+                 "fullname", "enname", "cnspell", "market", "exchange",
+                 "curr_type", "list_date", "delist_date", "is_hs")
 
-    def __init__(self, code: str, code_name: str, pinyin: str,
-                 ipoDate: str, outDate: str, type: str, status: str,
-                 industry: str, area: str, market: str):
-        self.code = code
-        self.code_name = code_name
-        self.pinyin = pinyin
-        self.ipoDate = ipoDate
-        self.outDate = outDate
-        self.type = type
-        self.status = status
-        self.industry = industry
+    def __init__(self, ts_code: str, symbol: str, name: str,
+                 area: str, industry: str, fullname: str, enname: str,
+                 cnspell: str, market: str, exchange: str, curr_type: str,
+                 list_date: str, delist_date: str, is_hs: str):
+        self.ts_code = ts_code
+        self.symbol = symbol
+        self.name = name
         self.area = area
+        self.industry = industry
+        self.fullname = fullname
+        self.enname = enname
+        self.cnspell = cnspell
         self.market = market
+        self.exchange = exchange
+        self.curr_type = curr_type
+        self.list_date = list_date
+        self.delist_date = delist_date
+        self.is_hs = is_hs
 
     @classmethod
     def from_dict(cls, d: dict) -> "StockBasic":
         """从字典（API 响应或数据库行）构造 StockBasic 对象。"""
         return cls(
-            code=d.get("code") or "",
-            code_name=d.get("code_name") or "",
-            pinyin=d.get("pinyin") or "",
-            ipoDate=d.get("ipoDate") or "",
-            outDate=d.get("outDate") or "",
-            type=d.get("type") or "",
-            status=d.get("status") or "",
-            industry=d.get("industry") or "",
+            ts_code=d.get("ts_code") or "",
+            symbol=d.get("symbol") or "",
+            name=d.get("name") or "",
             area=d.get("area") or "",
+            industry=d.get("industry") or "",
+            fullname=d.get("fullname") or "",
+            enname=d.get("enname") or "",
+            cnspell=d.get("cnspell") or "",
             market=d.get("market") or "",
+            exchange=d.get("exchange") or "",
+            curr_type=d.get("curr_type") or "",
+            list_date=d.get("list_date") or "",
+            delist_date=d.get("delist_date") or "",
+            is_hs=d.get("is_hs") or "",
         )
 
     def __repr__(self) -> str:
-        return f"StockBasic(code={self.code!r}, code_name={self.code_name!r}, status={self.status!r})"
+        return f"StockBasic(ts_code={self.ts_code!r}, name={self.name!r}, market={self.market!r})"
 
 
 class DailyKline:

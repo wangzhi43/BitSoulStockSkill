@@ -113,22 +113,21 @@ class StockApi:
     # 股票基础信息类接口
     # ============================================================
 
-    def get_all_symbols(self, status: str = None) -> List[str]:
+    def get_all_symbols(self) -> List[str]:
         """
         获取所有股票代码列表。
-        :param status: 上市状态，None=全部(默认)，L=上市，0=退市
-        :return: 股票代码列表，格式如 ['sh.600519', 'sz.000001', ...]
+        :return: 股票代码列表，格式如 ['000001.SZ', '600519.SH', ...]
         """
-        stocks = query_stock_basic(status=status)
-        return [s.code for s in stocks]
+        stocks = query_stock_basic()
+        return [s.ts_code for s in stocks]
     
-    def get_symbol_basic_infomation(self, code: str) -> Optional[StockBasic]:
+    def get_symbol_basic_infomation(self, ts_code: str) -> Optional[StockBasic]:
         """
         根据股票代码获取股票基础信息
-        :param code: 股票代码
+        :param ts_code: 股票代码，如 000001.SZ
         :return: 股票基础信息数据结构，没查询到则返回None
         """
-        stocks = query_stock_basic(code=code)
+        stocks = query_stock_basic(ts_code=ts_code)
         if len(stocks) > 0:
             return stocks[0]
         else:
@@ -1150,7 +1149,7 @@ class StockApi:
             return None
         
         klines.sort(key=lambda x: x.date, reverse=True)
-        pct_sum = sum(k.pct_chg for k in klines[:days])
+        pct_sum = sum(k.pctChg for k in klines[:days])
         return pct_sum / days
 
     def get_top_performers(self, codes: List[str], date: str, days: int = 3, top_n: int = 3) -> List[tuple]:
