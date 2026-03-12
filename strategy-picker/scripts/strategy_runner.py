@@ -20,24 +20,9 @@ import traceback
 # 将 scripts 目录加入路径，使策略代码能 import stock_api
 sys.path.insert(0, os.path.dirname(__file__))
 
-import stock_api as api
+from stock_api import StockApi
 
 BUILTIN_DIR = os.path.join(os.path.dirname(__file__), "builtin_strategies")
-
-
-def load_strategy_from_code(code: str):
-    """从代码字符串中加载策略函数。"""
-    namespace = {"api": api}
-    try:
-        exec(compile(code, "<strategy>", "exec"), namespace)
-    except SyntaxError as e:
-        print(f"[错误] 策略代码语法错误: {e}")
-        sys.exit(1)
-    if "strategy" not in namespace:
-        print("[错误] 策略代码中未找到函数 'strategy(symbol, api)'")
-        sys.exit(1)
-    return namespace["strategy"]
-
 
 def load_strategy_from_file(filepath: str):
     """从 .py 文件中加载策略函数。"""
@@ -46,7 +31,6 @@ def load_strategy_from_file(filepath: str):
         sys.exit(1)
     spec = importlib.util.spec_from_file_location("user_strategy", filepath)
     module = importlib.util.module_from_spec(spec)
-    module.api = api
     spec.loader.exec_module(module)
     if not hasattr(module, "strategy"):
         print("[错误] 策略文件中未找到函数 'strategy(api)'")
@@ -85,9 +69,12 @@ def main():
         print("Error:skill参数出错")
         return
     # 执行策略
+    api = StockApi()
     strategy_fn(api)
     print("skill执行完成")
 
 
 if __name__ == "__main__":
     main()
+    # strategy_fn = load_strategy_from_file("/tmp/bitsoul_skill_tmp_strategy.py")
+    

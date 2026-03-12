@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(python3 scripts/strategy_runner.py --strategy-file /tmp/strategy_close_gt5.py)",
-      "Bash(python3 scripts/strategy_runner.py --strategy-file /tmp/strategy_close_gt5_10days.py)"
+      "Bash(python3 scripts/strategy_runner.py --strategy-file /tmp/strategy_close_gt5_10days.py)",
+      "Bash(python3 scripts/strategy_runner.py --strategy-file /tmp/bitsoul_skill_tmp_strategy.py)"
     ]
   }
 }

@@ -485,7 +485,7 @@ def query_daily_kline(
     try:
         cursor = conn.execute(sql, params)
         rows = cursor.fetchall()
-        print("[query_daily_kline] sql:",sql, "params:",params, "rows:", len(rows))
+        # print("[query_daily_kline] sql:",sql, "params:",params, "rows:", len(rows))
         return [DailyKline.from_dict(dict(row)) for row in rows]
     finally:
         conn.close()
