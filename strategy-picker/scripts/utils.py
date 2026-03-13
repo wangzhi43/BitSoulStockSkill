@@ -1,6 +1,9 @@
 import tempfile
+import zipfile
 import os
 import shutil
+import urllib.request
+import urllib.error
 
 def get_skill_work_dir():
     """获取/创建skill专属的自定义临时目录"""
@@ -32,5 +35,51 @@ def scan_files_in_dir(dir:str):
                 file_list.append(entry.path)  # entry.path 直接返回完整路径
     return file_list
 
-if __name__ == "__main__":
-    print(get_skill_work_dir())
+def unzip_file(zip_file_path, target_dir):
+    """
+    将zip文件解压到指定目录
+    
+    Args:
+        zip_file_path (str): zip压缩文件的路径
+        target_dir (str): 解压目标目录
+    
+    Returns:
+        bool: 解压成功返回True，失败返回False
+    """
+    # 确保目标目录存在，如果不存在则创建
+    os.makedirs(target_dir, exist_ok=True)
+    
+    try:
+        # 以只读模式打开zip文件
+        with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+            # 解压所有文件到指定目录
+            zip_ref.extractall(target_dir)
+            return True
+    except zipfile.BadZipFile:
+        return False
+    except FileNotFoundError:
+        return False
+    except PermissionError:
+        return False
+    except Exception as e:
+        return False
+    
+def download_file(url: str, dest_path: str) -> bool:
+    """
+    从指定URL下载文件到目标路径
+
+    Args:
+        url (str): 文件下载链接
+        dest_path (str): 保存文件的完整路径（含文件名）
+
+    Returns:
+        bool: 下载成功返回True，失败返回False
+    """
+    os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+    try:
+        urllib.request.urlretrieve(url, dest_path)
+        return True
+    except urllib.error.URLError as e:
+        return False
+    except Exception as e:
+        return False

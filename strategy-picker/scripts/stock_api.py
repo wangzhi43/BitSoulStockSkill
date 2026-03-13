@@ -11,8 +11,8 @@ stock_api.py — 股票数据与回测API接口
     
     api = StockApi()
     
-    # 获取K线数据
-    klines = api.get_kline(['600519.SH'], '2026-01-01', '2026-03-01')
+    # 获取日线行情表
+    klines = api.get_daily_kline(['600519.SH'], '2026-01-01', '2026-03-01')
     
     # 获取技术指标
     sma = api.get_sma('600519.SH', '2026-03-01', 20)
@@ -27,22 +27,15 @@ from typing import Optional, List, Dict
 
 sys.path.insert(0, __file__.rsplit('/', 1)[0])
 
-from data_fetcher import query_stock_basic, query_daily_kline
-from define import DailyKline, StockBasic
-
-from data_loader import (
-    get_kline as _get_kline,
-    get_close_prices,
-    get_dates,
-    get_open_prices,
-    get_high_prices,
-    get_low_prices,
-    get_volumes,
-    get_pct_chg,
-    get_stock_info,
-    get_all_stocks,
-    get_stock_codes,
+from data_fetcher import (
+    query_stock_basic,
+    query_daily_kline,
+    query_hour_kline,
+    query_weekly_kline,
+    query_monthly_kline,
+    query_daily_basic
 )
+from define import DailyKline, HourKline, WeeklyKline, MonthlyKline, StockBasic,DailyBasic
 
 from indicators import (
     get_sma,
@@ -138,9 +131,51 @@ class StockApi:
     # 价格行情类接口
     # ─────────────────────────────────────────────
 
-    def get_kline(self, symbols: List[str], start_date: str, end_date: str) -> List[DailyKline]:
+    def get_daily_basic(
+        self,
+        ts_codes: List[str] = [],
+        trade_date: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        order_by: str = "trade_date ASC",
+    ) -> List[DailyBasic]:
         """
-        获取指定日期范围内的股票行情（按日期升序）。
+        查询每日基本面指标列表
+
+        参数:
+            ts_codes    按股票代码列表过滤
+            trade_date  按具体交易日期精确过滤，格式 "YYYY-MM-DD"
+            start_date  按日期范围过滤下限（含），格式 "YYYY-MM-DD"
+            end_date    按日期范围过滤上限（含），格式 "YYYY-MM-DD"
+            limit       返回最大记录数；为 None 表示不限
+            offset      分页偏移量，默认 0
+            order_by    排序表达式，默认 "trade_date ASC"
+
+        返回:
+            List[DailyBasic]  符合条件的每日基本面指标对象列表
+
+        示例:
+            # 查询某只股票全部历史基本面数据
+            basics = query_daily_basic(ts_codes=["000001.SZ"])
+
+            # 查询某天全市场基本面数据
+            basics = query_daily_basic(trade_date="2024-06-03")
+        """
+        return query_daily_basic(
+            ts_codes=ts_codes,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+            offset=offset,
+            order_by=order_by,
+        )
+
+    def get_daily_kline(self, symbols: List[str], start_date: str, end_date: str) -> List[DailyKline]:
+        """
+        获取指定日期范围内的股票日线行情（按日期升序）。
         :param symbols: 股票代码列表,可以为空，空表示获取所有股票行情
         :param start_date: 起始日期，格式 YYYY-MM-DD
         :param end_date: 结束日期，格式 YYYY-MM-DD
@@ -152,10 +187,52 @@ class StockApi:
             order_by="date ASC",
         )
         return klines
-
-    def get_close_prices(self, code: str, start_date: str, end_date: str) -> List[float]:
+  
+    def get_hour_kline(self, symbols: List[str], start_date: str, end_date: str) -> List[HourKline]:
         """
-        获取指定股票的收盘价列表（按日期升序）。
+        获取指定日期范围内的股票小时线行情（按日期和时间升序）。
+        :param symbols: 股票代码列表，可以为空，空表示获取所有股票行情
+        :param start_date: 起始日期，格式 YYYY-MM-DD
+        :param end_date: 结束日期，格式 YYYY-MM-DD
+        :return: HourKline 列表，无数据返回空列表
+        """
+        return query_hour_kline(
+            codes=symbols,
+            start_date=start_date, end_date=end_date,
+            order_by="date ASC, time ASC",
+        )
+
+    def get_weekly_kline(self, symbols: List[str], start_date: str, end_date: str) -> List[WeeklyKline]:
+        """
+        获取指定日期范围内的股票周线行情（按日期升序）。
+        :param symbols: 股票代码列表，可以为空，空表示获取所有股票行情
+        :param start_date: 起始日期，格式 YYYY-MM-DD
+        :param end_date: 结束日期，格式 YYYY-MM-DD
+        :return: WeeklyKline 列表，无数据返回空列表
+        """
+        return query_weekly_kline(
+            codes=symbols,
+            start_date=start_date, end_date=end_date,
+            order_by="date ASC",
+        )
+
+    def get_monthly_kline(self, symbols: List[str], start_date: str, end_date: str) -> List[MonthlyKline]:
+        """
+        获取指定日期范围内的股票月线行情（按日期升序）。
+        :param symbols: 股票代码列表，可以为空，空表示获取所有股票行情
+        :param start_date: 起始日期，格式 YYYY-MM-DD
+        :param end_date: 结束日期，格式 YYYY-MM-DD
+        :return: MonthlyKline 列表，无数据返回空列表
+        """
+        return query_monthly_kline(
+            codes=symbols,
+            start_date=start_date, end_date=end_date,
+            order_by="date ASC",
+        )
+
+    def get_daily_close_prices(self, code: str, start_date: str, end_date: str) -> List[float]:
+        """
+        获取指定股票的日线收盘价列表（按日期升序）。
         
         Args:
             code: 股票代码
@@ -166,13 +243,28 @@ class StockApi:
             收盘价列表
         
         Example:
-            prices = api.get_close_prices('600519.SH', '2026-01-01', '2026-03-01')
+            prices = api.get_daily_close_prices('600519.SH', '2026-01-01', '2026-03-01')
         """
-        return get_close_prices(code, start_date, end_date)
+        klines = self.get_daily_kline(code, start_date, end_date)
+        return [k.close for k in klines]
 
-    def get_dates(self, code: str, start_date: str, end_date: str) -> List[str]:
+    def get_daily_open_prices(self, code: str, start_date: str, end_date: str) -> List[float]:
         """
-        获取指定股票的日期列表（按日期升序）。
+        获取指定股票的日线开盘价列表。
+        Args:
+            code: 股票代码
+            start_date: 起始日期
+            end_date: 结束日期
+        
+        Returns:
+            日线开盘价列表
+        """
+        klines = self.get_daily_kline(code, start_date, end_date)
+        return [k.open for k in klines]
+
+    def get_daily_high_prices(self, code: str, start_date: str, end_date: str) -> List[float]:
+        """
+        获取指定股票的日线最高价列表。
         
         Args:
             code: 股票代码
@@ -180,44 +272,14 @@ class StockApi:
             end_date: 结束日期
         
         Returns:
-            日期列表，格式 YYYY-MM-DD
-        
-        Example:
-            dates = api.get_dates('600519.SH', '2026-01-01', '2026-03-01')
+            日线最高价列表
         """
-        return get_dates(code, start_date, end_date)
+        klines = self.get_daily_kline(code, start_date, end_date)
+        return [k.high for k in klines]
 
-    def get_open_prices(self, code: str, start_date: str, end_date: str) -> List[float]:
+    def get_daily_low_prices(self, code: str, start_date: str, end_date: str) -> List[float]:
         """
-        获取指定股票的开盘价列表。
-        
-        Args:
-            code: 股票代码
-            start_date: 起始日期
-            end_date: 结束日期
-        
-        Returns:
-            开盘价列表
-        """
-        return get_open_prices(code, start_date, end_date)
-
-    def get_high_prices(self, code: str, start_date: str, end_date: str) -> List[float]:
-        """
-        获取指定股票的最高价列表。
-        
-        Args:
-            code: 股票代码
-            start_date: 起始日期
-            end_date: 结束日期
-        
-        Returns:
-            最高价列表
-        """
-        return get_high_prices(code, start_date, end_date)
-
-    def get_low_prices(self, code: str, start_date: str, end_date: str) -> List[float]:
-        """
-        获取指定股票的最低价列表。
+        获取指定股票的日线最低价列表。
         
         Args:
             code: 股票代码
@@ -227,11 +289,12 @@ class StockApi:
         Returns:
             最低价列表
         """
-        return get_low_prices(code, start_date, end_date)
+        klines = self.get_daily_kline(code, start_date, end_date)
+        return [k.low for k in klines]
 
-    def get_volumes(self, code: str, start_date: str, end_date: str) -> List[float]:
+    def get_daily_volumes(self, code: str, start_date: str, end_date: str) -> List[float]:
         """
-        获取指定股票的成交量列表。
+        获取指定股票的日线成交量列表。
         
         Args:
             code: 股票代码
@@ -239,13 +302,14 @@ class StockApi:
             end_date: 结束日期
         
         Returns:
-            成交量列表
+            日线成交量列表
         """
-        return get_volumes(code, start_date, end_date)
+        klines = self.get_daily_kline(code, start_date, end_date)
+        return [k.volume for k in klines]
 
-    def get_pct_chg(self, code: str, start_date: str, end_date: str) -> List[float]:
+    def get_daily_pct_chg(self, code: str, start_date: str, end_date: str) -> List[float]:
         """
-        获取指定股票的涨跌幅列表。
+        获取指定股票的日线涨跌幅列表。
         
         Args:
             code: 股票代码
@@ -253,9 +317,10 @@ class StockApi:
             end_date: 结束日期
         
         Returns:
-            涨跌幅列表(%)
+            日线涨跌幅列表(%)
         """
-        return get_pct_chg(code, start_date, end_date)
+        klines = self.get_daily_kline(code, start_date, end_date)
+        return [k.pctChg for k in klines]
 
     # ============================================================
     # 技术指标类接口（带缓存）
