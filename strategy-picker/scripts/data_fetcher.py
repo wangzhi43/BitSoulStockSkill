@@ -17,8 +17,40 @@ import sqlite3
 import urllib.error
 import urllib.parse
 import urllib.request
+import pandas as pd
+import os
+from sqlalchemy import create_engine, text
 from typing import List, Optional
 from define import BASE_URL, HTTP_TIMEOUT, DB_PATH, StockBasic, DailyKline
+import utils
+g_table_name_to_pk = {
+    "stock_basic" : "ts_code",
+    "hour_kline" : "code",
+    "daily_kline" : "code",
+    "weekly_kline" : "code",
+    "monthly_kline" : "code",
+}
+
+class TablePatch:
+    """
+    各个表目前应用的是哪个补丁的数据
+    字段说明:
+        patch 当前表数据是用的哪个patch，patch格式patch0、patch1等
+    """
+    __slots__ = ("patch")
+
+    def __init__(self, patch: str):
+        self.patch = patch
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "TablePatch":
+        """从字典（API 响应或数据库行）构造 TablePatch 对象。"""
+        return cls(
+            patch=d.get("patch") or "",
+        )
+
+    def __repr__(self) -> str:
+        return f"TablePatch(patch={self.patch!r})"
 
 # ============================================================
 # 内部 HTTP 工具
@@ -152,7 +184,7 @@ def init_db() -> None:
     try:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS stock_basic (
-                ts_code     TEXT PRIMARY KEY,
+                ts_code     TEXT NOT NULL,
                 symbol      TEXT,
                 name        TEXT,
                 area        TEXT,
@@ -165,7 +197,8 @@ def init_db() -> None:
                 curr_type   TEXT,
                 list_date   TEXT,
                 delist_date TEXT,
-                is_hs       TEXT
+                is_hs       TEXT,
+                PRIMARY KEY (ts_code)
             );
 
             CREATE TABLE IF NOT EXISTS daily_kline (
@@ -182,11 +215,13 @@ def init_db() -> None:
                 pctChg      REAL,
                 pre_close   REAL,
                 change      REAL,
-                PRIMARY KEY (date, code)
+                PRIMARY KEY (code)
             );
-
-            CREATE INDEX IF NOT EXISTS idx_daily_kline_code ON daily_kline(code);
-            CREATE INDEX IF NOT EXISTS idx_daily_kline_date ON daily_kline(date);
+                           
+            CREATE TABLE IF NOT EXISTS table_patch (
+                patch        TEXT NOT NULL
+            );
+ 
         """)
         conn.commit()
     finally:
@@ -489,7 +524,109 @@ def query_daily_kline(
     finally:
         conn.close()
 
+ 
+class PatchItem:
+    def __init__(self):
+        self.patch_date:str = ""
+        self.patch_name:str = ""
+        self.version:int = int
+
+def request_patch_list() -> list[PatchItem]:
+    """
+    获取所有表的patch列表
+    返回json说明：
+        key: 表名
+        value: 所有可用patch列表
+    """
+
+    item1: PatchItem = PatchItem()
+    item1.patch_name = "patch_1.1_20260309_20260313.zip"
+    item1.patch_date = "2026-03-13 16:45:46"
+    item1.version = 11
+    return [item1]
+
+def syn_table_datas() -> List[str]:
+    """
+    根据表名，获取需要下载的 patch 列表。
+
+    逻辑：
+        1. 调用 request_patch_list() 获取服务器上该表的全部可用 patch 列表
+        2. 查询本地 table_patch 表，找到该表当前已应用的 patch
+        3. 返回当前 patch 之后（不含）的所有 patch，即待下载的部分；
+           若本地无记录，则返回全部可用 patch
+
+    参数:
+        table_name  指定表的名称
+
+    返回:
+        List[str]  待下载的 patch 名称列表（按顺序）
+    """
+    remote_patchs: List[PatchItem] = request_patch_list()
+    local_patch_ver = -1
+ 
+    conn = _get_conn()
+    cursor = conn.execute(
+        "SELECT patch FROM table_patch"
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        local_patch_ver = int(row[0])
+    else:
+        assets_dir = utils.get_skill_assets_dir()
+        patch0 = os.path.join(assets_dir, "patch0")
+        import_datas_in_dir(patch0)
+    need_update_patchs = []
+    for r_patch in remote_patchs:
+        if r_patch.version > local_patch_ver:
+            need_update_patchs.append(r_patch)
+            print(r_patch.version)
+
+def import_datas_in_dir(dir: str):
+    files = utils.scan_files_in_dir(dir)
+    to_import_file = []
+    for file in files:
+        basename = os.path.basename(file)
+        for table_name in g_table_name_to_pk.keys():
+            if basename.startswith(table_name):
+                to_import_file.append(file)
+    import_data_to_table(file)
+
+      
+        
+
+def import_data_to_table(input_file:str, table_name:str):
+    if input_file.endswith('.csv.gz'):
+        df = pd.read_csv(input_file, compression='gzip')
+    elif input_file.endswith('.csv'):
+        df = pd.read_csv(input_file)
+    elif input_file.endswith('.pkl'):
+        df = pd.read_pickle(input_file)
+    else:
+        assert False
+    engine = create_engine(f"sqlite:///{DB_PATH}")
+
+    # 先写入临时表
+    df.to_sql("tmp_import", engine, if_exists="replace", index=False)
+
+    with engine.connect() as conn:
+        # 目标表不存在时，按临时表结构创建，并设置主键
+        col_defs = ", ".join(
+            f"{col} TEXT PRIMARY KEY" if col == pk else f"{col} TEXT"
+            for col in df.columns
+        )
+        conn.execute(text(f"CREATE TABLE IF NOT EXISTS {table_name} ({col_defs})"))
+        # 用 SQL INSERT OR REPLACE 从临时表合并到目标表
+        conn.execute(text(f"INSERT OR REPLACE INTO {table_name} SELECT * FROM tmp_import"))
+        conn.execute(text("DROP TABLE tmp_import"))
+        conn.commit()
+
 if __name__ == "__main__":
     print("数据库路径:",DB_PATH)
-    sync_all_stock_basic()
-    sync_recent_daily_kline(10)
+    init_db()
+    syn_table_datas()
+    # import_data_to_table(input_file="/Users/liujie/Desktop/claw/stock_basic50.csv", 
+    #                      table_name="test", 
+    #                      pk=g_table_name_to_pk["test"])
+    # sync_all_stock_basic()
+    # sync_recent_daily_kline(10)
