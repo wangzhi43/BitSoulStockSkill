@@ -595,7 +595,7 @@ def syn_table_datas() -> List[str]:
         log(f"导入基础数据...")
         assets_dir = utils.get_skill_assets_dir()
         base_patch_zip = os.path.join(assets_dir, "data_1.0.zip")
-        base_patch_dir = os.path.join(assets_dir, "data_1.0")
+        base_patch_dir = os.path.join(utils.get_skill_work_dir(), "data_1.0")
         if not os.path.exists(base_patch_dir):
             utils.unzip_file(base_patch_zip, base_patch_dir)
         import_datas_in_dir(base_patch_dir)
