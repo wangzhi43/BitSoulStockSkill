@@ -24,10 +24,10 @@ from typing import List, Optional
 from define import BASE_URL, HTTP_TIMEOUT, DB_PATH, StockBasic, DailyKline
 import utils
 g_table_name_to_pk = {
-    "stock_basic" : "ts_code",
-    "hour_kline" : "code",
-    "daily_kline" : "code",
-    "weekly_kline" : "code",
+    # "stock_basic" : "ts_code",
+    # "hour_kline" : "code",
+    # "daily_kline" : "code",
+    # "weekly_kline" : "code",
     "monthly_kline" : "code",
 }
 
@@ -172,7 +172,6 @@ def init_db() -> None:
     初始化本地 SQLite 数据库，创建 stock_basic 和 daily_kline 表（若不存在）。
     若检测到旧版本表结构（字段不匹配），自动删除旧库重建。
     """
-    import os
     # 若旧库字段已过期，删除后重建
     if os.path.exists(DB_PATH) and _db_schema_is_outdated():
         os.remove(DB_PATH)
@@ -200,8 +199,58 @@ def init_db() -> None:
                 is_hs       TEXT,
                 PRIMARY KEY (ts_code)
             );
-
+                           
+            CREATE TABLE IF NOT EXISTS hour_kline (
+                date        TEXT NOT NULL,
+                code        TEXT NOT NULL,
+                open        REAL,
+                high        REAL,
+                low         REAL,
+                close       REAL,
+                volume      REAL,
+                amount      REAL,
+                adjustflag  TEXT,
+                turn        REAL,
+                pctChg      REAL,
+                pre_close   REAL,
+                change      REAL,
+                PRIMARY KEY (code)
+            );
             CREATE TABLE IF NOT EXISTS daily_kline (
+                date        TEXT NOT NULL,
+                code        TEXT NOT NULL,
+                open        REAL,
+                high        REAL,
+                low         REAL,
+                close       REAL,
+                volume      REAL,
+                amount      REAL,
+                adjustflag  TEXT,
+                turn        REAL,
+                pctChg      REAL,
+                pre_close   REAL,
+                change      REAL,
+                PRIMARY KEY (code)
+            );
+                           
+            CREATE TABLE IF NOT EXISTS weekly_kline (
+                date        TEXT NOT NULL,
+                code        TEXT NOT NULL,
+                open        REAL,
+                high        REAL,
+                low         REAL,
+                close       REAL,
+                volume      REAL,
+                amount      REAL,
+                adjustflag  TEXT,
+                turn        REAL,
+                pctChg      REAL,
+                pre_close   REAL,
+                change      REAL,
+                PRIMARY KEY (code)
+            );
+                           
+            CREATE TABLE IF NOT EXISTS monthly_kline (
                 date        TEXT NOT NULL,
                 code        TEXT NOT NULL,
                 open        REAL,
@@ -569,33 +618,35 @@ def syn_table_datas() -> List[str]:
         "SELECT patch FROM table_patch"
     )
     row = cursor.fetchone()
-    conn.close()
+    conn.commit()
     if row:
         local_patch_ver = int(row[0])
+    print(f"local_patch_ver:{local_patch_ver}")
+    if local_patch_ver >= 0:
+        print("查询")
     else:
         assets_dir = utils.get_skill_assets_dir()
         patch0 = os.path.join(assets_dir, "patch0")
         import_datas_in_dir(patch0)
+        conn.execute(f"INSERT OR REPLACE INTO table_patch (patch) VALUES ({'0'})")
+        conn.commit()
     need_update_patchs = []
     for r_patch in remote_patchs:
         if r_patch.version > local_patch_ver:
             need_update_patchs.append(r_patch)
             print(r_patch.version)
+    conn.close()
 
 def import_datas_in_dir(dir: str):
     files = utils.scan_files_in_dir(dir)
-    to_import_file = []
     for file in files:
         basename = os.path.basename(file)
         for table_name in g_table_name_to_pk.keys():
             if basename.startswith(table_name):
-                to_import_file.append(file)
-    import_data_to_table(file)
-
-      
-        
+                import_data_to_table(file, table_name)
 
 def import_data_to_table(input_file:str, table_name:str):
+    print(table_name, input_file)
     if input_file.endswith('.csv.gz'):
         df = pd.read_csv(input_file, compression='gzip')
     elif input_file.endswith('.csv'):
@@ -612,7 +663,7 @@ def import_data_to_table(input_file:str, table_name:str):
     with engine.connect() as conn:
         # 目标表不存在时，按临时表结构创建，并设置主键
         col_defs = ", ".join(
-            f"{col} TEXT PRIMARY KEY" if col == pk else f"{col} TEXT"
+            f"{col} TEXT PRIMARY KEY" if col == g_table_name_to_pk[table_name] else f"{col} TEXT"
             for col in df.columns
         )
         conn.execute(text(f"CREATE TABLE IF NOT EXISTS {table_name} ({col_defs})"))
