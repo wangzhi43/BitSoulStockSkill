@@ -25,15 +25,16 @@ from typing import List, Optional
 from define import BASE_URL, HTTP_TIMEOUT, DB_PATH, StockBasic, DailyKline, HourKline, WeeklyKline, MonthlyKline, DailyBasic
 import utils
 from logger import log
+from db_engine import getEngine
 g_table_name_to_pk = {
     "stock_basic" : ["ts_code"],
-    "hour_kline" : ["code"],
-    "daily_kline" : ["code"],
-    "weekly_kline" : ["code"],
-    "monthly_kline" : ["code"],
+    "hour_kline" : ["code","date", "time"],
+    "daily_kline" : ["code","date"],
+    "weekly_kline" : ["code","date"],
+    "monthly_kline" : ["code","date"],
     "daily_basic": ["ts_code", "trade_date"]
 }
-g_engine: Engine = None
+ 
 class TablePatch:
     """
     各个表目前应用的是哪个补丁的数据
@@ -64,12 +65,7 @@ def init_db() -> None:
     初始化本地 SQLite 数据库，创建 stock_basic 和 daily_kline 表（若不存在）。
     若检测到旧版本表结构（字段不匹配），自动删除旧库重建。
     """
-    global g_engine
-    g_engine = create_engine(f"sqlite:///{DB_PATH}")
-    if os.path.exists(DB_PATH):
-        return
-
-    with g_engine.connect() as conn:
+    with getEngine().connect() as conn:
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS stock_basic (
                 ts_code     TEXT NOT NULL,
@@ -101,7 +97,7 @@ def init_db() -> None:
                 volume      REAL,
                 amount      REAL,
                 code        TEXT NOT NULL,
-                PRIMARY KEY (code)
+                PRIMARY KEY (code,date,time)
             )
         """))
         conn.execute(text("""
@@ -119,7 +115,7 @@ def init_db() -> None:
                 pctChg      REAL,
                 pre_close   REAL,
                 change      REAL,
-                PRIMARY KEY (code)
+                PRIMARY KEY (code,date)
             )
         """))
         conn.execute(text("""
@@ -133,7 +129,7 @@ def init_db() -> None:
                 volume      REAL,
                 amount      REAL,
                 pctChg      REAL,
-                PRIMARY KEY (code)
+                PRIMARY KEY (code,date)
             )
         """))
         conn.execute(text("""
@@ -147,7 +143,7 @@ def init_db() -> None:
                 volume      REAL,
                 amount      REAL,
                 pctChg      REAL,
-                PRIMARY KEY (code)
+                PRIMARY KEY (code,date)
             )
         """))
         conn.execute(text("""
@@ -235,7 +231,7 @@ def query_stock_basic(
     if limit is not None:
         sql += f" LIMIT {int(limit)} OFFSET {int(offset)}"
 
-    with g_engine.connect() as conn:
+    with getEngine().connect() as conn:
         cursor = conn.execute(text(sql), params)
         rows = cursor.fetchall()
         return [StockBasic.from_dict(dict(row._mapping)) for row in rows]
@@ -303,7 +299,7 @@ def query_daily_kline(
     if limit is not None:
         sql += f" LIMIT {int(limit)} OFFSET {int(offset)}"
 
-    with g_engine.connect() as conn:
+    with getEngine().connect() as conn:
         cursor = conn.execute(text(sql), params)
         rows = cursor.fetchall()
         return [DailyKline.from_dict(dict(row._mapping)) for row in rows]
@@ -358,7 +354,7 @@ def query_hour_kline(
     if limit is not None:
         sql += f" LIMIT {int(limit)} OFFSET {int(offset)}"
 
-    with g_engine.connect() as conn:
+    with getEngine().connect() as conn:
         cursor = conn.execute(text(sql), params)
         rows = cursor.fetchall()
         return [HourKline.from_dict(dict(row._mapping)) for row in rows]
@@ -413,7 +409,7 @@ def query_weekly_kline(
     if limit is not None:
         sql += f" LIMIT {int(limit)} OFFSET {int(offset)}"
 
-    with g_engine.connect() as conn:
+    with getEngine().connect() as conn:
         cursor = conn.execute(text(sql), params)
         rows = cursor.fetchall()
         return [WeeklyKline.from_dict(dict(row._mapping)) for row in rows]
@@ -468,7 +464,7 @@ def query_monthly_kline(
     if limit is not None:
         sql += f" LIMIT {int(limit)} OFFSET {int(offset)}"
 
-    with g_engine.connect() as conn:
+    with getEngine().connect() as conn:
         cursor = conn.execute(text(sql), params)
         rows = cursor.fetchall()
         return [MonthlyKline.from_dict(dict(row._mapping)) for row in rows]
@@ -530,7 +526,7 @@ def query_daily_basic(
     if limit is not None:
         sql += f" LIMIT {int(limit)} OFFSET {int(offset)}"
 
-    with g_engine.connect() as conn:
+    with getEngine().connect() as conn:
         cursor = conn.execute(text(sql), params)
         rows = cursor.fetchall()
         return [DailyBasic.from_dict(dict(row._mapping)) for row in rows]
@@ -558,7 +554,7 @@ def request_patch_list() -> list[PatchItem]:
 
 def get_local_patch_ver() -> int:
     """从 table_patch 表中读取当前本地 patch 版本号，无记录时返回 -1。"""
-    with g_engine.connect() as conn:
+    with getEngine().connect() as conn:
         row = conn.execute(text("SELECT patch FROM table_patch LIMIT 1")).fetchone()
     print(int(row[0]) if row else -1)
     return int(row[0]) if row else -1
@@ -581,7 +577,7 @@ def syn_table_datas() -> List[str]:
     """
     
     local_patch_ver = -1
-    with g_engine.connect() as conn:
+    with getEngine().connect() as conn:
         cursor = conn.execute(
             text("SELECT patch FROM table_patch")
         )
@@ -600,7 +596,7 @@ def syn_table_datas() -> List[str]:
             utils.unzip_file(base_patch_zip, base_patch_dir)
         import_datas_in_dir(base_patch_dir)
 
-        with g_engine.connect() as conn:
+        with getEngine().connect() as conn:
             conn.execute(text("DELETE FROM table_patch"))
             conn.execute(text("INSERT INTO table_patch (patch) VALUES (0)"))
             conn.commit()
@@ -628,7 +624,7 @@ def request_and_import_remote_patch_by_name(patch_name:str, patch_ver: int):
         utils.download_file(download_url, tmp_patch_zip)
         utils.unzip_file(tmp_patch_zip, tmp_patch_dir)
         import_datas_in_dir(tmp_patch_dir)
-        with g_engine.connect() as conn:
+        with getEngine().connect() as conn:
             conn.execute(text("DELETE FROM table_patch"))
             conn.execute(text(f"INSERT INTO table_patch (patch) VALUES ({patch_ver})"))
             conn.commit()
@@ -652,23 +648,15 @@ def import_data_to_table(input_file:str, table_name:str):
         df = pd.read_pickle(input_file)
     else:
         assert False
-    
-    
-    # 先写入临时表
-    df.to_sql("tmp_import", g_engine, if_exists="replace", index=False)
 
-    with g_engine.connect() as conn:
-        # 目标表不存在时，按临时表结构创建，并设置主键
-        col_defs = ", ".join(
-            f"{col} TEXT PRIMARY KEY" if col in g_table_name_to_pk[table_name] else f"{col} TEXT"
-            for col in df.columns
-        )
-        conn.execute(text(f"CREATE TABLE IF NOT EXISTS {table_name} ({col_defs})"))
+    # 先写入临时表
+    df.to_sql("tmp_import", getEngine(), if_exists="replace", index=False)
+
+    with getEngine().connect() as conn:
         # 用 SQL INSERT OR REPLACE 从临时表合并到目标表
         conn.execute(text(f"INSERT OR REPLACE INTO {table_name} SELECT * FROM tmp_import"))
-        conn.execute(text("DROP TABLE tmp_import"))
+        # conn.execute(text("DROP TABLE tmp_import"))
         conn.commit()
-
 
 def testfunc():
      
@@ -779,4 +767,3 @@ if __name__ == "__main__":
     log(f"数据库路径:{DB_PATH}")
     init_db()
     syn_table_datas()
-    
