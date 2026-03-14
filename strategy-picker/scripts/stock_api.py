@@ -80,7 +80,7 @@ from backtest_tools import (
     buy,
     sell,
 )
-
+import data_fetcher
 
 class StockApi:
     """
@@ -98,8 +98,9 @@ class StockApi:
     # 初始化
     # ============================================================
 
-    def __init__(self):
-        """初始化StockApi，建议在使用指标前调用"""
+    def initialSetup(self):
+        data_fetcher.init_db()
+        data_fetcher.syn_table_datas()
         init_indicators_db()
 
     # ============================================================

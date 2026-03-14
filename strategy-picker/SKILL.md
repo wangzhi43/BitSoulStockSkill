@@ -1,6 +1,6 @@
 ---
 name: strategy-picker
-description: 当用户想用自定义交易策略看回测效果时激活。用户用自然语言描述交易策略，skill 将其转换为 Python 策略代码并调用执行。示例触发语句："回测交易策略:买入近三日平均日涨幅最高的前3只股票,每只股票固定买入100股,当资金不够时,不再买入,当股价高于买入时的10%时,卖出对应股票"、"回测自定义交易策略"
+description: 给用户提供自定义交易策略的回测、自定义策略选股功能。
 ---
 
 # 自定义策略选股 Skill
@@ -16,8 +16,10 @@ description: 当用户想用自定义交易策略看回测效果时激活。用�
 
 ## 注意事项
 - api接口文档是scripts/stock_api.py和scripts/define.py，不要从其他文件中读取任何接口，可以使用python标准库提供的接口，不允许使用任何额外的三方库。
+- 策略开始必须要调用 api.initialSetup()以进行环境初始化
+- 如果用户用的是自定义交易策略回测功能，那么策略逻辑执行完成后需要调用scripts/stock_api.py中的calculate_metrics接口生成回测报告。
 - 策略实现的代码文件保存在系统临时目录下，不要放到skill目录下，并且文件名称固定为bitsoul_skill_tmp_strategy.py。
-- 策略逻辑执行完成后需要调用scripts/stock_api.py中的calculate_metrics接口生成回测报告。
+
 - 所有任务执行完毕后，立刻结束回答。
 
 ## 示例
