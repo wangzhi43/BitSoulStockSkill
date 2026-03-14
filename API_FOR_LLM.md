@@ -20,6 +20,7 @@ api = StockApi()
 7. [回测引擎控制](#回测引擎控制)
 8. [策略辅助函数](#策略辅助函数)
 9. [数据库维护](#数据库维护)
+10. [实时行情 (爬虫)](#实时行情-爬虫)
 
 ---
 
@@ -759,3 +760,59 @@ api.clear_indicator_cache('600519.SH')  # 清除指定股票
 api.clear_indicator_cache()             # 清除所有
 # clear_indicator_cache(code: str = None) -> None
 ```
+
+---
+
+## 实时行情 (爬虫)
+
+### 初始化爬虫
+
+```python
+from stock_crawler import StockCrawler
+crawler = StockCrawler()
+```
+
+### 获取实时数据
+
+支持从新浪财经、东方财富、同花顺获取数据。
+
+```python
+data = crawler.fetch('000001.SZ', source='sina')
+# fetch(ts_code: str, source: str = 'sina') -> Dict
+```
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `ts_code` | `str` | - | 股票代码，如 `000001.SZ` |
+| `source` | `str` | `'sina'` | 数据源：`'sina'` (新浪), `'eastmoney'` (东方财富), `'tonghuashun'` (同花顺) |
+
+| 返回 | 说明 |
+|------|------|
+| `Dict` | 包含股票实时数据的字典，字段如下 |
+
+**返回字段说明:**
+
+| 字段 | 类型 | 说明 | 数据源支持 |
+|------|------|------|------------|
+| `source` | `str` | 数据源名称 | All |
+| `ts_code` | `str` | 股票代码 | All |
+| `status` | `str` | 状态 (`success`/`failed`) | All |
+| `name` | `str` | 股票名称 | Sina, EastMoney |
+| `price` | `float` | 当前价格 | All |
+| `open` | `float` | 开盘价 | All |
+| `high` | `float` | 最高价 | All |
+| `low` | `float` | 最低价 | All |
+| `volume` | `float` | 成交量 (股) | All |
+| `amount` | `float` | 成交额 (元) | All |
+| `pre_close` | `float` | 昨收价 | Sina, EastMoney |
+| `date` | `str` | 日期 | Sina, Tonghuashun |
+| `time` | `str` | 时间 | Sina |
+| `turnover_rate` | `float` | 换手率 (%) | EastMoney, Tonghuashun |
+| `change_pct` | `float` | 涨跌幅 (%) | EastMoney |
+| `amplitude` | `float` | 振幅 (%) | Sina, EastMoney |
+| `pe_ttm` | `float` | 市盈率(TTM) | EastMoney |
+| `pb` | `float` | 市净率 | EastMoney |
+| `total_cap` | `float` | 总市值 (元) | EastMoney |
+| `circ_cap` | `float` | 流通市值 (元) | EastMoney |
+| `total_shares` | `float` | 总股本 (股) | EastMoney |
+| `circ_shares` | `float` | 流通股 (股) | EastMoney |
