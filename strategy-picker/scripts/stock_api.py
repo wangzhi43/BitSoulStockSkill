@@ -33,9 +33,19 @@ from data_fetcher import (
     query_hour_kline,
     query_weekly_kline,
     query_monthly_kline,
-    query_daily_basic
+    query_daily_basic,
+    query_income,
 )
-from define import DailyKline, HourKline, WeeklyKline, MonthlyKline, StockBasic,DailyBasic
+from define import (
+    DailyKline, 
+    HourKline, 
+    WeeklyKline, 
+    MonthlyKline, 
+    StockBasic,
+    DailyBasic,
+    Income
+)
+
 
 from indicators import (
     get_sma,
@@ -191,6 +201,51 @@ class StockApi:
     # ─────────────────────────────────────────────
     # 价格行情类接口
     # ─────────────────────────────────────────────
+
+    def query_income(
+        self,
+        ts_codes: List[str] = [],
+        report_type: Optional[str] = None,
+        end_date: Optional[str] = None,
+        start_end_date: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        order_by: str = "end_date ASC",
+    ) -> List[Income]:
+        """
+        根据条件获取利润信息。
+
+        参数:
+            ts_codes        按股票代码列表过滤
+            report_type     按报告类型精确过滤（如 "1" 表示合并报表）
+            end_date        按报告期结束日期精确过滤，格式 "YYYYMMDD"
+            start_end_date  按报告期结束日期范围过滤下限（含），格式 "YYYYMMDD"
+            limit           返回最大记录数；为 None 表示不限
+            offset          分页偏移量，默认 0
+            order_by        排序表达式，默认 "end_date ASC"
+
+        返回:
+            List[Income]  符合条件的利润表对象列表
+
+        示例:
+            # 查询某只股票全部利润表（合并报表）
+            records = query_income(ts_codes=["000001.SZ"], report_type="1")
+
+            # 查询某报告期全市场数据
+            records = query_income(end_date="20231231")
+
+            # 查询最新一期
+            records = query_income(ts_codes=["000001.SZ"], order_by="end_date DESC", limit=1)
+        """
+        return query_income(
+            ts_codes=ts_codes,
+            report_type=report_type,
+            end_date=end_date,
+            start_end_date=start_end_date,
+            limit=limit,
+            offset=offset,
+            order_by=order_by,
+        )
 
     def get_daily_basic(
         self,

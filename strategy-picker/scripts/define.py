@@ -418,3 +418,148 @@ class DailyBasic:
     def __repr__(self) -> str:
         return (f"DailyBasic(trade_date={self.trade_date!r}, ts_code={self.ts_code!r}, "
                 f"close={self.close}, pe={self.pe}, pb={self.pb})")
+
+
+class Income:
+    """
+    利润表数据，对应本地 income 表。
+
+    字段说明:
+        ts_code           股票代码（PK）
+        end_date          报告期结束日期（PK）
+        report_type       报告类型（PK，1=合并报表）
+        ann_date          公告日期
+        comp_type         公司类型
+        basic_eps         基本每股收益
+        diluted_eps       稀释每股收益
+        total_revenue     营业总收入
+        revenue           营业收入
+        total_cogs        营业总成本
+        oper_cost         营业成本
+        sell_exp          销售费用
+        admin_exp         管理费用
+        fin_exp           财务费用
+        total_profit      利润总额
+        income_tax        所得税费用
+        n_income          净利润
+        n_income_attr_p   归属于母公司所有者的净利润
+        minority_gain     少数股东损益
+        oth_compr_income  其他综合收益
+        t_compr_income    综合收益总额
+        compr_inc_attr_p  归属于母公司所有者的综合收益总额
+        ebit              息税前利润
+        ebitda            息税折旧摊销前利润
+        roe               净资产收益率（%）
+        roa               总资产收益率（%）
+        gross_margin      毛利率（%）
+        net_profit_margin 净利率（%）
+        net_profit_yoy    净利润增长率（%）
+        revenue_yoy       营业收入增长率（%）
+        equity_yoy        净资产增长率（%）
+        pcf               市现率
+        free_circ_mv      自由流通市值
+    """
+
+    __slots__ = (
+        "ts_code", "end_date", "report_type", "ann_date", "comp_type",
+        "basic_eps", "diluted_eps", "total_revenue", "revenue",
+        "total_cogs", "oper_cost", "sell_exp", "admin_exp", "fin_exp",
+        "total_profit", "income_tax", "n_income", "n_income_attr_p",
+        "minority_gain", "oth_compr_income", "t_compr_income", "compr_inc_attr_p",
+        "ebit", "ebitda", "roe", "roa", "gross_margin", "net_profit_margin",
+        "net_profit_yoy", "revenue_yoy", "equity_yoy", "pcf", "free_circ_mv",
+    )
+
+    def __init__(
+        self,
+        ts_code: str, end_date: str, report_type: str, ann_date: str, comp_type: str,
+        basic_eps: float, diluted_eps: float, total_revenue: float, revenue: float,
+        total_cogs: float, oper_cost: float, sell_exp: float, admin_exp: float, fin_exp: float,
+        total_profit: float, income_tax: float, n_income: float, n_income_attr_p: float,
+        minority_gain: float, oth_compr_income: float, t_compr_income: float, compr_inc_attr_p: float,
+        ebit: float, ebitda: float, roe: float, roa: float, gross_margin: float,
+        net_profit_margin: float, net_profit_yoy: float, revenue_yoy: float,
+        equity_yoy: float, pcf: float, free_circ_mv: float,
+    ):
+        self.ts_code = ts_code
+        self.end_date = end_date
+        self.report_type = report_type
+        self.ann_date = ann_date
+        self.comp_type = comp_type
+        self.basic_eps = basic_eps
+        self.diluted_eps = diluted_eps
+        self.total_revenue = total_revenue
+        self.revenue = revenue
+        self.total_cogs = total_cogs
+        self.oper_cost = oper_cost
+        self.sell_exp = sell_exp
+        self.admin_exp = admin_exp
+        self.fin_exp = fin_exp
+        self.total_profit = total_profit
+        self.income_tax = income_tax
+        self.n_income = n_income
+        self.n_income_attr_p = n_income_attr_p
+        self.minority_gain = minority_gain
+        self.oth_compr_income = oth_compr_income
+        self.t_compr_income = t_compr_income
+        self.compr_inc_attr_p = compr_inc_attr_p
+        self.ebit = ebit
+        self.ebitda = ebitda
+        self.roe = roe
+        self.roa = roa
+        self.gross_margin = gross_margin
+        self.net_profit_margin = net_profit_margin
+        self.net_profit_yoy = net_profit_yoy
+        self.revenue_yoy = revenue_yoy
+        self.equity_yoy = equity_yoy
+        self.pcf = pcf
+        self.free_circ_mv = free_circ_mv
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "Income":
+        """从字典（数据库行）构造 Income 对象。"""
+        def _f(v):
+            try:
+                return float(v) if v is not None and v != "" else 0.0
+            except (TypeError, ValueError):
+                return 0.0
+
+        return cls(
+            ts_code=d.get("ts_code") or "",
+            end_date=d.get("end_date") or "",
+            report_type=d.get("report_type") or "",
+            ann_date=d.get("ann_date") or "",
+            comp_type=d.get("comp_type") or "",
+            basic_eps=_f(d.get("basic_eps")),
+            diluted_eps=_f(d.get("diluted_eps")),
+            total_revenue=_f(d.get("total_revenue")),
+            revenue=_f(d.get("revenue")),
+            total_cogs=_f(d.get("total_cogs")),
+            oper_cost=_f(d.get("oper_cost")),
+            sell_exp=_f(d.get("sell_exp")),
+            admin_exp=_f(d.get("admin_exp")),
+            fin_exp=_f(d.get("fin_exp")),
+            total_profit=_f(d.get("total_profit")),
+            income_tax=_f(d.get("income_tax")),
+            n_income=_f(d.get("n_income")),
+            n_income_attr_p=_f(d.get("n_income_attr_p")),
+            minority_gain=_f(d.get("minority_gain")),
+            oth_compr_income=_f(d.get("oth_compr_income")),
+            t_compr_income=_f(d.get("t_compr_income")),
+            compr_inc_attr_p=_f(d.get("compr_inc_attr_p")),
+            ebit=_f(d.get("ebit")),
+            ebitda=_f(d.get("ebitda")),
+            roe=_f(d.get("roe")),
+            roa=_f(d.get("roa")),
+            gross_margin=_f(d.get("gross_margin")),
+            net_profit_margin=_f(d.get("net_profit_margin")),
+            net_profit_yoy=_f(d.get("net_profit_yoy")),
+            revenue_yoy=_f(d.get("revenue_yoy")),
+            equity_yoy=_f(d.get("equity_yoy")),
+            pcf=_f(d.get("pcf")),
+            free_circ_mv=_f(d.get("free_circ_mv")),
+        )
+
+    def __repr__(self) -> str:
+        return (f"Income(ts_code={self.ts_code!r}, end_date={self.end_date!r}, "
+                f"report_type={self.report_type!r}, n_income={self.n_income})")

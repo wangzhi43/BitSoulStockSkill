@@ -17,12 +17,13 @@ import sqlite3
 import urllib.error
 import urllib.parse
 import urllib.request
+import shutil
 import pandas as pd
 import requests
 import os
 from sqlalchemy import create_engine, text, Engine
 from typing import List, Optional
-from define import BASE_URL, HTTP_TIMEOUT, DB_PATH, StockBasic, DailyKline, HourKline, WeeklyKline, MonthlyKline, DailyBasic
+from define import BASE_URL, HTTP_TIMEOUT, DB_PATH, StockBasic, DailyKline, HourKline, WeeklyKline, MonthlyKline, DailyBasic, Income
 import utils
 from logger import log
 from db_engine import getEngine
@@ -32,7 +33,8 @@ g_table_name_to_pk = {
     "daily_kline" : ["code","date"],
     "weekly_kline" : ["code","date"],
     "monthly_kline" : ["code","date"],
-    "daily_basic": ["ts_code", "trade_date"]
+    "daily_basic": ["ts_code", "trade_date"],
+    "income": ["ts_code", "report_type", "end_date"]
 }
  
 class TablePatch:
@@ -168,6 +170,44 @@ def init_db() -> None:
                 circ_mv          REAL,
                 adj_factor       REAL,
                 PRIMARY KEY (trade_date, ts_code)
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS income (
+                ts_code           TEXT NOT NULL,
+                end_date          TEXT NOT NULL,
+                report_type       TEXT NOT NULL,
+                ann_date          TEXT,
+                comp_type         TEXT,
+                basic_eps         REAL,
+                diluted_eps       REAL,
+                total_revenue     REAL,
+                revenue           REAL,
+                total_cogs        REAL,
+                oper_cost         REAL,
+                sell_exp          REAL,
+                admin_exp         REAL,
+                fin_exp           REAL,
+                total_profit      REAL,
+                income_tax        REAL,
+                n_income          REAL,
+                n_income_attr_p   REAL,
+                minority_gain     REAL,
+                oth_compr_income  REAL,
+                t_compr_income    REAL,
+                compr_inc_attr_p  REAL,
+                ebit              REAL,
+                ebitda            REAL,
+                roe               REAL,
+                roa               REAL,
+                gross_margin      REAL,
+                net_profit_margin REAL,
+                net_profit_yoy    REAL,
+                revenue_yoy       REAL,
+                equity_yoy        REAL,
+                pcf               REAL,
+                free_circ_mv      REAL,
+                PRIMARY KEY (ts_code, report_type, end_date)
             )
         """))
         conn.execute(text("""
@@ -532,6 +572,72 @@ def query_daily_basic(
         return [DailyBasic.from_dict(dict(row._mapping)) for row in rows]
 
 
+def query_income(
+    ts_codes: List[str] = [],
+    report_type: Optional[str] = None,
+    end_date: Optional[str] = None,
+    start_end_date: Optional[str] = None,
+    limit: Optional[int] = None,
+    offset: int = 0,
+    order_by: str = "end_date ASC",
+) -> List[Income]:
+    """
+    从本地 SQLite 数据库查询 income 表，返回 Income 对象列表。
+
+    参数:
+        ts_codes        按股票代码列表过滤
+        report_type     按报告类型精确过滤（如 "1" 表示合并报表）
+        end_date        按报告期结束日期精确过滤，格式 "YYYYMMDD"
+        start_end_date  按报告期结束日期范围过滤下限（含），格式 "YYYYMMDD"
+        limit           返回最大记录数；为 None 表示不限
+        offset          分页偏移量，默认 0
+        order_by        排序表达式，默认 "end_date ASC"
+
+    返回:
+        List[Income]  符合条件的利润表对象列表
+
+    示例:
+        # 查询某只股票全部利润表（合并报表）
+        records = query_income(ts_codes=["000001.SZ"], report_type="1")
+
+        # 查询某报告期全市场数据
+        records = query_income(end_date="20231231")
+
+        # 查询最新一期
+        records = query_income(ts_codes=["000001.SZ"], order_by="end_date DESC", limit=1)
+    """
+    conditions = []
+    params: dict = {}
+
+    if len(ts_codes) != 0:
+        keys = [f"ts_code_{i}" for i in range(len(ts_codes))]
+        placeholders = ",".join(f":{k}" for k in keys)
+        conditions.append(f"ts_code IN ({placeholders})")
+        for k, v in zip(keys, ts_codes):
+            params[k] = v
+    if report_type is not None:
+        conditions.append("report_type = :report_type")
+        params["report_type"] = report_type
+    if end_date is not None:
+        conditions.append("end_date = :end_date")
+        params["end_date"] = end_date
+    elif start_end_date is not None:
+        conditions.append("end_date >= :start_end_date")
+        params["start_end_date"] = start_end_date
+
+    sql = "SELECT * FROM income"
+    if conditions:
+        sql += " WHERE " + " AND ".join(conditions)
+    sql += f" ORDER BY {order_by}"
+    if limit is not None:
+        sql += f" LIMIT {int(limit)} OFFSET {int(offset)}"
+
+    with getEngine().connect() as conn:
+        cursor = conn.execute(text(sql), params)
+        rows = cursor.fetchall()
+        return [Income.from_dict(dict(row._mapping)) for row in rows]
+
+
 class PatchItem:
     def __init__(self):
         self.patch_date:str = ""
@@ -592,8 +698,9 @@ def syn_table_datas() -> List[str]:
         assets_dir = utils.get_skill_assets_dir()
         base_patch_zip = os.path.join(assets_dir, "data_1.0.zip")
         base_patch_dir = os.path.join(utils.get_skill_work_dir(), "data_1.0")
-        if not os.path.exists(base_patch_dir):
-            utils.unzip_file(base_patch_zip, base_patch_dir)
+        if os.path.exists(base_patch_dir):
+            shutil.rmtree(base_patch_dir)
+        utils.unzip_file(base_patch_zip, base_patch_dir)
         import_datas_in_dir(base_patch_dir)
 
         with getEngine().connect() as conn:
