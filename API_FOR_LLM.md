@@ -642,14 +642,7 @@ api.record_equity(env, '2026-03-01', current_prices)
 
 ---
 
-### 开仓，买入建立多头持仓
 
-```python
-pos = api.open_position('600519.SH', 1800.0, 100, '2026-01-01')
-# open_position(code, price, quantity, date) -> Position
-```
-
----
 
 ### 平仓，卖出结束多头持仓，返回盈亏和持有天数
 
