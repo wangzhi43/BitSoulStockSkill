@@ -1,6 +1,6 @@
 ---
 name: strategy-picker
-description: 给用户提供自定义交易策略的回测、自定义策略选股功能。
+description: 给用户提供自定义交易策略的回测、自定义策略选股、股票实时指标监控功能。触发场景:"帮我选些股票，策略是xxx"、"交易策略是xxx，回测一下，回测时间范围是xxx、查一下当前xxx股票的价格、查一下当前xxx指标。
 ---
 
 # 执行步骤
@@ -14,6 +14,7 @@ description: 给用户提供自定义交易策略的回测、自定义策略选�
 - api接口文档是scripts/stock_api.py和scripts/define.py，不要从其他文件中读取任何接口，可以使用python标准库提供的接口，不允许使用任何额外的三方库。
 - 策略开始必须要调用 api.initialSetup()以进行环境初始化
 - 如果用户用的是自定义交易策略回测功能，那么策略逻辑执行完成后需要调用scripts/stock_api.py中的calculate_metrics接口生成回测报告。
+- 如果用户查询的是实时信息，那么使用scripts/stock_api.py中的get_realtime_xxx系列接口。
 - 策略实现的代码文件保存在系统临时目录下，不要放到skill目录下，并且文件名称固定为bitsoul_skill_tmp_strategy.py。
 
 - 所有任务执行完毕后，立刻结束回答。

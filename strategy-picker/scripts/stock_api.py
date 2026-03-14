@@ -26,7 +26,10 @@ import sys
 from typing import Optional, List, Dict
 
 sys.path.insert(0, __file__.rsplit('/', 1)[0])
-
+from realtime_data_featcher import (
+    RealtimeStockQuote,
+    RealTimeDataFetcher
+)
 from data_fetcher import (
     query_stock_basic,
     query_daily_kline,
@@ -201,6 +204,16 @@ class StockApi:
     # ─────────────────────────────────────────────
     # 价格行情类接口
     # ─────────────────────────────────────────────
+    def get_realtime_stock_info(self, code:str) -> RealtimeStockQuote:
+        """
+        根据条件获取股票实时信息
+
+        参数:
+            code  股票代码
+        返回:
+            int 价格
+        """
+        return RealTimeDataFetcher().request_stock_info(code)
 
     def query_income(
         self,
