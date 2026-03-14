@@ -44,6 +44,66 @@ from indicators import (
     get_bollinger_bands,
     get_macd,
     get_atr,
+    get_wma,
+    get_tema,
+    get_mom,
+    get_roc,
+    get_cci,
+    get_obv,
+    get_volume,
+    get_kdj,
+    get_dmi,
+    get_trix,
+    get_sar,
+    get_williams_r,
+    get_psycho,
+    get_bias,
+    get_tr,
+    get_natr,
+    get_vwap,
+    get_ad,
+    get_adosc,
+    get_mfi,
+    get_cmo,
+    get_rocp,
+    get_rocr,
+    get_aroon,
+    get_ultosc,
+    get_dema,
+    get_kama,
+    get_midpoint,
+    get_midprice,
+    get_pvi,
+    get_nvi,
+    get_ppo,
+    get_roc_r,
+    get_stoch,
+    get_stochf,
+    get_stochrsi,
+    get_trange,
+    get_ma_channel,
+    get_donchian,
+    get_keltner,
+    get_bbands_width,
+    get_bbands_pct,
+    get_linearreg,
+    get_linearreg_angle,
+    get_linearreg_intercept,
+    get_linearreg_slope,
+    get_stddev,
+    get_tsf,
+    get_var,
+    get_correl,
+    get_beta,
+    get_ht_dcperiod,
+    get_ht_dcphase,
+    get_ht_phasor,
+    get_ht_sine,
+    get_ht_trendmode,
+    get_typical_price,
+    get_median_price,
+    get_weighted_close,
+    get_avgp,
     init_indicators_db,
 )
 
@@ -431,6 +491,854 @@ class StockApi:
             ATR值，若数据不足返回None
         """
         return get_atr(code, date, period)
+
+    def get_wma(self, code: str, date: str, period: int = 20) -> Optional[float]:
+        """
+        获取加权移动平均WMA。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认20
+        
+        Returns:
+            WMA值，若数据不足返回None
+        """
+        return get_wma(code, date, period)
+
+    def get_tema(self, code: str, date: str, period: int = 20) -> Optional[float]:
+        """
+        获取三重指数移动平均TEMA。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认20
+        
+        Returns:
+            TEMA值，若数据不足返回None
+        """
+        return get_tema(code, date, period)
+
+    def get_mom(self, code: str, date: str, period: int = 10) -> Optional[float]:
+        """
+        获取动量指标MOM。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认10
+        
+        Returns:
+            MOM值，若数据不足返回None
+        """
+        return get_mom(code, date, period)
+
+    def get_roc(self, code: str, date: str, period: int = 10) -> Optional[float]:
+        """
+        获取变动率指标ROC(%)。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认10
+        
+        Returns:
+            ROC值(%)，若数据不足返回None
+        """
+        return get_roc(code, date, period)
+
+    def get_cci(self, code: str, date: str, period: int = 20) -> Optional[float]:
+        """
+        获取顺势指标CCI。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认20
+        
+        Returns:
+            CCI值，若数据不足返回None
+        """
+        return get_cci(code, date, period)
+
+    def get_obv(self, code: str, date: str, period: int = 20) -> Optional[float]:
+        """
+        获取能量潮OBV。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认20
+        
+        Returns:
+            OBV值，若数据不足返回None
+        """
+        return get_obv(code, date, period)
+
+    def get_volume(self, code: str, date: str, period: int = 20) -> Optional[Dict[str, float]]:
+        """
+        获取成交量指标。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认20
+        
+        Returns:
+            字典 {'current': 当前成交量, 'sma': 成交量均线}，若数据不足返回None
+        """
+        return get_volume(code, date, period)
+
+    def get_kdj(self, code: str, date: str, n: int = 9, m1: int = 3, m2: int = 3) -> Optional[Dict[str, float]]:
+        """
+        获取随机指标KDJ。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            n: 周期，默认9
+            m1: 平滑参数1，默认3
+            m2: 平滑参数2，默认3
+        
+        Returns:
+            字典 {'k': K值, 'd': D值, 'j': J值}，若数据不足返回None
+        """
+        return get_kdj(code, date, n, m1, m2)
+
+    def get_dmi(self, code: str, date: str, period: int = 14) -> Optional[Dict[str, float]]:
+        """
+        获取趋向指标DMI。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认14
+        
+        Returns:
+            字典 {'pdi': +DI, 'mdi': -DI, 'adx': ADX}，若数据不足返回None
+        """
+        return get_dmi(code, date, period)
+
+    def get_trix(self, code: str, date: str, period: int = 12) -> Optional[float]:
+        """
+        获取三重指数平滑移动平均TRIX(%)。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认12
+        
+        Returns:
+            TRIX值(%)，若数据不足返回None
+        """
+        return get_trix(code, date, period)
+
+    def get_sar(self, code: str, date: str, af_start: float = 0.02, af_max: float = 0.2) -> Optional[Dict[str, float]]:
+        """
+        获取抛物线转向SAR。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            af_start: 加速因子起始值，默认0.02
+            af_max: 加速因子最大值，默认0.2
+        
+        Returns:
+            字典 {'sar': SAR值, 'trend': 趋势}，若数据不足返回None
+        """
+        return get_sar(code, date, af_start, af_max)
+
+    def get_williams_r(self, code: str, date: str, period: int = 14) -> Optional[float]:
+        """
+        获取威廉指标WR(0-100)。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认14
+        
+        Returns:
+            WR值(0-100)，0表示超买，100表示超卖，若数据不足返回None
+        """
+        return get_williams_r(code, date, period)
+
+    def get_psycho(self, code: str, date: str, period: int = 12) -> Optional[float]:
+        """
+        获取心理线PSY(0-100)。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认12
+        
+        Returns:
+            PSY值(0-100)，若数据不足返回None
+        """
+        return get_psycho(code, date, period)
+
+    def get_bias(self, code: str, date: str, period: int = 20) -> Optional[float]:
+        """
+        获取乖离率BIAS(%)。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认20
+        
+        Returns:
+            BIAS值(%)，若数据不足返回None
+        """
+        return get_bias(code, date, period)
+
+    def get_tr(self, code: str, date: str) -> Optional[float]:
+        """
+        获取真实波幅TR。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+        
+        Returns:
+            TR值，若数据不足返回None
+        """
+        return get_tr(code, date)
+
+    def get_natr(self, code: str, date: str, period: int = 14) -> Optional[float]:
+        """
+        获取归一化平均真实波幅NATR(%)。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认14
+        
+        Returns:
+            NATR值(%)，若数据不足返回None
+        """
+        return get_natr(code, date, period)
+
+    def get_vwap(self, code: str, date: str, period: int = 20) -> Optional[float]:
+        """
+        获取成交量加权平均价VWAP。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认20
+        
+        Returns:
+            VWAP值，若数据不足返回None
+        """
+        return get_vwap(code, date, period)
+
+    def get_ad(self, code: str, date: str, period: int = 20) -> Optional[float]:
+        """
+        获取累积/派发线AD。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认20
+        
+        Returns:
+            AD值，若数据不足返回None
+        """
+        return get_ad(code, date, period)
+
+    def get_adosc(self, code: str, date: str, fast: int = 3, slow: int = 10) -> Optional[float]:
+        """
+        获取震荡指标ADOSC。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            fast: 快线周期，默认3
+            slow: 慢线周期，默认10
+        
+        Returns:
+            ADOSC值，若数据不足返回None
+        """
+        return get_adosc(code, date, fast, slow)
+
+    def get_mfi(self, code: str, date: str, period: int = 14) -> Optional[float]:
+        """
+        获取资金流量指标MFI(0-100)。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认14
+        
+        Returns:
+            MFI值(0-100)，若数据不足返回None
+        """
+        return get_mfi(code, date, period)
+
+    def get_cmo(self, code: str, date: str, period: int = 14) -> Optional[float]:
+        """
+        获取钱德动量摆动指标CMO(-100 to 100)。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认14
+        
+        Returns:
+            CMO值(-100 to 100)，若数据不足返回None
+        """
+        return get_cmo(code, date, period)
+
+    def get_rocp(self, code: str, date: str, period: int = 10) -> Optional[float]:
+        """
+        获取价格变动率ROCP。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认10
+        
+        Returns:
+            ROCP值，若数据不足返回None
+        """
+        return get_rocp(code, date, period)
+
+    def get_rocr(self, code: str, date: str, period: int = 10) -> Optional[float]:
+        """
+        获取价格变动率比ROCR。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认10
+        
+        Returns:
+            ROCR值，若数据不足返回None
+        """
+        return get_rocr(code, date, period)
+
+    def get_aroon(self, code: str, date: str, period: int = 14) -> Optional[Dict[str, float]]:
+        """
+        获取阿隆指标AROON。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认14
+        
+        Returns:
+            字典 {'up': AROON_UP, 'down': AROON_DOWN, 'osc': AROON_OSC}，若数据不足返回None
+        """
+        return get_aroon(code, date, period)
+
+    def get_ultosc(self, code: str, date: str, period1: int = 7, period2: int = 14, period3: int = 28) -> Optional[float]:
+        """
+        获取终极振荡器ULTOSC(0-100)。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period1: 周期1，默认7
+            period2: 周期2，默认14
+            period3: 周期3，默认28
+        
+        Returns:
+            ULTOSC值(0-100)，若数据不足返回None
+        """
+        return get_ultosc(code, date, period1, period2, period3)
+
+    def get_dema(self, code: str, date: str, period: int = 20) -> Optional[float]:
+        """
+        获取双重指数移动平均DEMA。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认20
+        
+        Returns:
+            DEMA值，若数据不足返回None
+        """
+        return get_dema(code, date, period)
+
+    def get_kama(self, code: str, date: str, period: int = 10) -> Optional[float]:
+        """
+        获取考夫曼自适应移动平均KAMA。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认10
+        
+        Returns:
+            KAMA值，若数据不足返回None
+        """
+        return get_kama(code, date, period)
+
+    def get_midpoint(self, code: str, date: str, period: int = 14) -> Optional[float]:
+        """
+        获取中点价格MIDPOINT。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认14
+        
+        Returns:
+            MIDPOINT值，若数据不足返回None
+        """
+        return get_midpoint(code, date, period)
+
+    def get_midprice(self, code: str, date: str, period: int = 14) -> Optional[float]:
+        """
+        获取中点价格MIDPRICE。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认14
+        
+        Returns:
+            MIDPRICE值，若数据不足返回None
+        """
+        return get_midprice(code, date, period)
+
+    def get_pvi(self, code: str, date: str, period: int = 20) -> Optional[float]:
+        """
+        获取正成交量指标PVI。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认20
+        
+        Returns:
+            PVI值，若数据不足返回None
+        """
+        return get_pvi(code, date, period)
+
+    def get_nvi(self, code: str, date: str, period: int = 20) -> Optional[float]:
+        """
+        获取负成交量指标NVI。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认20
+        
+        Returns:
+            NVI值，若数据不足返回None
+        """
+        return get_nvi(code, date, period)
+
+    def get_ppo(self, code: str, date: str, fast: int = 12, slow: int = 26, signal: int = 9) -> Optional[Dict[str, float]]:
+        """
+        获取价格震荡指标PPO。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            fast: 快线周期，默认12
+            slow: 慢线周期，默认26
+            signal: 信号线周期，默认9
+        
+        Returns:
+            字典 {'ppo': PPO线, 'signal': 信号线, 'histogram': 柱状图}，若数据不足返回None
+        """
+        return get_ppo(code, date, fast, slow, signal)
+
+    def get_roc_r(self, code: str, date: str, period: int = 10) -> Optional[float]:
+        """
+        获取变动率ROC_R。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认10
+        
+        Returns:
+            ROC_R值，若数据不足返回None
+        """
+        return get_roc_r(code, date, period)
+
+    def get_stoch(self, code: str, date: str, fastk_period: int = 14, slowk_period: int = 3, slowd_period: int = 3) -> Optional[Dict[str, float]]:
+        """
+        获取随机指标STOCH。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            fastk_period: 快速K周期，默认14
+            slowk_period: 慢速K周期，默认3
+            slowd_period: 慢速D周期，默认3
+        
+        Returns:
+            字典 {'slowk': 慢速K, 'slowd': 慢速D}，若数据不足返回None
+        """
+        return get_stoch(code, date, fastk_period, slowk_period, slowd_period)
+
+    def get_stochf(self, code: str, date: str, fastk_period: int = 14, fastd_period: int = 3) -> Optional[Dict[str, float]]:
+        """
+        获取快速随机指标STOCHF。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            fastk_period: 快速K周期，默认14
+            fastd_period: 快速D周期，默认3
+        
+        Returns:
+            字典 {'fastk': 快速K, 'fastd': 快速D}，若数据不足返回None
+        """
+        return get_stochf(code, date, fastk_period, fastd_period)
+
+    def get_stochrsi(self, code: str, date: str, rsi_period: int = 14, stoch_period: int = 14) -> Optional[Dict[str, float]]:
+        """
+        获取随机RSI指标STOCHRSI。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            rsi_period: RSI周期，默认14
+            stoch_period: 随机周期，默认14
+        
+        Returns:
+            字典 {'fastk': K, 'fastd': D}，若数据不足返回None
+        """
+        return get_stochrsi(code, date, rsi_period, stoch_period)
+
+    def get_trange(self, code: str, date: str) -> Optional[float]:
+        """
+        获取真实波幅TRANGE。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+        
+        Returns:
+            TRANGE值，若数据不足返回None
+        """
+        return get_trange(code, date)
+
+    def get_ma_channel(self, code: str, date: str, period: int = 20, multiplier: float = 2.0) -> Optional[Dict[str, float]]:
+        """
+        获取移动平均通道。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认20
+            multiplier: 倍数，默认2.0
+        
+        Returns:
+            字典 {'upper': 上轨, 'middle': 中轨, 'lower': 下轨}，若数据不足返回None
+        """
+        return get_ma_channel(code, date, period, multiplier)
+
+    def get_donchian(self, code: str, date: str, period: int = 20) -> Optional[Dict[str, float]]:
+        """
+        获取唐奇安通道。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认20
+        
+        Returns:
+            字典 {'upper': 上轨, 'middle': 中轨, 'lower': 下轨}，若数据不足返回None
+        """
+        return get_donchian(code, date, period)
+
+    def get_keltner(self, code: str, date: str, ma_period: int = 20, atr_period: int = 10, multiplier: float = 2.0) -> Optional[Dict[str, float]]:
+        """
+        获取凯尔特纳通道。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            ma_period: MA周期，默认20
+            atr_period: ATR周期，默认10
+            multiplier: 倍数，默认2.0
+        
+        Returns:
+            字典 {'upper': 上轨, 'middle': 中轨, 'lower': 下轨}，若数据不足返回None
+        """
+        return get_keltner(code, date, ma_period, atr_period, multiplier)
+
+    def get_bbands_width(self, code: str, date: str, period: int = 20, std_dev: int = 2) -> Optional[float]:
+        """
+        获取布林带宽度BBANDS_WIDTH(%)。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认20
+            std_dev: 标准差倍数，默认2
+        
+        Returns:
+            BBANDS_WIDTH值(%)，若数据不足返回None
+        """
+        return get_bbands_width(code, date, period, std_dev)
+
+    def get_bbands_pct(self, code: str, date: str, period: int = 20, std_dev: int = 2) -> Optional[float]:
+        """
+        获取布林带百分比位置BBANDS_PCT(0-1)。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认20
+            std_dev: 标准差倍数，默认2
+        
+        Returns:
+            BBANDS_PCT值(0-1)，若数据不足返回None
+        """
+        return get_bbands_pct(code, date, period, std_dev)
+
+    def get_linearreg(self, code: str, date: str, period: int = 14) -> Optional[float]:
+        """
+        获取线性回归预测值LINEARREG。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认14
+        
+        Returns:
+            LINEARREG值，若数据不足返回None
+        """
+        return get_linearreg(code, date, period)
+
+    def get_linearreg_angle(self, code: str, date: str, period: int = 14) -> Optional[float]:
+        """
+        获取线性回归角度LINEARREG_ANGLE。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认14
+        
+        Returns:
+            LINEARREG_ANGLE值，若数据不足返回None
+        """
+        return get_linearreg_angle(code, date, period)
+
+    def get_linearreg_intercept(self, code: str, date: str, period: int = 14) -> Optional[float]:
+        """
+        获取线性回归截距LINEARREG_INTERCEPT。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认14
+        
+        Returns:
+            LINEARREG_INTERCEPT值，若数据不足返回None
+        """
+        return get_linearreg_intercept(code, date, period)
+
+    def get_linearreg_slope(self, code: str, date: str, period: int = 14) -> Optional[float]:
+        """
+        获取线性回归斜率LINEARREG_SLOPE。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认14
+        
+        Returns:
+            LINEARREG_SLOPE值，若数据不足返回None
+        """
+        return get_linearreg_slope(code, date, period)
+
+    def get_stddev(self, code: str, date: str, period: int = 20, nbdev: int = 1) -> Optional[float]:
+        """
+        获取标准差STDDEV。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认20
+            nbdev: 标准差倍数，默认1
+        
+        Returns:
+            STDDEV值，若数据不足返回None
+        """
+        return get_stddev(code, date, period, nbdev)
+
+    def get_tsf(self, code: str, date: str, period: int = 14) -> Optional[float]:
+        """
+        获取时间序列预测TSF。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认14
+        
+        Returns:
+            TSF值，若数据不足返回None
+        """
+        return get_tsf(code, date, period)
+
+    def get_var(self, code: str, date: str, period: int = 20, nbdev: int = 1) -> Optional[float]:
+        """
+        获取方差VAR。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认20
+            nbdev: 倍数，默认1
+        
+        Returns:
+            VAR值，若数据不足返回None
+        """
+        return get_var(code, date, period, nbdev)
+
+    def get_correl(self, code: str, date: str, period: int = 20) -> Optional[float]:
+        """
+        获取相关系数CORREL(固定返回1.0)。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认20
+        
+        Returns:
+            CORREL值(固定1.0)
+        """
+        return get_correl(code, date, period)
+
+    def get_beta(self, code: str, date: str, period: int = 20) -> Optional[float]:
+        """
+        获取贝塔系数BETA(固定返回1.0)。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+            period: 周期，默认20
+        
+        Returns:
+            BETA值(固定1.0)
+        """
+        return get_beta(code, date, period)
+
+    def get_ht_dcperiod(self, code: str, date: str) -> Optional[float]:
+        """
+        获取希尔伯特变换-主导周期HT_DCPERIOD。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+        
+        Returns:
+            HT_DCPERIOD值，若数据不足返回None
+        """
+        return get_ht_dcperiod(code, date)
+
+    def get_ht_dcphase(self, code: str, date: str) -> Optional[float]:
+        """
+        获取希尔伯特变换-主导相位HT_DCPHASE。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+        
+        Returns:
+            HT_DCPHASE值，若数据不足返回None
+        """
+        return get_ht_dcphase(code, date)
+
+    def get_ht_phasor(self, code: str, date: str) -> Optional[Dict[str, float]]:
+        """
+        获取希尔伯特变换-相位分量HT_PHASOR。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+        
+        Returns:
+            字典 {'inphase': 同相, 'quadrature': 正交}，若数据不足返回None
+        """
+        return get_ht_phasor(code, date)
+
+    def get_ht_sine(self, code: str, date: str) -> Optional[Dict[str, float]]:
+        """
+        获取希尔伯特变换-正弦波HT_SINE。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+        
+        Returns:
+            字典 {'sine': 正弦, 'leadsine': 超前正弦}，若数据不足返回None
+        """
+        return get_ht_sine(code, date)
+
+    def get_ht_trendmode(self, code: str, date: str) -> Optional[int]:
+        """
+        获取希尔伯特变换-趋势模式HT_TRENDMODE。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+        
+        Returns:
+            1=趋势, 0=周期，若数据不足返回None
+        """
+        return get_ht_trendmode(code, date)
+
+    def get_typical_price(self, code: str, date: str) -> Optional[float]:
+        """
+        获取典型价格TP = (High + Low + Close) / 3。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+        
+        Returns:
+            典型价格，若数据不足返回None
+        """
+        return get_typical_price(code, date)
+
+    def get_median_price(self, code: str, date: str) -> Optional[float]:
+        """
+        获取中位数价格 = (High + Low) / 2。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+        
+        Returns:
+            中位数价格，若数据不足返回None
+        """
+        return get_median_price(code, date)
+
+    def get_weighted_close(self, code: str, date: str) -> Optional[float]:
+        """
+        获取加权收盘价 = (High + Low + 2 * Close) / 4。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+        
+        Returns:
+            加权收盘价，若数据不足返回None
+        """
+        return get_weighted_close(code, date)
+
+    def get_avgp(self, code: str, date: str) -> Optional[float]:
+        """
+        获取平均价格 = (Open + High + Low + Close) / 4。
+        
+        Args:
+            code: 股票代码
+            date: 计算日期
+        
+        Returns:
+            平均价格，若数据不足返回None
+        """
+        return get_avgp(code, date)
 
     # ============================================================
     # 性能指标类接口
