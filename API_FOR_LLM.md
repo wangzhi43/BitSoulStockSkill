@@ -569,29 +569,7 @@ drawdowns = api.calculate_drawdown([1000000, 1100000, 950000])
 
 ---
 
-### 买入股票（纯函数，无副作用），返回更新后的现金、持仓和交易结果
 
-```python
-new_cash, new_positions, result = api.buy(1000000, {}, '600519.SH', 1800.0, 100, '2026-01-01')
-if result.success:
-    print(f'买入成功，成本: {result.cost}')
-# buy(cash, positions, code, price, quantity, date, fee_rate=0.0003)
-#     -> Tuple[float, Dict[str, Position], TradeResult]
-```
-
----
-
-### 卖出股票（纯函数，无副作用），返回更新后的现金、持仓和交易结果
-
-```python
-new_cash, new_positions, result = api.sell(900000, positions, '600519.SH', 1900.0, 100)
-if result.success:
-    print(f'卖出成功，净收款: {result.net_proceeds}')
-# sell(cash, positions, code, price, quantity, fee_rate=0.0003)
-#     -> Tuple[float, Dict[str, Position], TradeResult]
-```
-
----
 
 ## 回测引擎控制
 
