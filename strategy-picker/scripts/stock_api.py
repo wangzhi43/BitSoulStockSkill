@@ -943,27 +943,7 @@ class StockApi:
         """
         return order.get('status', 'UNKNOWN')
 
-    # ============================================================
-    # 持仓管理接口（增强版）
-    # ============================================================
 
-    def open_position(self, code: str, price: float, quantity: int, date: str) -> Position:
-        """
-        开仓（买入股票建立多头持仓）。
-        
-        Args:
-            code: 股票代码
-            price: 开仓价格
-            quantity: 数量（股，必须是100的倍数）
-            date: 开仓日期
-        
-        Returns:
-            Position对象
-        
-        Example:
-            pos = api.open_position('600519.SH', 1800.0, 100, '2026-01-01')
-        """
-        return create_position(code, quantity, price, date)
 
     def close_position(self, position: Position, price: float, date: str) -> Dict:
         """
@@ -1115,50 +1095,7 @@ class StockApi:
             'reason': result.reason,
         }
 
-    def buy(self, cash: float, positions: Dict[str, Position], code: str, price: float, quantity: int, date: str, fee_rate: float = 0.0003) -> Tuple[float, Dict[str, Position], TradeResult]:
-        """
-        买入股票（纯函数，无副作用）。
-        
-        Args:
-            cash: 当前现金
-            positions: 持仓字典 {code: Position}
-            code: 股票代码
-            price: 买入价格
-            quantity: 买入数量
-            date: 交易日期
-            fee_rate: 手续费率，默认0.0003
-        
-        Returns:
-            (更新后的现金, 更新后的持仓字典, 交易结果TradeResult)
-        
-        Example:
-            new_cash, new_positions, result = api.buy(1000000, {}, '600519.SH', 1800.0, 100, '2026-01-01')
-            if result.success:
-                print(f买入成功，成本: {result.cost})
-        """
-        return buy(cash, positions, code, price, quantity, date, fee_rate)
 
-    def sell(self, cash: float, positions: Dict[str, Position], code: str, price: float, quantity: int, fee_rate: float = 0.0003) -> Tuple[float, Dict[str, Position], TradeResult]:
-        """
-        卖出股票（纯函数，无副作用）。
-        
-        Args:
-            cash: 当前现金
-            positions: 持仓字典 {code: Position}
-            code: 股票代码
-            price: 卖出价格
-            quantity: 卖出数量
-            fee_rate: 手续费率，默认0.0003
-        
-        Returns:
-            (更新后的现金, 更新后的持仓字典, 交易结果TradeResult)
-        
-        Example:
-            new_cash, new_positions, result = api.sell(900000, positions, '600519.SH', 1900.0, 100)
-            if result.success:
-                print(f"卖出成功，净收款: {result.net_proceeds}")
-        """
-        return sell(cash, positions, code, price, quantity, fee_rate)
 
     def get_equity(self, env: Dict, current_prices: Dict[str, float]) -> float:
         """
