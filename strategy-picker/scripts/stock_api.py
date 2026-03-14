@@ -455,7 +455,7 @@ class StockApi:
     # 技术指标类接口（带缓存）
     # ============================================================
 
-    def get_sma(self, code: str, date: str, period: int = 20) -> Optional[float]:
+    def get_sma(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
         """
         获取简单移动平均SMA。
         
@@ -470,9 +470,9 @@ class StockApi:
         Example:
             sma = api.get_sma('600519.SH', '2026-03-01', 20)
         """
-        return get_sma(code, date, period)
+        return get_sma(code, date, period, use_adjusted)
 
-    def get_ema(self, code: str, date: str, period: int = 12) -> Optional[float]:
+    def get_ema(self, code: str, date: str, period: int = 12, use_adjusted: bool = True) -> Optional[float]:
         """
         获取指数移动平均EMA。
         
@@ -484,9 +484,9 @@ class StockApi:
         Returns:
             EMA值，若数据不足返回None
         """
-        return get_ema(code, date, period)
+        return get_ema(code, date, period, use_adjusted)
 
-    def get_rsi(self, code: str, date: str, period: int = 14) -> Optional[float]:
+    def get_rsi(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
         """
         获取相对强弱指标RSI。
         
@@ -503,9 +503,9 @@ class StockApi:
             if rsi and rsi < 30:
                 print('超卖')
         """
-        return get_rsi(code, date, period)
+        return get_rsi(code, date, period, use_adjusted)
 
-    def get_bollinger_bands(self, code: str, date: str, period: int = 20, std_dev: int = 2) -> Optional[Dict[str, float]]:
+    def get_bollinger_bands(self, code: str, date: str, period: int = 20, std_dev: int = 2, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
         """
         获取布林带指标。
         
@@ -523,9 +523,9 @@ class StockApi:
             if bb and close > bb['upper']:
                 print('突破上轨')
         """
-        return get_bollinger_bands(code, date, period, std_dev)
+        return get_bollinger_bands(code, date, period, std_dev, use_adjusted)
 
-    def get_macd(self, code: str, date: str, fast: int = 12, slow: int = 26, signal: int = 9) -> Optional[Dict[str, float]]:
+    def get_macd(self, code: str, date: str, fast: int = 12, slow: int = 26, signal: int = 9, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
         """
         获取MACD指标。
         
@@ -544,9 +544,9 @@ class StockApi:
             if macd and macd['histogram'] > 0:
                 print('多头')
         """
-        return get_macd(code, date, fast, slow, signal)
+        return get_macd(code, date, fast, slow, signal, use_adjusted)
 
-    def get_atr(self, code: str, date: str, period: int = 14) -> Optional[float]:
+    def get_atr(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
         """
         获取平均真实波幅ATR。
         
@@ -558,9 +558,9 @@ class StockApi:
         Returns:
             ATR值，若数据不足返回None
         """
-        return get_atr(code, date, period)
+        return get_atr(code, date, period, use_adjusted)
 
-    def get_wma(self, code: str, date: str, period: int = 20) -> Optional[float]:
+    def get_wma(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
         """
         获取加权移动平均WMA。
         
@@ -572,9 +572,9 @@ class StockApi:
         Returns:
             WMA值，若数据不足返回None
         """
-        return get_wma(code, date, period)
+        return get_wma(code, date, period, use_adjusted)
 
-    def get_tema(self, code: str, date: str, period: int = 20) -> Optional[float]:
+    def get_tema(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
         """
         获取三重指数移动平均TEMA。
         
@@ -586,9 +586,9 @@ class StockApi:
         Returns:
             TEMA值，若数据不足返回None
         """
-        return get_tema(code, date, period)
+        return get_tema(code, date, period, use_adjusted)
 
-    def get_mom(self, code: str, date: str, period: int = 10) -> Optional[float]:
+    def get_mom(self, code: str, date: str, period: int = 10, use_adjusted: bool = True) -> Optional[float]:
         """
         获取动量指标MOM。
         
@@ -600,9 +600,9 @@ class StockApi:
         Returns:
             MOM值，若数据不足返回None
         """
-        return get_mom(code, date, period)
+        return get_mom(code, date, period, use_adjusted)
 
-    def get_roc(self, code: str, date: str, period: int = 10) -> Optional[float]:
+    def get_roc(self, code: str, date: str, period: int = 10, use_adjusted: bool = True) -> Optional[float]:
         """
         获取变动率指标ROC(%)。
         
@@ -614,9 +614,9 @@ class StockApi:
         Returns:
             ROC值(%)，若数据不足返回None
         """
-        return get_roc(code, date, period)
+        return get_roc(code, date, period, use_adjusted)
 
-    def get_cci(self, code: str, date: str, period: int = 20) -> Optional[float]:
+    def get_cci(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
         """
         获取顺势指标CCI。
         
@@ -628,9 +628,9 @@ class StockApi:
         Returns:
             CCI值，若数据不足返回None
         """
-        return get_cci(code, date, period)
+        return get_cci(code, date, period, use_adjusted)
 
-    def get_obv(self, code: str, date: str, period: int = 20) -> Optional[float]:
+    def get_obv(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
         """
         获取能量潮OBV。
         
@@ -642,9 +642,9 @@ class StockApi:
         Returns:
             OBV值，若数据不足返回None
         """
-        return get_obv(code, date, period)
+        return get_obv(code, date, period, use_adjusted)
 
-    def get_volume(self, code: str, date: str, period: int = 20) -> Optional[Dict[str, float]]:
+    def get_volume(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
         """
         获取成交量指标。
         
@@ -656,9 +656,9 @@ class StockApi:
         Returns:
             字典 {'current': 当前成交量, 'sma': 成交量均线}，若数据不足返回None
         """
-        return get_volume(code, date, period)
+        return get_volume(code, date, period, use_adjusted)
 
-    def get_kdj(self, code: str, date: str, n: int = 9, m1: int = 3, m2: int = 3) -> Optional[Dict[str, float]]:
+    def get_kdj(self, code: str, date: str, n: int = 9, m1: int = 3, m2: int = 3, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
         """
         获取随机指标KDJ。
         
@@ -672,9 +672,9 @@ class StockApi:
         Returns:
             字典 {'k': K值, 'd': D值, 'j': J值}，若数据不足返回None
         """
-        return get_kdj(code, date, n, m1, m2)
+        return get_kdj(code, date, n, m1, m2, use_adjusted)
 
-    def get_dmi(self, code: str, date: str, period: int = 14) -> Optional[Dict[str, float]]:
+    def get_dmi(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
         """
         获取趋向指标DMI。
         
@@ -686,9 +686,9 @@ class StockApi:
         Returns:
             字典 {'pdi': +DI, 'mdi': -DI, 'adx': ADX}，若数据不足返回None
         """
-        return get_dmi(code, date, period)
+        return get_dmi(code, date, period, use_adjusted)
 
-    def get_trix(self, code: str, date: str, period: int = 12) -> Optional[float]:
+    def get_trix(self, code: str, date: str, period: int = 12, use_adjusted: bool = True) -> Optional[float]:
         """
         获取三重指数平滑移动平均TRIX(%)。
         
@@ -700,9 +700,9 @@ class StockApi:
         Returns:
             TRIX值(%)，若数据不足返回None
         """
-        return get_trix(code, date, period)
+        return get_trix(code, date, period, use_adjusted)
 
-    def get_sar(self, code: str, date: str, af_start: float = 0.02, af_max: float = 0.2) -> Optional[Dict[str, float]]:
+    def get_sar(self, code: str, date: str, af_start: float = 0.02, af_max: float = 0.2, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
         """
         获取抛物线转向SAR。
         
@@ -715,9 +715,9 @@ class StockApi:
         Returns:
             字典 {'sar': SAR值, 'trend': 趋势}，若数据不足返回None
         """
-        return get_sar(code, date, af_start, af_max)
+        return get_sar(code, date, af_start, af_max, use_adjusted)
 
-    def get_williams_r(self, code: str, date: str, period: int = 14) -> Optional[float]:
+    def get_williams_r(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
         """
         获取威廉指标WR(0-100)。
         
@@ -729,9 +729,9 @@ class StockApi:
         Returns:
             WR值(0-100)，0表示超买，100表示超卖，若数据不足返回None
         """
-        return get_williams_r(code, date, period)
+        return get_williams_r(code, date, period, use_adjusted)
 
-    def get_psycho(self, code: str, date: str, period: int = 12) -> Optional[float]:
+    def get_psycho(self, code: str, date: str, period: int = 12, use_adjusted: bool = True) -> Optional[float]:
         """
         获取心理线PSY(0-100)。
         
@@ -743,9 +743,9 @@ class StockApi:
         Returns:
             PSY值(0-100)，若数据不足返回None
         """
-        return get_psycho(code, date, period)
+        return get_psycho(code, date, period, use_adjusted)
 
-    def get_bias(self, code: str, date: str, period: int = 20) -> Optional[float]:
+    def get_bias(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
         """
         获取乖离率BIAS(%)。
         
@@ -757,9 +757,9 @@ class StockApi:
         Returns:
             BIAS值(%)，若数据不足返回None
         """
-        return get_bias(code, date, period)
+        return get_bias(code, date, period, use_adjusted)
 
-    def get_tr(self, code: str, date: str) -> Optional[float]:
+    def get_tr(self, code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
         """
         获取真实波幅TR。
         
@@ -770,9 +770,9 @@ class StockApi:
         Returns:
             TR值，若数据不足返回None
         """
-        return get_tr(code, date)
+        return get_tr(code, date, use_adjusted)
 
-    def get_natr(self, code: str, date: str, period: int = 14) -> Optional[float]:
+    def get_natr(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
         """
         获取归一化平均真实波幅NATR(%)。
         
@@ -784,9 +784,9 @@ class StockApi:
         Returns:
             NATR值(%)，若数据不足返回None
         """
-        return get_natr(code, date, period)
+        return get_natr(code, date, period, use_adjusted)
 
-    def get_vwap(self, code: str, date: str, period: int = 20) -> Optional[float]:
+    def get_vwap(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
         """
         获取成交量加权平均价VWAP。
         
@@ -798,9 +798,9 @@ class StockApi:
         Returns:
             VWAP值，若数据不足返回None
         """
-        return get_vwap(code, date, period)
+        return get_vwap(code, date, period, use_adjusted)
 
-    def get_ad(self, code: str, date: str, period: int = 20) -> Optional[float]:
+    def get_ad(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
         """
         获取累积/派发线AD。
         
@@ -812,9 +812,9 @@ class StockApi:
         Returns:
             AD值，若数据不足返回None
         """
-        return get_ad(code, date, period)
+        return get_ad(code, date, period, use_adjusted)
 
-    def get_adosc(self, code: str, date: str, fast: int = 3, slow: int = 10) -> Optional[float]:
+    def get_adosc(self, code: str, date: str, fast: int = 3, slow: int = 10, use_adjusted: bool = True) -> Optional[float]:
         """
         获取震荡指标ADOSC。
         
@@ -827,9 +827,9 @@ class StockApi:
         Returns:
             ADOSC值，若数据不足返回None
         """
-        return get_adosc(code, date, fast, slow)
+        return get_adosc(code, date, fast, slow, use_adjusted)
 
-    def get_mfi(self, code: str, date: str, period: int = 14) -> Optional[float]:
+    def get_mfi(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
         """
         获取资金流量指标MFI(0-100)。
         
@@ -841,9 +841,9 @@ class StockApi:
         Returns:
             MFI值(0-100)，若数据不足返回None
         """
-        return get_mfi(code, date, period)
+        return get_mfi(code, date, period, use_adjusted)
 
-    def get_cmo(self, code: str, date: str, period: int = 14) -> Optional[float]:
+    def get_cmo(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
         """
         获取钱德动量摆动指标CMO(-100 to 100)。
         
@@ -855,9 +855,9 @@ class StockApi:
         Returns:
             CMO值(-100 to 100)，若数据不足返回None
         """
-        return get_cmo(code, date, period)
+        return get_cmo(code, date, period, use_adjusted)
 
-    def get_rocp(self, code: str, date: str, period: int = 10) -> Optional[float]:
+    def get_rocp(self, code: str, date: str, period: int = 10, use_adjusted: bool = True) -> Optional[float]:
         """
         获取价格变动率ROCP。
         
@@ -869,9 +869,9 @@ class StockApi:
         Returns:
             ROCP值，若数据不足返回None
         """
-        return get_rocp(code, date, period)
+        return get_rocp(code, date, period, use_adjusted)
 
-    def get_rocr(self, code: str, date: str, period: int = 10) -> Optional[float]:
+    def get_rocr(self, code: str, date: str, period: int = 10, use_adjusted: bool = True) -> Optional[float]:
         """
         获取价格变动率比ROCR。
         
@@ -883,9 +883,9 @@ class StockApi:
         Returns:
             ROCR值，若数据不足返回None
         """
-        return get_rocr(code, date, period)
+        return get_rocr(code, date, period, use_adjusted)
 
-    def get_aroon(self, code: str, date: str, period: int = 14) -> Optional[Dict[str, float]]:
+    def get_aroon(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
         """
         获取阿隆指标AROON。
         
@@ -897,9 +897,9 @@ class StockApi:
         Returns:
             字典 {'up': AROON_UP, 'down': AROON_DOWN, 'osc': AROON_OSC}，若数据不足返回None
         """
-        return get_aroon(code, date, period)
+        return get_aroon(code, date, period, use_adjusted)
 
-    def get_ultosc(self, code: str, date: str, period1: int = 7, period2: int = 14, period3: int = 28) -> Optional[float]:
+    def get_ultosc(self, code: str, date: str, period1: int = 7, period2: int = 14, period3: int = 28, use_adjusted: bool = True) -> Optional[float]:
         """
         获取终极振荡器ULTOSC(0-100)。
         
@@ -913,9 +913,9 @@ class StockApi:
         Returns:
             ULTOSC值(0-100)，若数据不足返回None
         """
-        return get_ultosc(code, date, period1, period2, period3)
+        return get_ultosc(code, date, period1, period2, period3, use_adjusted)
 
-    def get_dema(self, code: str, date: str, period: int = 20) -> Optional[float]:
+    def get_dema(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
         """
         获取双重指数移动平均DEMA。
         
@@ -927,9 +927,9 @@ class StockApi:
         Returns:
             DEMA值，若数据不足返回None
         """
-        return get_dema(code, date, period)
+        return get_dema(code, date, period, use_adjusted)
 
-    def get_kama(self, code: str, date: str, period: int = 10) -> Optional[float]:
+    def get_kama(self, code: str, date: str, period: int = 10, use_adjusted: bool = True) -> Optional[float]:
         """
         获取考夫曼自适应移动平均KAMA。
         
@@ -941,9 +941,9 @@ class StockApi:
         Returns:
             KAMA值，若数据不足返回None
         """
-        return get_kama(code, date, period)
+        return get_kama(code, date, period, use_adjusted)
 
-    def get_midpoint(self, code: str, date: str, period: int = 14) -> Optional[float]:
+    def get_midpoint(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
         """
         获取中点价格MIDPOINT。
         
@@ -955,9 +955,9 @@ class StockApi:
         Returns:
             MIDPOINT值，若数据不足返回None
         """
-        return get_midpoint(code, date, period)
+        return get_midpoint(code, date, period, use_adjusted)
 
-    def get_midprice(self, code: str, date: str, period: int = 14) -> Optional[float]:
+    def get_midprice(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
         """
         获取中点价格MIDPRICE。
         
@@ -969,9 +969,9 @@ class StockApi:
         Returns:
             MIDPRICE值，若数据不足返回None
         """
-        return get_midprice(code, date, period)
+        return get_midprice(code, date, period, use_adjusted)
 
-    def get_pvi(self, code: str, date: str, period: int = 20) -> Optional[float]:
+    def get_pvi(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
         """
         获取正成交量指标PVI。
         
@@ -983,9 +983,9 @@ class StockApi:
         Returns:
             PVI值，若数据不足返回None
         """
-        return get_pvi(code, date, period)
+        return get_pvi(code, date, period, use_adjusted)
 
-    def get_nvi(self, code: str, date: str, period: int = 20) -> Optional[float]:
+    def get_nvi(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
         """
         获取负成交量指标NVI。
         
@@ -997,9 +997,9 @@ class StockApi:
         Returns:
             NVI值，若数据不足返回None
         """
-        return get_nvi(code, date, period)
+        return get_nvi(code, date, period, use_adjusted)
 
-    def get_ppo(self, code: str, date: str, fast: int = 12, slow: int = 26, signal: int = 9) -> Optional[Dict[str, float]]:
+    def get_ppo(self, code: str, date: str, fast: int = 12, slow: int = 26, signal: int = 9, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
         """
         获取价格震荡指标PPO。
         
@@ -1013,9 +1013,9 @@ class StockApi:
         Returns:
             字典 {'ppo': PPO线, 'signal': 信号线, 'histogram': 柱状图}，若数据不足返回None
         """
-        return get_ppo(code, date, fast, slow, signal)
+        return get_ppo(code, date, fast, slow, signal, use_adjusted)
 
-    def get_roc_r(self, code: str, date: str, period: int = 10) -> Optional[float]:
+    def get_roc_r(self, code: str, date: str, period: int = 10, use_adjusted: bool = True) -> Optional[float]:
         """
         获取变动率ROC_R。
         
@@ -1027,9 +1027,9 @@ class StockApi:
         Returns:
             ROC_R值，若数据不足返回None
         """
-        return get_roc_r(code, date, period)
+        return get_roc_r(code, date, period, use_adjusted)
 
-    def get_stoch(self, code: str, date: str, fastk_period: int = 14, slowk_period: int = 3, slowd_period: int = 3) -> Optional[Dict[str, float]]:
+    def get_stoch(self, code: str, date: str, fastk_period: int = 14, slowk_period: int = 3, slowd_period: int = 3, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
         """
         获取随机指标STOCH。
         
@@ -1043,9 +1043,9 @@ class StockApi:
         Returns:
             字典 {'slowk': 慢速K, 'slowd': 慢速D}，若数据不足返回None
         """
-        return get_stoch(code, date, fastk_period, slowk_period, slowd_period)
+        return get_stoch(code, date, fastk_period, slowk_period, slowd_period, use_adjusted)
 
-    def get_stochf(self, code: str, date: str, fastk_period: int = 14, fastd_period: int = 3) -> Optional[Dict[str, float]]:
+    def get_stochf(self, code: str, date: str, fastk_period: int = 14, fastd_period: int = 3, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
         """
         获取快速随机指标STOCHF。
         
@@ -1058,9 +1058,9 @@ class StockApi:
         Returns:
             字典 {'fastk': 快速K, 'fastd': 快速D}，若数据不足返回None
         """
-        return get_stochf(code, date, fastk_period, fastd_period)
+        return get_stochf(code, date, fastk_period, fastd_period, use_adjusted)
 
-    def get_stochrsi(self, code: str, date: str, rsi_period: int = 14, stoch_period: int = 14) -> Optional[Dict[str, float]]:
+    def get_stochrsi(self, code: str, date: str, rsi_period: int = 14, stoch_period: int = 14, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
         """
         获取随机RSI指标STOCHRSI。
         
@@ -1073,9 +1073,9 @@ class StockApi:
         Returns:
             字典 {'fastk': K, 'fastd': D}，若数据不足返回None
         """
-        return get_stochrsi(code, date, rsi_period, stoch_period)
+        return get_stochrsi(code, date, rsi_period, stoch_period, use_adjusted)
 
-    def get_trange(self, code: str, date: str) -> Optional[float]:
+    def get_trange(self, code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
         """
         获取真实波幅TRANGE。
         
@@ -1086,9 +1086,9 @@ class StockApi:
         Returns:
             TRANGE值，若数据不足返回None
         """
-        return get_trange(code, date)
+        return get_trange(code, date, use_adjusted)
 
-    def get_ma_channel(self, code: str, date: str, period: int = 20, multiplier: float = 2.0) -> Optional[Dict[str, float]]:
+    def get_ma_channel(self, code: str, date: str, period: int = 20, multiplier: float = 2.0, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
         """
         获取移动平均通道。
         
@@ -1101,9 +1101,9 @@ class StockApi:
         Returns:
             字典 {'upper': 上轨, 'middle': 中轨, 'lower': 下轨}，若数据不足返回None
         """
-        return get_ma_channel(code, date, period, multiplier)
+        return get_ma_channel(code, date, period, multiplier, use_adjusted)
 
-    def get_donchian(self, code: str, date: str, period: int = 20) -> Optional[Dict[str, float]]:
+    def get_donchian(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
         """
         获取唐奇安通道。
         
@@ -1115,9 +1115,9 @@ class StockApi:
         Returns:
             字典 {'upper': 上轨, 'middle': 中轨, 'lower': 下轨}，若数据不足返回None
         """
-        return get_donchian(code, date, period)
+        return get_donchian(code, date, period, use_adjusted)
 
-    def get_keltner(self, code: str, date: str, ma_period: int = 20, atr_period: int = 10, multiplier: float = 2.0) -> Optional[Dict[str, float]]:
+    def get_keltner(self, code: str, date: str, ma_period: int = 20, atr_period: int = 10, multiplier: float = 2.0, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
         """
         获取凯尔特纳通道。
         
@@ -1131,9 +1131,9 @@ class StockApi:
         Returns:
             字典 {'upper': 上轨, 'middle': 中轨, 'lower': 下轨}，若数据不足返回None
         """
-        return get_keltner(code, date, ma_period, atr_period, multiplier)
+        return get_keltner(code, date, ma_period, atr_period, multiplier, use_adjusted)
 
-    def get_bbands_width(self, code: str, date: str, period: int = 20, std_dev: int = 2) -> Optional[float]:
+    def get_bbands_width(self, code: str, date: str, period: int = 20, std_dev: int = 2, use_adjusted: bool = True) -> Optional[float]:
         """
         获取布林带宽度BBANDS_WIDTH(%)。
         
@@ -1146,9 +1146,9 @@ class StockApi:
         Returns:
             BBANDS_WIDTH值(%)，若数据不足返回None
         """
-        return get_bbands_width(code, date, period, std_dev)
+        return get_bbands_width(code, date, period, std_dev, use_adjusted)
 
-    def get_bbands_pct(self, code: str, date: str, period: int = 20, std_dev: int = 2) -> Optional[float]:
+    def get_bbands_pct(self, code: str, date: str, period: int = 20, std_dev: int = 2, use_adjusted: bool = True) -> Optional[float]:
         """
         获取布林带百分比位置BBANDS_PCT(0-1)。
         
@@ -1161,9 +1161,9 @@ class StockApi:
         Returns:
             BBANDS_PCT值(0-1)，若数据不足返回None
         """
-        return get_bbands_pct(code, date, period, std_dev)
+        return get_bbands_pct(code, date, period, std_dev, use_adjusted)
 
-    def get_linearreg(self, code: str, date: str, period: int = 14) -> Optional[float]:
+    def get_linearreg(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
         """
         获取线性回归预测值LINEARREG。
         
@@ -1175,9 +1175,9 @@ class StockApi:
         Returns:
             LINEARREG值，若数据不足返回None
         """
-        return get_linearreg(code, date, period)
+        return get_linearreg(code, date, period, use_adjusted)
 
-    def get_linearreg_angle(self, code: str, date: str, period: int = 14) -> Optional[float]:
+    def get_linearreg_angle(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
         """
         获取线性回归角度LINEARREG_ANGLE。
         
@@ -1189,9 +1189,9 @@ class StockApi:
         Returns:
             LINEARREG_ANGLE值，若数据不足返回None
         """
-        return get_linearreg_angle(code, date, period)
+        return get_linearreg_angle(code, date, period, use_adjusted)
 
-    def get_linearreg_intercept(self, code: str, date: str, period: int = 14) -> Optional[float]:
+    def get_linearreg_intercept(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
         """
         获取线性回归截距LINEARREG_INTERCEPT。
         
@@ -1203,9 +1203,9 @@ class StockApi:
         Returns:
             LINEARREG_INTERCEPT值，若数据不足返回None
         """
-        return get_linearreg_intercept(code, date, period)
+        return get_linearreg_intercept(code, date, period, use_adjusted)
 
-    def get_linearreg_slope(self, code: str, date: str, period: int = 14) -> Optional[float]:
+    def get_linearreg_slope(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
         """
         获取线性回归斜率LINEARREG_SLOPE。
         
@@ -1217,9 +1217,9 @@ class StockApi:
         Returns:
             LINEARREG_SLOPE值，若数据不足返回None
         """
-        return get_linearreg_slope(code, date, period)
+        return get_linearreg_slope(code, date, period, use_adjusted)
 
-    def get_stddev(self, code: str, date: str, period: int = 20, nbdev: int = 1) -> Optional[float]:
+    def get_stddev(self, code: str, date: str, period: int = 20, nbdev: int = 1, use_adjusted: bool = True) -> Optional[float]:
         """
         获取标准差STDDEV。
         
@@ -1232,9 +1232,9 @@ class StockApi:
         Returns:
             STDDEV值，若数据不足返回None
         """
-        return get_stddev(code, date, period, nbdev)
+        return get_stddev(code, date, period, nbdev, use_adjusted)
 
-    def get_tsf(self, code: str, date: str, period: int = 14) -> Optional[float]:
+    def get_tsf(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
         """
         获取时间序列预测TSF。
         
@@ -1246,9 +1246,9 @@ class StockApi:
         Returns:
             TSF值，若数据不足返回None
         """
-        return get_tsf(code, date, period)
+        return get_tsf(code, date, period, use_adjusted)
 
-    def get_var(self, code: str, date: str, period: int = 20, nbdev: int = 1) -> Optional[float]:
+    def get_var(self, code: str, date: str, period: int = 20, nbdev: int = 1, use_adjusted: bool = True) -> Optional[float]:
         """
         获取方差VAR。
         
@@ -1261,9 +1261,9 @@ class StockApi:
         Returns:
             VAR值，若数据不足返回None
         """
-        return get_var(code, date, period, nbdev)
+        return get_var(code, date, period, nbdev, use_adjusted)
 
-    def get_correl(self, code: str, date: str, period: int = 20) -> Optional[float]:
+    def get_correl(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
         """
         获取相关系数CORREL(固定返回1.0)。
         
@@ -1275,9 +1275,9 @@ class StockApi:
         Returns:
             CORREL值(固定1.0)
         """
-        return get_correl(code, date, period)
+        return get_correl(code, date, period, use_adjusted)
 
-    def get_beta(self, code: str, date: str, period: int = 20) -> Optional[float]:
+    def get_beta(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
         """
         获取贝塔系数BETA(固定返回1.0)。
         
@@ -1289,9 +1289,9 @@ class StockApi:
         Returns:
             BETA值(固定1.0)
         """
-        return get_beta(code, date, period)
+        return get_beta(code, date, period, use_adjusted)
 
-    def get_ht_dcperiod(self, code: str, date: str) -> Optional[float]:
+    def get_ht_dcperiod(self, code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
         """
         获取希尔伯特变换-主导周期HT_DCPERIOD。
         
@@ -1302,9 +1302,9 @@ class StockApi:
         Returns:
             HT_DCPERIOD值，若数据不足返回None
         """
-        return get_ht_dcperiod(code, date)
+        return get_ht_dcperiod(code, date, use_adjusted)
 
-    def get_ht_dcphase(self, code: str, date: str) -> Optional[float]:
+    def get_ht_dcphase(self, code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
         """
         获取希尔伯特变换-主导相位HT_DCPHASE。
         
@@ -1315,9 +1315,9 @@ class StockApi:
         Returns:
             HT_DCPHASE值，若数据不足返回None
         """
-        return get_ht_dcphase(code, date)
+        return get_ht_dcphase(code, date, use_adjusted)
 
-    def get_ht_phasor(self, code: str, date: str) -> Optional[Dict[str, float]]:
+    def get_ht_phasor(self, code: str, date: str, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
         """
         获取希尔伯特变换-相位分量HT_PHASOR。
         
@@ -1328,9 +1328,9 @@ class StockApi:
         Returns:
             字典 {'inphase': 同相, 'quadrature': 正交}，若数据不足返回None
         """
-        return get_ht_phasor(code, date)
+        return get_ht_phasor(code, date, use_adjusted)
 
-    def get_ht_sine(self, code: str, date: str) -> Optional[Dict[str, float]]:
+    def get_ht_sine(self, code: str, date: str, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
         """
         获取希尔伯特变换-正弦波HT_SINE。
         
@@ -1341,9 +1341,9 @@ class StockApi:
         Returns:
             字典 {'sine': 正弦, 'leadsine': 超前正弦}，若数据不足返回None
         """
-        return get_ht_sine(code, date)
+        return get_ht_sine(code, date, use_adjusted)
 
-    def get_ht_trendmode(self, code: str, date: str) -> Optional[int]:
+    def get_ht_trendmode(self, code: str, date: str, use_adjusted: bool = True) -> Optional[int]:
         """
         获取希尔伯特变换-趋势模式HT_TRENDMODE。
         
@@ -1354,9 +1354,9 @@ class StockApi:
         Returns:
             1=趋势, 0=周期，若数据不足返回None
         """
-        return get_ht_trendmode(code, date)
+        return get_ht_trendmode(code, date, use_adjusted)
 
-    def get_typical_price(self, code: str, date: str) -> Optional[float]:
+    def get_typical_price(self, code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
         """
         获取典型价格TP = (High + Low + Close) / 3。
         
@@ -1367,9 +1367,9 @@ class StockApi:
         Returns:
             典型价格，若数据不足返回None
         """
-        return get_typical_price(code, date)
+        return get_typical_price(code, date, use_adjusted)
 
-    def get_median_price(self, code: str, date: str) -> Optional[float]:
+    def get_median_price(self, code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
         """
         获取中位数价格 = (High + Low) / 2。
         
@@ -1380,9 +1380,9 @@ class StockApi:
         Returns:
             中位数价格，若数据不足返回None
         """
-        return get_median_price(code, date)
+        return get_median_price(code, date, use_adjusted)
 
-    def get_weighted_close(self, code: str, date: str) -> Optional[float]:
+    def get_weighted_close(self, code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
         """
         获取加权收盘价 = (High + Low + 2 * Close) / 4。
         
@@ -1393,9 +1393,9 @@ class StockApi:
         Returns:
             加权收盘价，若数据不足返回None
         """
-        return get_weighted_close(code, date)
+        return get_weighted_close(code, date, use_adjusted)
 
-    def get_avgp(self, code: str, date: str) -> Optional[float]:
+    def get_avgp(self, code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
         """
         获取平均价格 = (Open + High + Low + Close) / 4。
         
@@ -1406,7 +1406,7 @@ class StockApi:
         Returns:
             平均价格，若数据不足返回None
         """
-        return get_avgp(code, date)
+        return get_avgp(code, date, use_adjusted)
 
     # ============================================================
     # 性能指标类接口
