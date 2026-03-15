@@ -22,7 +22,11 @@ import math
 
 
 def init_indicators_db():
-    """初始化指标缓存表"""
+    """初始化指标缓存数据库表
+
+    创建 cached_indicators 表（如不存在），用于缓存所有指标计算结果，并建立查询索引。
+    每次计算前先查缓存，命中则直接返回，避免对相同参数重复计算。
+    """
     with getEngine().connect() as conn:
         conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS cached_indicators (
@@ -42,7 +46,18 @@ def init_indicators_db():
 
 
 def _get_cached_indicator(code: str, indicator_type: str, period: int, date: str, use_adjusted: bool = True) -> Optional[str]:
-    """查询缓存指标"""
+    """从缓存表中查询指标值
+
+    Args:
+        code: 股票代码
+        indicator_type: 指标类型字符串，如 'SMA'、'RSI'
+        period: 周期参数（复合参数如MACD已编码为单个整数）
+        date: 查询日期
+        use_adjusted: 是否为复权计算结果
+
+    Returns:
+        str: 缓存的字符串值，未命中返回 None
+    """
     with getEngine().connect() as conn:
         cursor = conn.execute(text(
             "SELECT value FROM cached_indicators WHERE code=:code AND indicator_type=:indicator_type AND period=:period AND use_adjusted=:use_adjusted AND date=:date"
@@ -52,7 +67,18 @@ def _get_cached_indicator(code: str, indicator_type: str, period: int, date: str
 
 
 def _save_indicator(code: str, indicator_type: str, period: int, date: str, value: str, use_adjusted: bool = True):
-    """保存指标到缓存"""
+    """将指标计算结果保存到缓存表
+
+    已存在则替换（INSERT OR REPLACE），确保缓存始终为最新值。
+
+    Args:
+        code: 股票代码
+        indicator_type: 指标类型字符串
+        period: 周期参数
+        date: 计算日期
+        value: 指标值的字符串表示（float 用 str()，dict 用 str() 后 eval() 还原）
+        use_adjusted: 是否为复权计算结果
+    """
     with getEngine().connect() as conn:
         conn.execute(text(
             "INSERT OR REPLACE INTO cached_indicators (code, indicator_type, period, use_adjusted, date, value) VALUES (:code, :indicator_type, :period, :use_adjusted, :date, :value)"
@@ -61,7 +87,16 @@ def _save_indicator(code: str, indicator_type: str, period: int, date: str, valu
 
 
 def _get_klines_before_date(code: str, date: str, limit: int) -> List[DailyKline]:
-    """获取指定日期前的K线数据"""
+    """获取指定日期（含）前最近 limit 根K线，按时间升序排列
+
+    Args:
+        code: 股票代码
+        date: 截止日期（含）
+        limit: 最多返回的K线根数
+
+    Returns:
+        List[DailyKline]: 按日期升序排列的K线列表（最新一根在末尾）
+    """
     klines = query_daily_kline(
         codes=[code],
         end_date=date,
@@ -72,7 +107,16 @@ def _get_klines_before_date(code: str, date: str, limit: int) -> List[DailyKline
 
 
 def _get_klines_range(code: str, start_date: str, end_date: str) -> List[DailyKline]:
-    """获取指定日期范围的K线数据"""
+    """获取指定日期范围内的K线，按时间升序排列
+
+    Args:
+        code: 股票代码
+        start_date: 起始日期（含），格式 'YYYY-MM-DD'
+        end_date: 结束日期（含），格式 'YYYY-MM-DD'
+
+    Returns:
+        List[DailyKline]: 按日期升序排列的K线列表
+    """
     klines = query_daily_kline(
         codes=[code],
         start_date=start_date,
@@ -83,7 +127,15 @@ def _get_klines_range(code: str, start_date: str, end_date: str) -> List[DailyKl
 
 
 def _get_adj_factor(code: str, date: str) -> Optional[float]:
-    """获取指定日期的复权因子"""
+    """获取指定日期的复权因子
+
+    Args:
+        code: 股票代码
+        date: 查询日期，格式 'YYYY-MM-DD'
+
+    Returns:
+        float: 该日期的复权因子，查询不到返回 None
+    """
     daily_basics = query_daily_basic(ts_codes=[code], trade_date=date)
     if daily_basics:
         return daily_basics[0].adj_factor
@@ -91,7 +143,14 @@ def _get_adj_factor(code: str, date: str) -> Optional[float]:
 
 
 def _get_adj_factors_for_klines(klines: List[DailyKline]) -> Dict[str, float]:
-    """获取K线日期范围内的复权因子"""
+    """批量获取K线覆盖日期范围内的所有复权因子
+
+    Args:
+        klines: K线列表，用于确定查询的日期范围和股票代码
+
+    Returns:
+        dict: {日期字符串: 复权因子} 的映射，klines 为空时返回空字典
+    """
     if not klines:
         return {}
     
@@ -108,14 +167,38 @@ def _get_adj_factors_for_klines(klines: List[DailyKline]) -> Dict[str, float]:
 
 
 def _adjust_price(price: float, adj_factor: float, base_adj_factor: float = 1.0) -> float:
-    """复权价格计算（前复权）"""
+    """计算前复权价格
+
+    前复权以最新日期为基准（base_adj_factor），历史价格乘以比率还原。
+    公式：复权价 = 原始价 * (该日复权因子 / 最新日复权因子)
+
+    Args:
+        price: 原始价格
+        adj_factor: 该K线日期对应的复权因子
+        base_adj_factor: 最新K线的复权因子（作为基准，最新日比率=1.0）
+
+    Returns:
+        float: 前复权后的价格，因子为0时原样返回原始价格
+    """
     if base_adj_factor == 0 or adj_factor == 0:
         return price
     return price * (adj_factor / base_adj_factor)
 
 
 def _adjust_klines(klines: List[DailyKline], adj_factors: Dict[str, float]) -> List[DailyKline]:
-    """对K线数据进行前复权处理"""
+    """对K线列表执行前复权处理
+
+    以最新K线的复权因子为基准，等比缩放所有历史K线的价格字段
+    （open/high/low/close/amount/pre_close/change），成交量不做调整。
+
+    Args:
+        klines: 原始K线列表
+        adj_factors: 复权因子字典 {日期字符串: 复权因子}
+
+    Returns:
+        List[DailyKline]: 复权后的新K线列表（原始列表不被修改）；
+        klines 或 adj_factors 为空时直接返回原始 klines
+    """
     if not klines or not adj_factors:
         return klines
     
@@ -152,13 +235,19 @@ def _adjust_klines(klines: List[DailyKline], adj_factors: Dict[str, float]) -> L
 # ============================================================
 
 def get_sma(code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
-    """简单移动平均 SMA（默认使用复权价格）
-    
+    """简单移动平均线 SMA（Simple Moving Average）
+
+    对过去 period 根K线的收盘价取算术平均，是最基础的趋势跟踪指标。
+    数值平滑，对价格变化反应较慢，适合判断中长期趋势方向。
+
     Args:
-        code: 股票代码
-        date: 计算日期
-        period: 周期，默认20
-        use_adjusted: 是否使用复权价格，默认True
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 均线周期，默认20（即20日均线）
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日SMA值（元）；数据不足 period 根K线时返回 None
     """
     cached = _get_cached_indicator(code, 'SMA', period, date, use_adjusted)
     if cached is not None:
@@ -178,13 +267,19 @@ def get_sma(code: str, date: str, period: int = 20, use_adjusted: bool = True) -
 
 
 def get_ema(code: str, date: str, period: int = 12, use_adjusted: bool = True) -> Optional[float]:
-    """指数移动平均 EMA（默认使用复权价格）
-    
+    """指数移动平均线 EMA（Exponential Moving Average）
+
+    对近期价格赋予更高权重的移动平均，对价格变化比 SMA 更敏感。
+    公式：EMA = 上一EMA + 乘数 * (今收盘 - 上一EMA)，乘数 = 2/(period+1)
+
     Args:
-        code: 股票代码
-        date: 计算日期
-        period: 周期，默认12
-        use_adjusted: 是否使用复权价格，默认True
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 周期，默认12（常用12/26/9组合配合MACD）
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日EMA值（元）；数据不足时返回 None
     """
     cached = _get_cached_indicator(code, 'EMA', period, date, use_adjusted)
     if cached is not None:
@@ -208,21 +303,27 @@ def get_ema(code: str, date: str, period: int = 12, use_adjusted: bool = True) -
     return ema
 
 
-def get_wma(code: str, date: str, period: int = 20, use_adjusted: bool = True) -&gt; Optional[float]:
-    """加权移动平均 WMA（默认使用复权价格）
-    
+def get_wma(code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
+    """加权移动平均线 WMA（Weighted Moving Average）
+
+    越近的K线权重越高（最近一天权重=period，最早一天权重=1），
+    比 SMA 更快响应近期价格变化，适合短中期趋势判断。
+
     Args:
-        code: 股票代码
-        date: 计算日期
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 周期，默认20
-        use_adjusted: 是否使用复权价格，默认True
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日WMA值（元）；数据不足时返回 None
     """
     cached = _get_cached_indicator(code, 'WMA', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
     
     klines = _get_klines_before_date(code, date, period)
-    if len(klines) &lt; period:
+    if len(klines) < period:
         return None
     
     if use_adjusted:
@@ -238,13 +339,19 @@ def get_wma(code: str, date: str, period: int = 20, use_adjusted: bool = True) -
 
 
 def get_tema(code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
-    """三重指数移动平均 TEMA（默认使用复权价格）
-    
+    """三重指数移动平均线 TEMA（Triple Exponential Moving Average）
+
+    TEMA = 3*EMA1 - 3*EMA2 + EMA3，通过三重EMA消除滞后，
+    比单重/双重EMA对价格反应更迅速，适合短线趋势判断。
+
     Args:
-        code: 股票代码
-        date: 计算日期
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 周期，默认20
-        use_adjusted: 是否使用复权价格，默认True
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日TEMA值（元）；数据不足时返回 None
     """
     cached = _get_cached_indicator(code, 'TEMA', period, date, use_adjusted)
     if cached is not None:
@@ -268,13 +375,19 @@ def get_tema(code: str, date: str, period: int = 20, use_adjusted: bool = True) 
 
 
 def get_rsi(code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
-    """相对强弱指标 RSI (0-100)（默认使用复权价格）
-    
+    """相对强弱指数 RSI（Relative Strength Index）
+
+    衡量过去 period 日内上涨幅度与下跌幅度的比值，反映超买超卖状态。
+    取值0-100，通常 >70 视为超买，<30 视为超卖。
+
     Args:
-        code: 股票代码
-        date: 计算日期
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 周期，默认14
-        use_adjusted: 是否使用复权价格，默认True
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日RSI值（0-100）；数据不足时返回 None
     """
     cached = _get_cached_indicator(code, 'RSI', period, date, use_adjusted)
     if cached is not None:
@@ -312,15 +425,22 @@ def get_rsi(code: str, date: str, period: int = 14, use_adjusted: bool = True) -
 
 
 def get_macd(code: str, date: str, fast: int = 12, slow: int = 26, signal: int = 9, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
-    """MACD {'macd': MACD线, 'signal': 信号线, 'histogram': 柱状图}（默认使用复权价格）
-    
+    """MACD 指数平滑异同移动平均线（Moving Average Convergence Divergence）
+
+    MACD线 = 快线EMA - 慢线EMA，Signal线 = MACD线的EMA，柱状图 = MACD - Signal。
+    用于判断价格动量和趋势转折，MACD上穿0轴为多头信号，下穿为空头信号。
+
     Args:
-        code: 股票代码
-        date: 计算日期
-        fast: 快线周期，默认12
-        slow: 慢线周期，默认26
-        signal: 信号线周期，默认9
-        use_adjusted: 是否使用复权价格，默认True
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        fast: 快线EMA周期，默认12
+        slow: 慢线EMA周期，默认26
+        signal: 信号线EMA周期，默认9（当前近似处理）
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        dict: {'macd': MACD线, 'signal': 信号线, 'histogram': 柱状图}（单位：元）；
+        数据不足时返回 None
     """
     period_key = fast * 10000 + slow * 100 + signal
     cached = _get_cached_indicator(code, 'MACD', period_key, date, use_adjusted)
@@ -341,14 +461,21 @@ def get_macd(code: str, date: str, fast: int = 12, slow: int = 26, signal: int =
 
 
 def get_bollinger_bands(code: str, date: str, period: int = 20, std_dev: int = 2, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
-    """布林带 {'upper': 上轨, 'middle': 中轨, 'lower': 下轨}（默认使用复权价格）
-    
+    """布林带 BOLL（Bollinger Bands）
+
+    中轨 = SMA，上轨 = 中轨 + std_dev * 标准差，下轨 = 中轨 - std_dev * 标准差。
+    价格接近上轨为超买，接近下轨为超卖，带宽收窄预示行情即将爆发。
+
     Args:
-        code: 股票代码
-        date: 计算日期
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 周期，默认20
-        std_dev: 标准差倍数，默认2
-        use_adjusted: 是否使用复权价格，默认True
+        std_dev: 标准差倍数，默认2（即±2σ，覆盖约95%的波动区间）
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        dict: {'upper': 上轨, 'middle': 中轨, 'lower': 下轨}（单位：元）；
+        数据不足时返回 None
     """
     cached = _get_cached_indicator(code, 'BB', period, date, use_adjusted)
     if cached is not None:
@@ -376,21 +503,27 @@ def get_bollinger_bands(code: str, date: str, period: int = 20, std_dev: int = 2
     return bb
 
 
-def get_atr(code: str, date: str, period: int = 14, use_adjusted: bool = True) -&gt; Optional[float]:
-    """平均真实波幅 ATR（默认使用复权价格）
-    
+def get_atr(code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
+    """平均真实波幅 ATR（Average True Range）
+
+    对过去 period 根K线的真实波幅（TR）取简单均值，衡量市场波动性。
+    TR = max(最高-最低, |最高-昨收|, |最低-昨收|)，ATR 越大说明近期波动越剧烈。
+
     Args:
-        code: 股票代码
-        date: 计算日期
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 周期，默认14
-        use_adjusted: 是否使用复权价格，默认True
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日ATR值（元）；数据不足时返回 None
     """
     cached = _get_cached_indicator(code, 'ATR', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
     
     klines = _get_klines_before_date(code, date, period + 1)
-    if len(klines) &lt; period + 1:
+    if len(klines) < period + 1:
         return None
     
     if use_adjusted:
@@ -409,21 +542,27 @@ def get_atr(code: str, date: str, period: int = 14, use_adjusted: bool = True) -
     _save_indicator(code, 'ATR', period, date, str(atr), use_adjusted)
     return atr
 
-def get_mom(code: str, date: str, period: int = 10, use_adjusted: bool = True) -&gt; Optional[float]:
-    """动量指标 MOM（默认使用复权价格）
-    
+def get_mom(code: str, date: str, period: int = 10, use_adjusted: bool = True) -> Optional[float]:
+    """动量指标 MOM（Momentum）
+
+    当前收盘价与 period 天前收盘价的差值，衡量价格变动的绝对速度。
+    正值表示上涨动能，负值表示下跌动能，0轴穿越可作为趋势转折信号。
+
     Args:
-        code: 股票代码
-        date: 计算日期
-        period: 周期，默认10
-        use_adjusted: 是否使用复权价格，默认True
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 回溯天数，默认10
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日动量值（元）；数据不足时返回 None
     """
     cached = _get_cached_indicator(code, 'MOM', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
     
     klines = _get_klines_before_date(code, date, period + 1)
-    if len(klines) &lt; period + 1:
+    if len(klines) < period + 1:
         return None
     
     if use_adjusted:
@@ -434,21 +573,27 @@ def get_mom(code: str, date: str, period: int = 10, use_adjusted: bool = True) -
     _save_indicator(code, 'MOM', period, date, str(mom), use_adjusted)
     return mom
 
-def get_roc(code: str, date: str, period: int = 10, use_adjusted: bool = True) -&gt; Optional[float]:
-    """变动率指标 ROC (%)（默认使用复权价格）
-    
+def get_roc(code: str, date: str, period: int = 10, use_adjusted: bool = True) -> Optional[float]:
+    """变动率指标 ROC（Rate of Change，%）
+
+    (今收盘 - N日前收盘) / N日前收盘 * 100，是动量的百分比表达。
+    正值表示相对N日前上涨，负值表示下跌，比 MOM 更适合横向对比不同价位股票。
+
     Args:
-        code: 股票代码
-        date: 计算日期
-        period: 周期，默认10
-        use_adjusted: 是否使用复权价格，默认True
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 回溯天数，默认10
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日ROC值（%）；数据不足或N日前收盘为0时返回 None
     """
     cached = _get_cached_indicator(code, 'ROC', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
     
     klines = _get_klines_before_date(code, date, period + 1)
-    if len(klines) &lt; period + 1:
+    if len(klines) < period + 1:
         return None
     
     if use_adjusted:
@@ -462,21 +607,27 @@ def get_roc(code: str, date: str, period: int = 10, use_adjusted: bool = True) -
     _save_indicator(code, 'ROC', period, date, str(roc), use_adjusted)
     return roc
 
-def get_cci(code: str, date: str, period: int = 20, use_adjusted: bool = True) -&gt; Optional[float]:
-    """顺势指标 CCI（默认使用复权价格）
-    
+def get_cci(code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
+    """顺势指标 CCI（Commodity Channel Index）
+
+    (典型价格 - SMA典型价格) / (0.015 * 平均绝对偏差)，衡量价格偏离均值的程度。
+    通常 >100 视为超买，<-100 视为超卖，适合捕捉短期强弱拐点。
+
     Args:
-        code: 股票代码
-        date: 计算日期
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 周期，默认20
-        use_adjusted: 是否使用复权价格，默认True
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日CCI值（无量纲）；数据不足时返回 None
     """
     cached = _get_cached_indicator(code, 'CCI', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
     
     klines = _get_klines_before_date(code, date, period)
-    if len(klines) &lt; period:
+    if len(klines) < period:
         return None
     
     if use_adjusted:
@@ -495,21 +646,27 @@ def get_cci(code: str, date: str, period: int = 20, use_adjusted: bool = True) -
     _save_indicator(code, 'CCI', period, date, str(cci), use_adjusted)
     return cci
 
-def get_obv(code: str, date: str, period: int = 20, use_adjusted: bool = True) -&gt; Optional[float]:
-    """能量潮 OBV（默认使用复权价格）
-    
+def get_obv(code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
+    """能量潮 OBV（On Balance Volume）
+
+    价格上涨日累加成交量，下跌日扣减成交量，累积值反映资金流入/流出方向。
+    OBV 持续上升说明主动买盘积极，用于验证价格趋势是否有量能支撑。
+
     Args:
-        code: 股票代码
-        date: 计算日期
-        period: 周期，默认20
-        use_adjusted: 是否使用复权价格，默认True
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 统计K线根数，默认20
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日OBV累计值（手）；数据不足时返回 None
     """
     cached = _get_cached_indicator(code, 'OBV', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
     
     klines = _get_klines_before_date(code, date, period + 1)
-    if len(klines) &lt; period + 1:
+    if len(klines) < period + 1:
         return None
     
     if use_adjusted:
@@ -518,22 +675,29 @@ def get_obv(code: str, date: str, period: int = 20, use_adjusted: bool = True) -
     
     obv = 0.0
     for i in range(1, len(klines)):
-        if klines[i].close &gt; klines[i-1].close:
+        if klines[i].close > klines[i-1].close:
             obv += klines[i].volume
-        elif klines[i].close &lt; klines[i-1].close:
+        elif klines[i].close < klines[i-1].close:
             obv -= klines[i].volume
     
     _save_indicator(code, 'OBV', period, date, str(obv), use_adjusted)
     return obv
 
-def get_volume(code: str, date: str, period: int = 20, use_adjusted: bool = True) -&gt; Optional[Dict[str, float]]:
-    """成交量指标 {'current': 当前成交量, 'sma': 成交量均线}（默认使用复权价格）
-    
+def get_volume(code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
+    """成交量统计 VOLUME
+
+    返回当日成交量及近 period 日的均量，用于判断量能是否放大/萎缩。
+    当日量 > 均量说明放量，当日量 < 均量说明缩量。
+
     Args:
-        code: 股票代码
-        date: 计算日期
-        period: 周期，默认20
-        use_adjusted: 是否使用复权价格，默认True
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 均量计算周期，默认20
+        use_adjusted: 是否使用前复权价格，默认True（不影响成交量本身）
+
+    Returns:
+        dict: {'current': 当日成交量, 'sma': period日均量}（单位：手）；
+        数据不足时返回 None
     """
     cached = _get_cached_indicator(code, 'VOLUME', period, date, use_adjusted)
     if cached is not None:
@@ -554,16 +718,23 @@ def get_volume(code: str, date: str, period: int = 20, use_adjusted: bool = True
     _save_indicator(code, 'VOLUME', period, date, str(vol_data), use_adjusted)
     return vol_data
 
-def get_kdj(code: str, date: str, n: int = 9, m1: int = 3, m2: int = 3, use_adjusted: bool = True) -&gt; Optional[Dict[str, float]]:
-    """随机指标 KDJ {'k': K值, 'd': D值, 'j': J值}（默认使用复权价格）
-    
+def get_kdj(code: str, date: str, n: int = 9, m1: int = 3, m2: int = 3, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
+    """随机指标 KDJ
+
+    基于 n 日内最高/最低价计算RSV（未成熟随机值），再经平滑得到K、D、J值。
+    K>80 视为超买，K<20 视为超卖；J线最灵敏，常用K线与D线的交叉作为买卖信号。
+
     Args:
-        code: 股票代码
-        date: 计算日期
-        n: 周期，默认9
-        m1: 平滑参数1，默认3
-        m2: 平滑参数2，默认3
-        use_adjusted: 是否使用复权价格，默认True
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        n: 计算RSV的周期，默认9
+        m1: K线平滑系数（1/m1），默认3
+        m2: D线平滑系数（1/m2），默认3
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        dict: {'k': K值, 'd': D值, 'j': J值}（取值大致0-100，J可超出范围）；
+        数据不足时返回 None
     """
     period_key = n * 10000 + m1 * 100 + m2
     cached = _get_cached_indicator(code, 'KDJ', period_key, date, use_adjusted)
@@ -571,7 +742,7 @@ def get_kdj(code: str, date: str, n: int = 9, m1: int = 3, m2: int = 3, use_adju
         return eval(cached)
     
     klines = _get_klines_before_date(code, date, n)
-    if len(klines) &lt; n:
+    if len(klines) < n:
         return None
     
     if use_adjusted:
@@ -594,21 +765,28 @@ def get_kdj(code: str, date: str, n: int = 9, m1: int = 3, m2: int = 3, use_adju
     _save_indicator(code, 'KDJ', period_key, date, str(kdj), use_adjusted)
     return kdj
 
-def get_dmi(code: str, date: str, period: int = 14, use_adjusted: bool = True) -&gt; Optional[Dict[str, float]]:
-    """趋向指标 DMI {'pdi': +DI, 'mdi': -DI, 'adx': ADX}（默认使用复权价格）
-    
+def get_dmi(code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
+    """趋向指标 DMI（Directional Movement Index）
+
+    +DI 衡量上升趋势力度，-DI 衡量下降趋势力度，ADX 衡量趋势整体强弱（不含方向）。
+    +DI 上穿 -DI 为买入信号，ADX>25 说明市场趋势较强。
+
     Args:
-        code: 股票代码
-        date: 计算日期
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 周期，默认14
-        use_adjusted: 是否使用复权价格，默认True
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        dict: {'pdi': +DI值, 'mdi': -DI值, 'adx': ADX值}（取值0-100）；
+        数据不足时返回 None
     """
     cached = _get_cached_indicator(code, 'DMI', period, date, use_adjusted)
     if cached is not None:
         return eval(cached)
     
     klines = _get_klines_before_date(code, date, period + 1)
-    if len(klines) &lt; period + 1:
+    if len(klines) < period + 1:
         return None
     
     if use_adjusted:
@@ -623,9 +801,9 @@ def get_dmi(code: str, date: str, period: int = 14, use_adjusted: bool = True) -
         high_diff = klines[i].high - klines[i-1].high
         low_diff = klines[i-1].low - klines[i].low
         
-        if high_diff &gt; low_diff and high_diff &gt; 0:
+        if high_diff > low_diff and high_diff > 0:
             plus_dm += high_diff
-        if low_diff &gt; high_diff and low_diff &gt; 0:
+        if low_diff > high_diff and low_diff > 0:
             minus_dm += low_diff
         
         tr = max(klines[i].high - klines[i].low, 
@@ -640,29 +818,57 @@ def get_dmi(code: str, date: str, period: int = 14, use_adjusted: bool = True) -
         pdi = (plus_dm / tr_sum) * 100
         mdi = (minus_dm / tr_sum) * 100
     
-    adx = abs(pdi - mdi) / (pdi + mdi) * 100 if (pdi + mdi) &gt; 0 else 0
+    adx = abs(pdi - mdi) / (pdi + mdi) * 100 if (pdi + mdi) > 0 else 0
     
     dmi = {'pdi': pdi, 'mdi': mdi, 'adx': adx}
     _save_indicator(code, 'DMI', period, date, str(dmi), use_adjusted)
     return dmi
 
 def get_trix(code: str, date: str, period: int = 12, use_adjusted: bool = True) -> Optional[float]:
-    """三重指数平滑移动平均 TRIX (%)"""
+    """三重指数平滑移动平均率 TRIX（Triple Exponential Average，%）
+
+    [存根函数] 理论上计算三重EMA的日变化率（%），
+    TRIX 上穿0轴为买入信号，下穿为卖出信号；当前固定返回 0.0。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 周期，默认12
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当前固定返回 0.0（未完整实现）；数据不足时返回 None
+    """
     cached = _get_cached_indicator(code, 'TRIX', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
     
-    ema1 = get_ema(code, date, period)
+    ema1 = get_ema(code, date, period, use_adjusted)
     if ema1 is None:
         return None
-    
+
     trix = 0.0
     _save_indicator(code, 'TRIX', period, date, str(trix), use_adjusted)
     return trix
 
 
 def get_sar(code: str, date: str, af_start: float = 0.02, af_max: float = 0.2, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
-    """抛物线转向 SAR {'sar': SAR值, 'trend': 趋势}"""
+    """抛物线转向指标 SAR（Parabolic Stop And Reverse）
+
+    价格上涨时 SAR 跟随在价格下方，下跌时跟随在价格上方，触碰 SAR 即为趋势反转信号。
+    加速因子（af）随趋势延续逐步增大，使 SAR 越来越贴近价格。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        af_start: 加速因子初始值，默认0.02
+        af_max: 加速因子最大值，默认0.2
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        dict: {'sar': SAR价格（元）, 'trend': 趋势方向（1=上涨, -1=下跌）}；
+        数据不足时返回 None
+    """
     period_key = int(af_start * 10000 + af_max)
     cached = _get_cached_indicator(code, 'SAR', period_key, date, use_adjusted)
     if cached is not None:
@@ -671,6 +877,10 @@ def get_sar(code: str, date: str, af_start: float = 0.02, af_max: float = 0.2, u
     klines = _get_klines_before_date(code, date, 10)
     if len(klines) < 2:
         return None
+    
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
     
     sar = klines[0].low
     trend = 1
@@ -682,21 +892,27 @@ def get_sar(code: str, date: str, af_start: float = 0.02, af_max: float = 0.2, u
     return sar_data
 
 
-def get_williams_r(code: str, date: str, period: int = 14, use_adjusted: bool = True) -&gt; Optional[float]:
-    """威廉指标 WR (0-100，0表示超买，100表示超卖)（默认使用复权价格）
-    
+def get_williams_r(code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
+    """威廉指标 WR（Williams %R）
+
+    (period日最高 - 今收) / (period日最高 - period日最低) * 100。
+    取值0-100，接近0为超买，接近100为超卖（注意：方向与RSI相反）。
+
     Args:
-        code: 股票代码
-        date: 计算日期
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 周期，默认14
-        use_adjusted: 是否使用复权价格，默认True
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日WR值（0-100）；数据不足时返回 None
     """
     cached = _get_cached_indicator(code, 'WR', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
     
     klines = _get_klines_before_date(code, date, period)
-    if len(klines) &lt; period:
+    if len(klines) < period:
         return None
     
     if use_adjusted:
@@ -714,21 +930,27 @@ def get_williams_r(code: str, date: str, period: int = 14, use_adjusted: bool = 
     _save_indicator(code, 'WR', period, date, str(wr), use_adjusted)
     return wr
 
-def get_psycho(code: str, date: str, period: int = 12, use_adjusted: bool = True) -&gt; Optional[float]:
-    """心理线 PSY (0-100)（默认使用复权价格）
-    
+def get_psycho(code: str, date: str, period: int = 12, use_adjusted: bool = True) -> Optional[float]:
+    """心理线 PSY（Psychological Line）
+
+    过去 period 日中上涨天数占比（%），衡量多数投资者的心理倾向。
+    >75% 表示过度乐观（超买预警），<25% 表示过度悲观（超卖预警）。
+
     Args:
-        code: 股票代码
-        date: 计算日期
-        period: 周期，默认12
-        use_adjusted: 是否使用复权价格，默认True
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 统计周期，默认12
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日PSY值（%，0-100）；数据不足时返回 None
     """
     cached = _get_cached_indicator(code, 'PSY', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
     
     klines = _get_klines_before_date(code, date, period + 1)
-    if len(klines) &lt; period + 1:
+    if len(klines) < period + 1:
         return None
     
     if use_adjusted:
@@ -737,21 +959,27 @@ def get_psycho(code: str, date: str, period: int = 12, use_adjusted: bool = True
     
     up_days = 0
     for i in range(1, len(klines)):
-        if klines[i].close &gt; klines[i-1].close:
+        if klines[i].close > klines[i-1].close:
             up_days += 1
     
     psy = (up_days / period) * 100
     _save_indicator(code, 'PSY', period, date, str(psy), use_adjusted)
     return psy
 
-def get_bias(code: str, date: str, period: int = 20, use_adjusted: bool = True) -&gt; Optional[float]:
-    """乖离率 BIAS (%)（默认使用复权价格）
-    
+def get_bias(code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
+    """乖离率 BIAS（Bias Ratio，%）
+
+    (今收盘 - N日SMA) / N日SMA * 100，衡量股价偏离均线的程度。
+    正值表示价格在均线上方，负值在下方，极端偏离值常预示均值回归行情。
+
     Args:
-        code: 股票代码
-        date: 计算日期
-        period: 周期，默认20
-        use_adjusted: 是否使用复权价格，默认True
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 均线周期，默认20
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日乖离率（%）；数据不足或SMA为0时返回 None
     """
     cached = _get_cached_indicator(code, 'BIAS', period, date, use_adjusted)
     if cached is not None:
@@ -775,7 +1003,19 @@ def get_bias(code: str, date: str, period: int = 20, use_adjusted: bool = True) 
     return bias
 
 def get_tr(code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
-    """真实波幅 TR"""
+    """真实波幅 TR（True Range）
+
+    单根K线的真实波动范围：max(最高-最低, |最高-昨收|, |最低-昨收|)。
+    是计算 ATR 的基础，跳空缺口越大则 TR 值越大。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日TR值（元）；少于2根K线时返回 None
+    """
     cached = _get_cached_indicator(code, 'TR', 1, date, use_adjusted)
     if cached is not None:
         return float(cached)
@@ -783,6 +1023,10 @@ def get_tr(code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
     klines = _get_klines_before_date(code, date, 2)
     if len(klines) < 2:
         return None
+    
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
     
     high = klines[-1].high
     low = klines[-1].low
@@ -794,13 +1038,30 @@ def get_tr(code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
 
 
 def get_natr(code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
-    """归一化平均真实波幅 NATR (%)"""
+    """归一化平均真实波幅 NATR（Normalized Average True Range，%）
+
+    ATR / 当日收盘价 * 100，是 ATR 的百分比形式，
+    消除了股价高低对波幅绝对值的影响，便于不同价位股票横向比较。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: ATR计算周期，默认14
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日NATR值（%）；数据不足或收盘价为0时返回 None
+    """
     cached = _get_cached_indicator(code, 'NATR', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
     
-    atr = get_atr(code, date, period)
+    atr = get_atr(code, date, period, use_adjusted)
     klines = _get_klines_before_date(code, date, 1)
+    
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
     
     if atr is None or len(klines) == 0 or klines[-1].close == 0:
         return None
@@ -811,7 +1072,20 @@ def get_natr(code: str, date: str, period: int = 14, use_adjusted: bool = True) 
 
 
 def get_vwap(code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
-    """成交量加权平均价 VWAP"""
+    """成交量加权平均价 VWAP（Volume Weighted Average Price）
+
+    Σ(典型价格 * 成交量) / Σ(成交量)，反映过去 period 日的成交重心。
+    价格在 VWAP 上方说明多头占优，机构常以 VWAP 作为买卖基准价。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 统计周期，默认20
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日VWAP值（元）；成交量为0或数据不足时返回 None
+    """
     cached = _get_cached_indicator(code, 'VWAP', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
@@ -819,6 +1093,10 @@ def get_vwap(code: str, date: str, period: int = 20, use_adjusted: bool = True) 
     klines = _get_klines_before_date(code, date, period)
     if len(klines) == 0:
         return None
+    
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
     
     total_pv = 0.0
     total_vol = 0.0
@@ -837,7 +1115,20 @@ def get_vwap(code: str, date: str, period: int = 20, use_adjusted: bool = True) 
 
 
 def get_ad(code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
-    """累积/派发线 AD"""
+    """累积/派发线 AD（Accumulation/Distribution Line）
+
+    每日 CLV = [(收-低) - (高-收)] / (高-低)，CLV * 成交量后累加。
+    CLV 衡量收盘价在当日高低范围中的位置，AD 持续上升表示主力在吸筹（积累）。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 统计K线根数，默认20
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日AD累积值（量纲：手）；数据不足时返回 None
+    """
     cached = _get_cached_indicator(code, 'AD', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
@@ -845,6 +1136,10 @@ def get_ad(code: str, date: str, period: int = 20, use_adjusted: bool = True) ->
     klines = _get_klines_before_date(code, date, period)
     if len(klines) == 0:
         return None
+    
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
     
     ad_line = 0.0
     for k in klines:
@@ -860,14 +1155,28 @@ def get_ad(code: str, date: str, period: int = 20, use_adjusted: bool = True) ->
 
 
 def get_adosc(code: str, date: str, fast: int = 3, slow: int = 10, use_adjusted: bool = True) -> Optional[float]:
-    """震荡指标 ADOSC"""
+    """AD震荡指标 ADOSC（Accumulation/Distribution Oscillator）
+
+    快周期AD - 慢周期AD，衡量资金流向的变化速度（AD的动量）。
+    正值且上升表示买盘在增强，负值且下降表示卖盘在增强。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        fast: 快速AD的周期，默认3
+        slow: 慢速AD的周期，默认10
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日ADOSC值；数据不足时返回 None
+    """
     period_key = fast * 100 + slow
     cached = _get_cached_indicator(code, 'ADOSC', period_key, date, use_adjusted)
     if cached is not None:
         return float(cached)
     
-    ad_fast = get_ad(code, date, fast)
-    ad_slow = get_ad(code, date, slow)
+    ad_fast = get_ad(code, date, fast, use_adjusted)
+    ad_slow = get_ad(code, date, slow, use_adjusted)
     
     if ad_fast is None or ad_slow is None:
         return None
@@ -878,7 +1187,20 @@ def get_adosc(code: str, date: str, fast: int = 3, slow: int = 10, use_adjusted:
 
 
 def get_mfi(code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
-    """资金流量指标 MFI (0-100)"""
+    """资金流量指标 MFI（Money Flow Index，0-100）
+
+    结合典型价格和成交量的动量指标，原理类似 RSI 但加入了成交量权重（量价共振）。
+    取值0-100，>80 视为超买，<20 视为超卖。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 周期，默认14
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日MFI值（0-100）；数据不足时返回 None
+    """
     cached = _get_cached_indicator(code, 'MFI', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
@@ -886,7 +1208,11 @@ def get_mfi(code: str, date: str, period: int = 14, use_adjusted: bool = True) -
     klines = _get_klines_before_date(code, date, period + 1)
     if len(klines) < period + 1:
         return None
-    
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
     positive_mf = 0.0
     negative_mf = 0.0
     
@@ -911,7 +1237,20 @@ def get_mfi(code: str, date: str, period: int = 14, use_adjusted: bool = True) -
 
 
 def get_cmo(code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
-    """钱德动量摆动指标 CMO (-100 to 100)"""
+    """钱德动量摆动指标 CMO（Chande Momentum Oscillator，-100到100）
+
+    (上涨幅度总和 - 下跌幅度总和) / (上涨+下跌幅度总和) * 100。
+    取值-100到100，>50 超买，<-50 超卖，穿越0轴视为趋势转变信号。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 周期，默认14
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日CMO值（-100到100）；数据不足时返回 None
+    """
     cached = _get_cached_indicator(code, 'CMO', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
@@ -919,7 +1258,11 @@ def get_cmo(code: str, date: str, period: int = 14, use_adjusted: bool = True) -
     klines = _get_klines_before_date(code, date, period + 1)
     if len(klines) < period + 1:
         return None
-    
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
     up_sum = 0.0
     down_sum = 0.0
     
@@ -940,7 +1283,20 @@ def get_cmo(code: str, date: str, period: int = 14, use_adjusted: bool = True) -
 
 
 def get_rocp(code: str, date: str, period: int = 10, use_adjusted: bool = True) -> Optional[float]:
-    """价格变动率 ROCP"""
+    """价格变动率 ROCP（Rate of Change Percentage）
+
+    (今收盘 - N日前收盘) / N日前收盘，结果为小数而非百分比（区别于 ROC）。
+    例：上涨5%返回0.05，下跌3%返回-0.03。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 回溯天数，默认10
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日ROCP值（小数，非百分比）；数据不足或N日前收盘为0时返回 None
+    """
     cached = _get_cached_indicator(code, 'ROCP', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
@@ -948,14 +1304,31 @@ def get_rocp(code: str, date: str, period: int = 10, use_adjusted: bool = True) 
     klines = _get_klines_before_date(code, date, period + 1)
     if len(klines) < period + 1 or klines[0].close == 0:
         return None
-    
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
     rocp = (klines[-1].close - klines[0].close) / klines[0].close
     _save_indicator(code, 'ROCP', period, date, str(rocp), use_adjusted)
     return rocp
 
 
 def get_rocr(code: str, date: str, period: int = 10, use_adjusted: bool = True) -> Optional[float]:
-    """价格变动率比 ROCR"""
+    """价格变动率比 ROCR（Rate of Change Ratio）
+
+    今收盘 / N日前收盘，即价格的倍数比。
+    =1.0 表示与N日前持平，=1.05 表示上涨5%，=0.95 表示下跌5%。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 回溯天数，默认10
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日ROCR值（倍数）；数据不足或N日前收盘为0时返回 None
+    """
     cached = _get_cached_indicator(code, 'ROCR', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
@@ -963,14 +1336,33 @@ def get_rocr(code: str, date: str, period: int = 10, use_adjusted: bool = True) 
     klines = _get_klines_before_date(code, date, period + 1)
     if len(klines) < period + 1 or klines[0].close == 0:
         return None
-    
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
     rocr = klines[-1].close / klines[0].close
     _save_indicator(code, 'ROCR', period, date, str(rocr), use_adjusted)
     return rocr
 
 
 def get_aroon(code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
-    """阿隆指标 {'up': AROON_UP, 'down': AROON_DOWN, 'osc': AROON_OSC}"""
+    """阿隆指标 AROON（Aroon Indicator）
+
+    AROON_UP = (period - 距最高点天数) / period * 100
+    AROON_DOWN = (period - 距最低点天数) / period * 100
+    AROON_OSC = UP - DOWN，取值-100到100，衡量趋势强度和方向变化。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 周期，默认14
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        dict: {'up': 上行强度（0-100）, 'down': 下行强度（0-100）, 'osc': 震荡值（-100到100）}；
+        数据不足时返回 None
+    """
     cached = _get_cached_indicator(code, 'AROON', period, date, use_adjusted)
     if cached is not None:
         return eval(cached)
@@ -978,24 +1370,41 @@ def get_aroon(code: str, date: str, period: int = 14, use_adjusted: bool = True)
     klines = _get_klines_before_date(code, date, period + 1)
     if len(klines) < period + 1:
         return None
-    
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
     highs = [k.high for k in klines]
     lows = [k.low for k in klines]
-    
+
     high_idx = highs.index(max(highs))
     low_idx = lows.index(min(lows))
-    
+
     aroon_up = ((period - high_idx) / period) * 100
     aroon_down = ((period - low_idx) / period) * 100
     aroon_osc = aroon_up - aroon_down
-    
+
     aroon = {'up': aroon_up, 'down': aroon_down, 'osc': aroon_osc}
     _save_indicator(code, 'AROON', period, date, str(aroon), use_adjusted)
     return aroon
-
-
 def get_ultosc(code: str, date: str, period1: int = 7, period2: int = 14, period3: int = 28, use_adjusted: bool = True) -> Optional[float]:
-    """终极振荡器 ULTOSC (0-100)"""
+    """终极振荡器 ULTOSC（Ultimate Oscillator，0-100）
+
+    [存根函数] 理论上综合三个不同周期的买盘压力计算超买超卖，
+    >70 超买，<30 超卖；当前固定返回 50.0（中性值）。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period1: 短周期，默认7
+        period2: 中周期，默认14
+        period3: 长周期，默认28
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当前固定返回 50.0（未完整实现）；数据不足时返回 None
+    """
     period_key = period1 * 10000 + period2 * 100 + period3
     cached = _get_cached_indicator(code, 'ULTOSC', period_key, date, use_adjusted)
     if cached is not None:
@@ -1004,7 +1413,10 @@ def get_ultosc(code: str, date: str, period1: int = 7, period2: int = 14, period
     klines = _get_klines_before_date(code, date, max(period1, period2, period3) + 1)
     if len(klines) < max(period1, period2, period3) + 1:
         return None
-    
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
     ultosc = 50.0
     _save_indicator(code, 'ULTOSC', period_key, date, str(ultosc), use_adjusted)
     return ultosc
@@ -1015,24 +1427,49 @@ def get_ultosc(code: str, date: str, period1: int = 7, period2: int = 14, period
 # ============================================================
 
 def get_dema(code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
-    """双重指数移动平均 DEMA"""
+    """双重指数移动平均线 DEMA（Double Exponential Moving Average）
+
+    DEMA = 2 * EMA - EMA(EMA)，比单重 EMA 减少滞后，对价格变化响应更快。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 周期，默认20
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日DEMA值（元）；数据不足时返回 None
+    """
     cached = _get_cached_indicator(code, 'DEMA', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
     
-    ema1 = get_ema(code, date, period)
-    ema2 = get_ema(code, date, period)
-    
+    ema1 = get_ema(code, date, period, use_adjusted)
+    ema2 = get_ema(code, date, period, use_adjusted)
+
     if ema1 is None or ema2 is None:
         return None
-    
+
     dema = 2 * ema1 - ema2
     _save_indicator(code, 'DEMA', period, date, str(dema), use_adjusted)
     return dema
 
 
 def get_kama(code: str, date: str, period: int = 10, use_adjusted: bool = True) -> Optional[float]:
-    """考夫曼自适应移动平均 KAMA"""
+    """考夫曼自适应移动平均线 KAMA（Kaufman Adaptive Moving Average）
+
+    [存根函数] 理论上根据市场效率比率自动调整平滑系数，
+    趋势行情时快速跟踪，震荡行情时近乎平坦；当前直接返回最新收盘价。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 效率比率计算周期，默认10
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日KAMA值（元），当前近似为最新收盘价；数据不足时返回 None
+    """
     cached = _get_cached_indicator(code, 'KAMA', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
@@ -1040,14 +1477,30 @@ def get_kama(code: str, date: str, period: int = 10, use_adjusted: bool = True) 
     klines = _get_klines_before_date(code, date, period + 1)
     if len(klines) < period + 1:
         return None
-    
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
     kama = klines[-1].close
     _save_indicator(code, 'KAMA', period, date, str(kama), use_adjusted)
     return kama
 
 
 def get_midpoint(code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
-    """中点价格 MIDPOINT"""
+    """中点价格 MIDPOINT
+
+    过去 period 日内 (最高价极值 + 最低价极值) / 2，代表价格区间的中心位置。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 回看周期，默认14
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 过去period日的中点价格（元）；数据不足时返回 None
+    """
     cached = _get_cached_indicator(code, 'MIDPOINT', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
@@ -1055,7 +1508,11 @@ def get_midpoint(code: str, date: str, period: int = 14, use_adjusted: bool = Tr
     klines = _get_klines_before_date(code, date, period)
     if len(klines) < period:
         return None
-    
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
     highest = max(k.high for k in klines)
     lowest = min(k.low for k in klines)
     
@@ -1065,12 +1522,37 @@ def get_midpoint(code: str, date: str, period: int = 14, use_adjusted: bool = Tr
 
 
 def get_midprice(code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
-    """中点价格 MIDPRICE"""
-    return get_midpoint(code, date, period)
+    """中点价格别名 MIDPRICE（等同于 MIDPOINT）
+
+    直接委托给 get_midpoint，两者完全等价。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 回看周期，默认14
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 过去period日的中点价格（元）；数据不足时返回 None
+    """
+    return get_midpoint(code, date, period, use_adjusted)
 
 
 def get_pvi(code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
-    """正成交量指标 PVI"""
+    """正成交量指标 PVI（Positive Volume Index）
+
+    [存根函数] 理论上只在成交量增大时更新累计价格变化，反映跟风散户的行为；
+    当前固定返回 100.0。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 统计K线根数，默认20
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当前固定返回 100.0（未完整实现）；数据不足时返回 None
+    """
     cached = _get_cached_indicator(code, 'PVI', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
@@ -1085,7 +1567,20 @@ def get_pvi(code: str, date: str, period: int = 20, use_adjusted: bool = True) -
 
 
 def get_nvi(code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
-    """负成交量指标 NVI"""
+    """负成交量指标 NVI（Negative Volume Index）
+
+    [存根函数] 理论上只在成交量缩小时更新累计价格变化，反映主力资金的悄然动向；
+    当前固定返回 100.0。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 统计K线根数，默认20
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当前固定返回 100.0（未完整实现）；数据不足时返回 None
+    """
     cached = _get_cached_indicator(code, 'NVI', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
@@ -1100,18 +1595,34 @@ def get_nvi(code: str, date: str, period: int = 20, use_adjusted: bool = True) -
 
 
 def get_ppo(code: str, date: str, fast: int = 12, slow: int = 26, signal: int = 9, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
-    """价格震荡指标 PPO"""
+    """价格震荡百分比指标 PPO（Percentage Price Oscillator）
+
+    (快EMA - 慢EMA) / 慢EMA * 100，是 MACD 的百分比版本，
+    消除了股价绝对值差异，便于不同价位股票横向比较。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        fast: 快线EMA周期，默认12
+        slow: 慢线EMA周期，默认26
+        signal: 信号线周期，默认9（当前近似处理）
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        dict: {'ppo': PPO线(%), 'signal': 信号线(%), 'histogram': 柱状图}；
+        数据不足或慢EMA为0时返回 None
+    """
     period_key = fast * 10000 + slow * 100 + signal
     cached = _get_cached_indicator(code, 'PPO', period_key, date, use_adjusted)
     if cached is not None:
         return eval(cached)
     
-    ema_fast = get_ema(code, date, fast)
-    ema_slow = get_ema(code, date, slow)
-    
+    ema_fast = get_ema(code, date, fast, use_adjusted)
+    ema_slow = get_ema(code, date, slow, use_adjusted)
+
     if ema_fast is None or ema_slow is None or ema_slow == 0:
         return None
-    
+
     ppo_line = ((ema_fast - ema_slow) / ema_slow) * 100
     ppo = {'ppo': ppo_line, 'signal': ppo_line, 'histogram': 0}
     _save_indicator(code, 'PPO', period_key, date, str(ppo), use_adjusted)
@@ -1119,12 +1630,39 @@ def get_ppo(code: str, date: str, fast: int = 12, slow: int = 26, signal: int = 
 
 
 def get_roc_r(code: str, date: str, period: int = 10, use_adjusted: bool = True) -> Optional[float]:
-    """变动率 ROC_R"""
-    return get_rocr(code, date, period)
+    """变动率比别名 ROC_R（等同于 ROCR）
+
+    直接委托给 get_rocr，两者完全等价。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 回溯天数，默认10
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 今收盘 / N日前收盘的比值；数据不足时返回 None
+    """
+    return get_rocr(code, date, period, use_adjusted)
 
 
 def get_stoch(code: str, date: str, fastk_period: int = 14, slowk_period: int = 3, slowd_period: int = 3, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
-    """随机指标 STOCH {'slowk': 慢速K, 'slowd': 慢速D}"""
+    """慢速随机指标 STOCH（Stochastic Oscillator）
+
+    基于 fastk_period 日高低价范围计算快速K，再经平滑得到慢速K和D值。
+    slowk>80 超买，slowk<20 超卖，K线上穿D线为买入信号，下穿为卖出信号。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        fastk_period: 快速K值计算的高低价范围周期，默认14
+        slowk_period: 慢速K的平滑周期，默认3（当前近似处理）
+        slowd_period: 慢速D的平滑周期，默认3（当前近似处理）
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        dict: {'slowk': 慢速K值, 'slowd': 慢速D值}（0-100）；数据不足时返回 None
+    """
     period_key = fastk_period * 10000 + slowk_period * 100 + slowd_period
     cached = _get_cached_indicator(code, 'STOCH', period_key, date, use_adjusted)
     if cached is not None:
@@ -1133,7 +1671,11 @@ def get_stoch(code: str, date: str, fastk_period: int = 14, slowk_period: int = 
     klines = _get_klines_before_date(code, date, fastk_period)
     if len(klines) < fastk_period:
         return None
-    
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
     low_n = min(k.low for k in klines)
     high_n = max(k.high for k in klines)
     
@@ -1148,7 +1690,21 @@ def get_stoch(code: str, date: str, fastk_period: int = 14, slowk_period: int = 
 
 
 def get_stochf(code: str, date: str, fastk_period: int = 14, fastd_period: int = 3, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
-    """快速随机指标 STOCHF {'fastk': 快速K, 'fastd': 快速D}"""
+    """快速随机指标 STOCHF（Fast Stochastic Oscillator）
+
+    [存根函数] 与 STOCH 类似但不做慢速平滑，反应更灵敏；
+    当前固定返回 {'fastk': 50.0, 'fastd': 50.0}。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        fastk_period: 快速K值计算周期，默认14
+        fastd_period: 快速D的平滑周期，默认3
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        dict: {'fastk': 快速K值, 'fastd': 快速D值}；当前固定返回各50.0（未完整实现）
+    """
     period_key = fastk_period * 100 + fastd_period
     cached = _get_cached_indicator(code, 'STOCHF', period_key, date, use_adjusted)
     if cached is not None:
@@ -1160,7 +1716,21 @@ def get_stochf(code: str, date: str, fastk_period: int = 14, fastd_period: int =
 
 
 def get_stochrsi(code: str, date: str, rsi_period: int = 14, stoch_period: int = 14, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
-    """随机RSI指标 STOCHRSI {'fastk': K, 'fastd': D}"""
+    """随机RSI STOCHRSI（Stochastic RSI）
+
+    [存根函数] 将 RSI 值再经随机指标公式处理，对超买超卖更敏感；
+    当前固定返回 {'fastk': 50.0, 'fastd': 50.0}。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        rsi_period: RSI计算周期，默认14
+        stoch_period: STOCH计算周期，默认14
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        dict: {'fastk': K值, 'fastd': D值}；当前固定返回各50.0（未完整实现）
+    """
     period_key = rsi_period * 100 + stoch_period
     cached = _get_cached_indicator(code, 'STOCHRSI', period_key, date, use_adjusted)
     if cached is not None:
@@ -1172,8 +1742,19 @@ def get_stochrsi(code: str, date: str, rsi_period: int = 14, stoch_period: int =
 
 
 def get_trange(code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
-    """真实波幅 TRANGE"""
-    return get_tr(code, date)
+    """真实波幅别名 TRANGE（等同于 TR）
+
+    直接委托给 get_tr，两者完全等价。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日TR值（元）；数据不足时返回 None
+    """
+    return get_tr(code, date, use_adjusted)
 
 
 # ============================================================
@@ -1181,17 +1762,32 @@ def get_trange(code: str, date: str, use_adjusted: bool = True) -> Optional[floa
 # ============================================================
 
 def get_ma_channel(code: str, date: str, period: int = 20, multiplier: float = 2.0, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
-    """移动平均通道 {'upper': 上轨, 'middle': 中轨, 'lower': 下轨}"""
+    """移动平均通道 MA_CHANNEL
+
+    以 SMA 为中轨，上下各扩展 multiplier 倍 ATR 作为上下轨，形成动态通道。
+    价格突破上轨可能是超强趋势信号，跌破下轨可能是弱势信号，通道宽度随波动率变化。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: SMA和ATR的计算周期，默认20
+        multiplier: ATR倍数，控制通道宽窄，默认2.0
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        dict: {'upper': 上轨, 'middle': 中轨(SMA), 'lower': 下轨}（单位：元）；
+        数据不足时返回 None
+    """
     cached = _get_cached_indicator(code, 'MA_CHANNEL', period, date, use_adjusted)
     if cached is not None:
         return eval(cached)
     
-    sma = get_sma(code, date, period)
-    atr = get_atr(code, date, period)
-    
+    sma = get_sma(code, date, period, use_adjusted)
+    atr = get_atr(code, date, period, use_adjusted)
+
     if sma is None or atr is None:
         return None
-    
+
     channel = {
         'upper': sma + multiplier * atr,
         'middle': sma,
@@ -1202,7 +1798,21 @@ def get_ma_channel(code: str, date: str, period: int = 20, multiplier: float = 2
 
 
 def get_donchian(code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
-    """唐奇安通道 {'upper': 上轨, 'middle': 中轨, 'lower': 下轨}"""
+    """唐奇安通道 DONCHIAN（Donchian Channel）
+
+    上轨 = 过去 period 日最高价，下轨 = 过去 period 日最低价，中轨 = (上+下)/2。
+    价格突破上轨为买入信号，突破下轨为卖出信号（海龟交易系统的核心）。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 通道计算周期，默认20
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        dict: {'upper': 上轨, 'middle': 中轨, 'lower': 下轨}（单位：元）；
+        数据不足时返回 None
+    """
     cached = _get_cached_indicator(code, 'DONCHIAN', period, date, use_adjusted)
     if cached is not None:
         return eval(cached)
@@ -1210,7 +1820,11 @@ def get_donchian(code: str, date: str, period: int = 20, use_adjusted: bool = Tr
     klines = _get_klines_before_date(code, date, period)
     if len(klines) < period:
         return None
-    
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
     upper = max(k.high for k in klines)
     lower = min(k.low for k in klines)
     middle = (upper + lower) / 2
@@ -1221,18 +1835,34 @@ def get_donchian(code: str, date: str, period: int = 20, use_adjusted: bool = Tr
 
 
 def get_keltner(code: str, date: str, ma_period: int = 20, atr_period: int = 10, multiplier: float = 2.0, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
-    """凯尔特纳通道 {'upper': 上轨, 'middle': 中轨, 'lower': 下轨}"""
+    """凯尔特纳通道 KELTNER（Keltner Channel）
+
+    以 EMA 为中轨，上下各扩展 multiplier 倍 ATR。
+    布林带在内、凯特纳在外时称"挤压"（Squeeze），是大行情前兆的判断依据之一。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        ma_period: EMA计算周期，默认20
+        atr_period: ATR计算周期，默认10
+        multiplier: ATR倍数，控制通道宽窄，默认2.0
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        dict: {'upper': 上轨, 'middle': 中轨(EMA), 'lower': 下轨}（单位：元）；
+        数据不足时返回 None
+    """
     period_key = ma_period * 10000 + atr_period * 100 + int(multiplier * 10)
     cached = _get_cached_indicator(code, 'KELTNER', period_key, date, use_adjusted)
     if cached is not None:
         return eval(cached)
     
-    ema = get_ema(code, date, ma_period)
-    atr = get_atr(code, date, atr_period)
-    
+    ema = get_ema(code, date, ma_period, use_adjusted)
+    atr = get_atr(code, date, atr_period, use_adjusted)
+
     if ema is None or atr is None:
         return None
-    
+
     keltner = {
         'upper': ema + multiplier * atr,
         'middle': ema,
@@ -1243,34 +1873,66 @@ def get_keltner(code: str, date: str, ma_period: int = 20, atr_period: int = 10,
 
 
 def get_bbands_width(code: str, date: str, period: int = 20, std_dev: int = 2, use_adjusted: bool = True) -> Optional[float]:
-    """布林带宽度 BBANDS_WIDTH (%)"""
+    """布林带宽度 BBANDS_WIDTH（%）
+
+    (上轨 - 下轨) / 中轨 * 100，衡量布林带的相对宽窄程度（标准化后的带宽）。
+    带宽极度收窄（挤压）通常预示即将发生大行情；带宽扩大表示行情波动加剧。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 布林带周期，默认20
+        std_dev: 标准差倍数，默认2
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日布林带宽度（%）；数据不足或中轨为0时返回 None
+    """
     period_key = period * 10 + std_dev
     cached = _get_cached_indicator(code, 'BBANDS_WIDTH', period_key, date, use_adjusted)
     if cached is not None:
         return float(cached)
     
-    bb = get_bollinger_bands(code, date, period, std_dev)
+    bb = get_bollinger_bands(code, date, period, std_dev, use_adjusted)
     if bb is None or bb['middle'] == 0:
         return None
-    
+
     width = ((bb['upper'] - bb['lower']) / bb['middle']) * 100
     _save_indicator(code, 'BBANDS_WIDTH', period_key, date, str(width), use_adjusted)
     return width
 
 
 def get_bbands_pct(code: str, date: str, period: int = 20, std_dev: int = 2, use_adjusted: bool = True) -> Optional[float]:
-    """布林带百分比位置 BBANDS_PCT (0-1)"""
+    """布林带百分比位置 BBANDS_PCT（Bollinger Bands %B）
+
+    (今收 - 下轨) / (上轨 - 下轨)，衡量价格在布林带中的相对位置。
+    =1.0 表示触及上轨（超买），=0.0 触及下轨（超卖），=0.5 在中轨；极端时可超出[0,1]范围。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 布林带周期，默认20
+        std_dev: 标准差倍数，默认2
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日%B值（通常0-1，极端时可超出范围）；数据不足时返回 None
+    """
     period_key = period * 10 + std_dev
     cached = _get_cached_indicator(code, 'BBANDS_PCT', period_key, date, use_adjusted)
     if cached is not None:
         return float(cached)
     
-    bb = get_bollinger_bands(code, date, period, std_dev)
+    bb = get_bollinger_bands(code, date, period, std_dev, use_adjusted)
     klines = _get_klines_before_date(code, date, 1)
-    
+
     if bb is None or len(klines) == 0:
         return None
-    
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
     if bb['upper'] - bb['lower'] == 0:
         pct = 0.5
     else:
@@ -1285,15 +1947,32 @@ def get_bbands_pct(code: str, date: str, period: int = 20, std_dev: int = 2, use
 # ============================================================
 
 def get_linearreg(code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
-    """线性回归预测值 LINEARREG"""
+    """线性回归预测值 LINEARREG
+
+    对过去 period 日收盘价做最小二乘线性回归，返回回归线在最后一天的预测值。
+    可理解为去噪后的"理论收盘价"，与实际价格的偏差反映超买超卖程度。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 回归窗口大小，默认14
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日线性回归预测价（元）；数据不足时返回 None
+    """
     cached = _get_cached_indicator(code, 'LINEARREG', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
-    
+
     klines = _get_klines_before_date(code, date, period)
     if len(klines) < period:
         return None
-    
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
     prices = [k.close for k in klines]
     x = list(range(period))
     mean_x = sum(x) / period
@@ -1314,15 +1993,32 @@ def get_linearreg(code: str, date: str, period: int = 14, use_adjusted: bool = T
 
 
 def get_linearreg_angle(code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
-    """线性回归角度 LINEARREG_ANGLE"""
+    """线性回归角度 LINEARREG_ANGLE（度）
+
+    对过去 period 日收盘价做线性回归，将斜率转换为角度（arctan）。
+    正角度表示上升趋势，负角度表示下降趋势，角度绝对值越大趋势越陡峭。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 回归窗口大小，默认14
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日回归线角度（度，-90到90）；数据不足时返回 None
+    """
     cached = _get_cached_indicator(code, 'LINEARREG_ANGLE', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
-    
+
     klines = _get_klines_before_date(code, date, period)
     if len(klines) < period:
         return None
-    
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
     prices = [k.close for k in klines]
     x = list(range(period))
     mean_x = sum(x) / period
@@ -1342,15 +2038,32 @@ def get_linearreg_angle(code: str, date: str, period: int = 14, use_adjusted: bo
 
 
 def get_linearreg_intercept(code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
-    """线性回归截距 LINEARREG_INTERCEPT"""
+    """线性回归截距 LINEARREG_INTERCEPT（元）
+
+    过去 period 日收盘价线性回归直线的Y轴截距（x=0时的理论价格）。
+    通常配合 LINEARREG_SLOPE 和 LINEARREG 一起使用，单独使用意义不大。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 回归窗口大小，默认14
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 线性回归截距值（元）；数据不足时返回 None
+    """
     cached = _get_cached_indicator(code, 'LINEARREG_INTERCEPT', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
-    
+
     klines = _get_klines_before_date(code, date, period)
     if len(klines) < period:
         return None
-    
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
     prices = [k.close for k in klines]
     x = list(range(period))
     mean_x = sum(x) / period
@@ -1370,15 +2083,32 @@ def get_linearreg_intercept(code: str, date: str, period: int = 14, use_adjusted
 
 
 def get_linearreg_slope(code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
-    """线性回归斜率 LINEARREG_SLOPE"""
+    """线性回归斜率 LINEARREG_SLOPE（元/天）
+
+    过去 period 日收盘价线性回归直线的斜率（每交易日平均涨跌幅）。
+    正值表示上升趋势，负值表示下降趋势，绝对值越大趋势越强劲。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 回归窗口大小，默认14
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 线性回归斜率（元/天）；数据不足时返回 None
+    """
     cached = _get_cached_indicator(code, 'LINEARREG_SLOPE', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
-    
+
     klines = _get_klines_before_date(code, date, period)
     if len(klines) < period:
         return None
-    
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
     prices = [k.close for k in klines]
     x = list(range(period))
     mean_x = sum(x) / period
@@ -1396,16 +2126,34 @@ def get_linearreg_slope(code: str, date: str, period: int = 14, use_adjusted: bo
 
 
 def get_stddev(code: str, date: str, period: int = 20, nbdev: int = 1, use_adjusted: bool = True) -> Optional[float]:
-    """标准差 STDDEV"""
+    """标准差 STDDEV（Standard Deviation）
+
+    过去 period 日收盘价的总体标准差，乘以 nbdev 倍数。
+    衡量价格的离散程度，是布林带计算的基础；nbdev=1为原始标准差，=2则与布林带2σ对应。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 计算周期，默认20
+        nbdev: 标准差倍数，默认1
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日标准差值（元）；数据不足时返回 None
+    """
     period_key = period * 10 + nbdev
     cached = _get_cached_indicator(code, 'STDDEV', period_key, date, use_adjusted)
     if cached is not None:
         return float(cached)
-    
+
     klines = _get_klines_before_date(code, date, period)
     if len(klines) < period:
         return None
-    
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
     prices = [k.close for k in klines]
     mean = sum(prices) / period
     variance = sum((p - mean) ** 2 for p in prices) / period
@@ -1416,21 +2164,51 @@ def get_stddev(code: str, date: str, period: int = 20, nbdev: int = 1, use_adjus
 
 
 def get_tsf(code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
-    """时间序列预测 TSF"""
-    return get_linearreg(code, date, period)
+    """时间序列预测别名 TSF（Time Series Forecast，等同于 LINEARREG）
+
+    直接委托给 get_linearreg，两者完全等价。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 回归窗口大小，默认14
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日线性回归预测价（元）；数据不足时返回 None
+    """
+    return get_linearreg(code, date, period, use_adjusted)
 
 
 def get_var(code: str, date: str, period: int = 20, nbdev: int = 1, use_adjusted: bool = True) -> Optional[float]:
-    """方差 VAR"""
+    """方差 VAR（Variance）
+
+    过去 period 日收盘价的总体方差，乘以 nbdev² 倍数。
+    方差 = 标准差²，是 STDDEV 的平方，衡量价格离散程度；与 STDDEV 配合使用。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 计算周期，默认20
+        nbdev: 倍数，默认1（实际方差再乘以nbdev²）
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日方差值（元²）；数据不足时返回 None
+    """
     period_key = period * 10 + nbdev
     cached = _get_cached_indicator(code, 'VAR', period_key, date, use_adjusted)
     if cached is not None:
         return float(cached)
-    
+
     klines = _get_klines_before_date(code, date, period)
     if len(klines) < period:
         return None
-    
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
     prices = [k.close for k in klines]
     mean = sum(prices) / period
     variance = sum((p - mean) ** 2 for p in prices) / period
@@ -1441,7 +2219,20 @@ def get_var(code: str, date: str, period: int = 20, nbdev: int = 1, use_adjusted
 
 
 def get_correl(code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
-    """相关系数 CORREL (与自身价格序列，固定返回1.0)"""
+    """相关系数 CORREL（Pearson Correlation Coefficient）
+
+    [存根函数] 理论上计算两个价格序列的皮尔逊相关系数（-1到1）；
+    当前仅支持单只股票（与自身序列相关，结果恒为1.0）。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 统计周期，默认20
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当前固定返回 1.0（未完整实现）
+    """
     cached = _get_cached_indicator(code, 'CORREL', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
@@ -1452,7 +2243,20 @@ def get_correl(code: str, date: str, period: int = 20, use_adjusted: bool = True
 
 
 def get_beta(code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
-    """贝塔系数 BETA (与自身比较，固定返回1.0)"""
+    """贝塔系数 BETA
+
+    [存根函数] 理论上衡量个股相对市场指数的系统性风险（>1波动大于市场，<1反之）；
+    需要基准指数数据，当前仅支持单只股票（与自身比较，固定返回1.0）。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        period: 统计周期，默认20
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当前固定返回 1.0（未完整实现）
+    """
     cached = _get_cached_indicator(code, 'BETA', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
@@ -1463,7 +2267,19 @@ def get_beta(code: str, date: str, period: int = 20, use_adjusted: bool = True) 
 
 
 def get_ht_dcperiod(code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
-    """希尔伯特变换-主导周期 HT_DCPERIOD"""
+    """希尔伯特变换-主导周期 HT_DCPERIOD
+
+    [存根函数] 通过希尔伯特变换检测价格序列当前的主导振荡周期（天数），
+    用于自适应指标的动态周期参数；当前固定返回 10.0。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当前固定返回 10.0（未完整实现），单位：天
+    """
     cached = _get_cached_indicator(code, 'HT_DCPERIOD', 1, date, use_adjusted)
     if cached is not None:
         return float(cached)
@@ -1474,7 +2290,19 @@ def get_ht_dcperiod(code: str, date: str, use_adjusted: bool = True) -> Optional
 
 
 def get_ht_dcphase(code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
-    """希尔伯特变换-主导相位 HT_DCPHASE"""
+    """希尔伯特变换-主导相位 HT_DCPHASE
+
+    [存根函数] 当前价格在主导周期中所处的相位角（度），
+    配合 HT_DCPERIOD 使用，可判断周期性行情的位置；当前固定返回 0.0。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当前固定返回 0.0（未完整实现），单位：度
+    """
     cached = _get_cached_indicator(code, 'HT_DCPHASE', 1, date, use_adjusted)
     if cached is not None:
         return float(cached)
@@ -1485,7 +2313,19 @@ def get_ht_dcphase(code: str, date: str, use_adjusted: bool = True) -> Optional[
 
 
 def get_ht_phasor(code: str, date: str, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
-    """希尔伯特变换-相位分量 HT_PHASOR {'inphase': 同相, 'quadrature': 正交}"""
+    """希尔伯特变换-相位分量 HT_PHASOR
+
+    [存根函数] 将价格信号分解为同相（InPhase）和正交（Quadrature）两个正交分量，
+    用于计算相位和主导周期；当前固定返回零值。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        dict: {'inphase': 同相分量, 'quadrature': 正交分量}；当前固定返回各0.0（未完整实现）
+    """
     cached = _get_cached_indicator(code, 'HT_PHASOR', 1, date, use_adjusted)
     if cached is not None:
         return eval(cached)
@@ -1496,7 +2336,19 @@ def get_ht_phasor(code: str, date: str, use_adjusted: bool = True) -> Optional[D
 
 
 def get_ht_sine(code: str, date: str, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
-    """希尔伯特变换-正弦波 HT_SINE {'sine': 正弦, 'leadsine': 超前正弦}"""
+    """希尔伯特变换-正弦波 HT_SINE
+
+    [存根函数] 基于希尔伯特变换输出正弦波和超前正弦波（领先约45度），
+    两线交叉预示周期性趋势转折；当前固定返回零值。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        dict: {'sine': 正弦值, 'leadsine': 超前正弦值}；当前固定返回各0.0（未完整实现）
+    """
     cached = _get_cached_indicator(code, 'HT_SINE', 1, date, use_adjusted)
     if cached is not None:
         return eval(cached)
@@ -1507,7 +2359,19 @@ def get_ht_sine(code: str, date: str, use_adjusted: bool = True) -> Optional[Dic
 
 
 def get_ht_trendmode(code: str, date: str, use_adjusted: bool = True) -> Optional[int]:
-    """希尔伯特变换-趋势模式 HT_TRENDMODE (1=趋势, 0=周期)"""
+    """希尔伯特变换-趋势模式 HT_TRENDMODE
+
+    [存根函数] 判断当前市场处于趋势行情（1）还是周期性震荡行情（0），
+    用于切换使用趋势类或震荡类指标；当前固定返回1（趋势模式）。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        int: 1=趋势行情，0=周期性震荡；当前固定返回 1（未完整实现）
+    """
     cached = _get_cached_indicator(code, 'HT_TRENDMODE', 1, date, use_adjusted)
     if cached is not None:
         return int(float(cached))
@@ -1522,52 +2386,112 @@ def get_ht_trendmode(code: str, date: str, use_adjusted: bool = True) -> Optiona
 # ============================================================
 
 def get_typical_price(code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
-    """典型价格 TP = (High + Low + Close) / 3"""
-    cached = _get_cached_indicator(code, 'TYPICAL', 1, date)
+    """典型价格 TP（Typical Price）
+
+    当日 (最高价 + 最低价 + 收盘价) / 3，是 MFI、CCI、VWAP 等指标的基础计算单元，
+    比单纯收盘价更能代表当日的价格重心。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日典型价格（元）；数据不足时返回 None
+    """
+    cached = _get_cached_indicator(code, 'TYPICAL', 1, date, use_adjusted)
     if cached is not None:
         return float(cached)
-    
+
     klines = _get_klines_before_date(code, date, 1)
     if len(klines) == 0:
         return None
-    
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
     tp = (klines[-1].high + klines[-1].low + klines[-1].close) / 3
-    _save_indicator(code, 'TYPICAL', 1, date, str(tp))
+    _save_indicator(code, 'TYPICAL', 1, date, str(tp), use_adjusted)
     return tp
 
 
 def get_median_price(code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
-    """中位数价格 = (High + Low) / 2"""
-    cached = _get_cached_indicator(code, 'MEDIAN', 1, date)
+    """中位数价格 MEDPRICE（Median Price）
+
+    当日 (最高价 + 最低价) / 2，代表当日价格区间的中心点，
+    不考虑收盘价位置，适合作为对称通道的基准价格。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日中位数价格（元）；数据不足时返回 None
+    """
+    cached = _get_cached_indicator(code, 'MEDIAN', 1, date, use_adjusted)
     if cached is not None:
         return float(cached)
-    
+
     klines = _get_klines_before_date(code, date, 1)
     if len(klines) == 0:
         return None
-    
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
     mp = (klines[-1].high + klines[-1].low) / 2
-    _save_indicator(code, 'MEDIAN', 1, date, str(mp))
+    _save_indicator(code, 'MEDIAN', 1, date, str(mp), use_adjusted)
     return mp
 
 
 def get_weighted_close(code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
-    """加权收盘价 = (High + Low + 2 * Close) / 4"""
-    cached = _get_cached_indicator(code, 'WCL', 1, date)
+    """加权收盘价 WCL（Weighted Close Price）
+
+    当日 (最高价 + 最低价 + 2 * 收盘价) / 4，给收盘价赋予双倍权重，
+    比典型价格更强调收盘价的重要性，反映市场对当日收盘位置的认可。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日加权收盘价（元）；数据不足时返回 None
+    """
+    cached = _get_cached_indicator(code, 'WCL', 1, date, use_adjusted)
     if cached is not None:
         return float(cached)
-    
+
     klines = _get_klines_before_date(code, date, 1)
     if len(klines) == 0:
         return None
-    
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
     wcl = (klines[-1].high + klines[-1].low + 2 * klines[-1].close) / 4
-    _save_indicator(code, 'WCL', 1, date, str(wcl))
+    _save_indicator(code, 'WCL', 1, date, str(wcl), use_adjusted)
     return wcl
 
 
 def get_avgp(code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
-    """平均价格 = (Open + High + Low + Close) / 4"""
+    """平均价格 AVGP（Average Price）
+
+    当日 (开盘价 + 最高价 + 最低价 + 收盘价) / 4，四价平均，
+    综合反映当日全程的价格水平，可用于判断当日多空博弈的均衡点。
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 计算截止日期，格式 'YYYY-MM-DD'
+        use_adjusted: 是否使用前复权价格，默认True
+
+    Returns:
+        float: 当日四价平均价格（元）；数据不足时返回 None
+    """
     cached = _get_cached_indicator(code, 'AVGP', 1, date, use_adjusted)
     if cached is not None:
         return float(cached)
@@ -1575,7 +2499,11 @@ def get_avgp(code: str, date: str, use_adjusted: bool = True) -> Optional[float]
     klines = _get_klines_before_date(code, date, 1)
     if len(klines) == 0:
         return None
-    
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
     avgp = (klines[-1].open + klines[-1].high + klines[-1].low + klines[-1].close) / 4
     _save_indicator(code, 'AVGP', 1, date, str(avgp), use_adjusted)
     return avgp
