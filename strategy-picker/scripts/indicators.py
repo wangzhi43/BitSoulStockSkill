@@ -223,6 +223,28 @@ def _adjust_klines(klines: List[DailyKline], adj_factors: Dict[str, float]) -> L
     return adjusted_klines
 
 
+def _ema_series(values: list, period: int) -> list:
+    """计算EMA序列（内部辅助函数）
+
+    对输入数值列表计算指数移动平均，返回与输入等长的序列。
+    平滑因子 k = 2 / (period + 1)，首值直接取第一个输入值。
+
+    Args:
+        values: 原始数值列表
+        period: EMA 平滑周期
+
+    Returns:
+        list: 与 values 等长的 EMA 值列表；values 为空时返回空列表
+    """
+    if not values:
+        return []
+    k = 2.0 / (period + 1)
+    result = [values[0]]
+    for v in values[1:]:
+        result.append(result[-1] + k * (v - result[-1]))
+    return result
+
+
 # ============================================================
 # 第一梯队：最常用指标
 # ============================================================
@@ -820,27 +842,41 @@ def get_dmi(code: str, date: str, period: int = 14, use_adjusted: bool = True) -
 def get_trix(code: str, date: str, period: int = 12, use_adjusted: bool = True) -> Optional[float]:
     """三重指数平滑移动平均率 TRIX（Triple Exponential Average，%）
 
-    [存根函数] 理论上计算三重EMA的日变化率（%），
-    TRIX 上穿0轴为买入信号，下穿为卖出信号；当前固定返回 0.0。
+    对收盘价连续做三次 EMA，取最后一次 EMA 的日变化率（%）。
+    EMA1 = EMA(close, N)，EMA2 = EMA(EMA1, N)，EMA3 = EMA(EMA2, N)
+    TRIX = (EMA3 - EMA3[prev]) / EMA3[prev] * 100
+    上穿 0 轴为买入信号，下穿为卖出信号；配合 MATRIX（TRIX 的 M 日均线）使用更佳。
 
     Args:
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
-        period: 周期，默认12
+        period: EMA 周期，默认12
         use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
-        float: 当前固定返回 0.0（未完整实现）；数据不足时返回 None
+        float: 当日 TRIX 值（%）；数据不足时返回 None
     """
     cached = _get_cached_indicator(code, 'TRIX', period, date, use_adjusted)
     if cached is not None:
         return float(cached)
-    
-    ema1 = get_ema(code, date, period, use_adjusted)
-    if ema1 is None:
+
+    klines = _get_klines_before_date(code, date, period * 3 + 5)
+    if len(klines) < period * 3:
         return None
 
-    trix = 0.0
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
+    closes = [k.close for k in klines]
+    ema1 = _ema_series(closes, period)
+    ema2 = _ema_series(ema1, period)
+    ema3 = _ema_series(ema2, period)
+
+    if len(ema3) < 2 or ema3[-2] == 0:
+        return None
+
+    trix = (ema3[-1] - ema3[-2]) / ema3[-2] * 100
     _save_indicator(code, 'TRIX', period, date, str(trix), use_adjusted)
     return trix
 
@@ -2500,6 +2536,445 @@ def get_avgp(code: str, date: str, use_adjusted: bool = True) -> Optional[float]
     avgp = (klines[-1].open + klines[-1].high + klines[-1].low + klines[-1].close) / 4
     _save_indicator(code, 'AVGP', 1, date, str(avgp), use_adjusted)
     return avgp
+
+
+# ============================================================
+# 新增指标
+# ============================================================
+
+def get_asi(code: str, date: str, period: int = 26, use_adjusted: bool = True) -> Optional[float]:
+    """振动升降指标 ASI（Accumulation Swing Index）
+
+    由 Wilder 提出，综合 open/high/low/close 计算每日摆动指数 SI，再累计求和。
+    ASI 上穿前高为强烈买入信号，下穿前低为卖出信号，常用于确认趋势突破的真实性。
+
+    Args:
+        code:         股票代码，如 '000001.SZ'
+        date:         计算截止日期，格式 'YYYY-MM-DD'
+        period:       累计 SI 的 K 线根数，默认 26
+        use_adjusted: 是否使用后复权价格，默认 True
+
+    Returns:
+        float: 当日 ASI 值；数据不足（< period+1 根）时返回 None
+    """
+    cached = _get_cached_indicator(code, 'ASI', period, date, use_adjusted)
+    if cached is not None:
+        return float(cached)
+
+    klines = _get_klines_before_date(code, date, period + 1)
+    if len(klines) < period + 1:
+        return None
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
+    asi = 0.0
+    for i in range(1, len(klines)):
+        cur  = klines[i]
+        prev = klines[i - 1]
+        A = abs(cur.high  - prev.close)
+        B = abs(cur.low   - prev.close)
+        C = abs(cur.high  - prev.low)
+        D = abs(prev.close - prev.open) if prev.open else 0.0
+
+        if A >= B and A >= C:
+            R = A - 0.5 * B + 0.25 * D
+        elif B >= A and B >= C:
+            R = B - 0.5 * A + 0.25 * D
+        else:
+            R = C + 0.25 * D
+
+        X = (cur.close - prev.close) + 0.5 * (cur.close - cur.open) + 0.25 * (prev.close - prev.open if prev.open else 0.0)
+        si = (50.0 * X / R) if R != 0 else 0.0
+        asi += si
+
+    _save_indicator(code, 'ASI', period, date, str(asi), use_adjusted)
+    return asi
+
+
+def get_vr(code: str, date: str, period: int = 26, use_adjusted: bool = True) -> Optional[float]:
+    """成交量变异率 VR（Volume Ratio）
+
+    将过去 period 日的成交量按涨/跌/平分类累加，计算多空力量之比。
+    VR = (上涨日成交量 + 平盘日成交量/2) / (下跌日成交量 + 平盘日成交量/2) * 100
+    VR 在 70~150 为盘整区，>250 超买，<70 超卖，<40 极度超卖（可能反弹）。
+
+    Args:
+        code:         股票代码，如 '000001.SZ'
+        date:         计算截止日期，格式 'YYYY-MM-DD'
+        period:       统计周期，默认 26
+        use_adjusted: 是否使用后复权价格，默认 True
+
+    Returns:
+        float: 当日 VR 值；数据不足或分母为 0 时返回 None
+    """
+    cached = _get_cached_indicator(code, 'VR', period, date, use_adjusted)
+    if cached is not None:
+        return float(cached)
+
+    klines = _get_klines_before_date(code, date, period + 1)
+    if len(klines) < period + 1:
+        return None
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
+    avs = bvs = cvs = 0.0
+    for i in range(1, len(klines)):
+        vol = klines[i].volume or 0.0
+        if klines[i].close > klines[i - 1].close:
+            avs += vol
+        elif klines[i].close < klines[i - 1].close:
+            bvs += vol
+        else:
+            cvs += vol
+
+    denominator = bvs + cvs / 2.0
+    if denominator == 0:
+        return None
+
+    vr = (avs + cvs / 2.0) / denominator * 100.0
+    _save_indicator(code, 'VR', period, date, str(vr), use_adjusted)
+    return vr
+
+
+def get_ar(code: str, date: str, period: int = 26, use_adjusted: bool = True) -> Optional[float]:
+    """AR 人气指标（Atmosphere Ratio）
+
+    衡量当前市场人气，反映多空双方争夺的激烈程度。
+    AR = sum(High - Open) / sum(Open - Low) * 100，值越高说明买方越强势。
+    AR > 180 为超买区，AR < 40 为超卖区，一般在 80~120 间震荡。
+
+    Args:
+        code:         股票代码，如 '000001.SZ'
+        date:         计算截止日期，格式 'YYYY-MM-DD'
+        period:       统计周期，默认 26
+        use_adjusted: 是否使用后复权价格，默认 True
+
+    Returns:
+        float: 当日 AR 值；数据不足或分母为 0 时返回 None
+    """
+    cached = _get_cached_indicator(code, 'AR', period, date, use_adjusted)
+    if cached is not None:
+        return float(cached)
+
+    klines = _get_klines_before_date(code, date, period)
+    if len(klines) < period:
+        return None
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
+    sum_ho = sum(k.high - k.open for k in klines)
+    sum_ol = sum(k.open - k.low  for k in klines)
+
+    if sum_ol == 0:
+        return None
+
+    ar = sum_ho / sum_ol * 100.0
+    _save_indicator(code, 'AR', period, date, str(ar), use_adjusted)
+    return ar
+
+
+def get_br(code: str, date: str, period: int = 26, use_adjusted: bool = True) -> Optional[float]:
+    """BR 意愿指标（Willingness Ratio）
+
+    衡量市场买卖意愿，以前收盘价为参考基准区分主动多空力量。
+    BR = sum(max(0, High - prevClose)) / sum(max(0, prevClose - Low)) * 100
+    BR > 400 超买，BR < 40 超卖。与 AR 配合使用可判断主力意图。
+
+    Args:
+        code:         股票代码，如 '000001.SZ'
+        date:         计算截止日期，格式 'YYYY-MM-DD'
+        period:       统计周期，默认 26
+        use_adjusted: 是否使用后复权价格，默认 True
+
+    Returns:
+        float: 当日 BR 值；数据不足或分母为 0 时返回 None
+    """
+    cached = _get_cached_indicator(code, 'BR', period, date, use_adjusted)
+    if cached is not None:
+        return float(cached)
+
+    klines = _get_klines_before_date(code, date, period + 1)
+    if len(klines) < period + 1:
+        return None
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
+    sum_hpc = sum_pcl = 0.0
+    for i in range(1, len(klines)):
+        pc = klines[i - 1].close
+        sum_hpc += max(0.0, klines[i].high - pc)
+        sum_pcl += max(0.0, pc - klines[i].low)
+
+    if sum_pcl == 0:
+        return None
+
+    br = sum_hpc / sum_pcl * 100.0
+    _save_indicator(code, 'BR', period, date, str(br), use_adjusted)
+    return br
+
+
+def get_brar(code: str, date: str, period: int = 26, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
+    """BRAR 情绪指标（BR + AR 组合）
+
+    同时返回 AR（人气指标）和 BR（意愿指标），综合衡量市场情绪。
+    AR 反映多空争夺强度，BR 反映主力买卖意愿；两者配合判断超买超卖。
+    AR/BR 同时超买 → 市场过热；AR/BR 同时超卖 → 可能见底。
+
+    Args:
+        code:         股票代码，如 '000001.SZ'
+        date:         计算截止日期，格式 'YYYY-MM-DD'
+        period:       统计周期，默认 26
+        use_adjusted: 是否使用后复权价格，默认 True
+
+    Returns:
+        dict: {'ar': AR值, 'br': BR值}；任一指标无法计算时返回 None
+    """
+    cached = _get_cached_indicator(code, 'BRAR', period, date, use_adjusted)
+    if cached is not None:
+        return eval(cached)
+
+    ar = get_ar(code, date, period, use_adjusted)
+    br = get_br(code, date, period, use_adjusted)
+
+    if ar is None or br is None:
+        return None
+
+    result = {'ar': ar, 'br': br}
+    _save_indicator(code, 'BRAR', period, date, str(result), use_adjusted)
+    return result
+
+
+def get_dpo(code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
+    """区间震荡线 DPO（Detrended Price Oscillator）
+
+    通过去除价格中的趋势成分，突出周期性波动。
+    DPO = 今收盘 - SMA(close, N) 向前偏移 (N/2 + 1) 根K线
+    偏移后的 SMA 反映 N/2+1 天前的均价水平，DPO > 0 表示价格高于历史均值。
+
+    Args:
+        code:         股票代码，如 '000001.SZ'
+        date:         计算截止日期，格式 'YYYY-MM-DD'
+        period:       周期，默认 20
+        use_adjusted: 是否使用后复权价格，默认 True
+
+    Returns:
+        float: 当日 DPO 值（元）；数据不足时返回 None
+    """
+    cached = _get_cached_indicator(code, 'DPO', period, date, use_adjusted)
+    if cached is not None:
+        return float(cached)
+
+    shift = period // 2 + 1
+    needed = period + shift + 1
+    klines = _get_klines_before_date(code, date, needed)
+    if len(klines) < needed:
+        return None
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
+    # SMA 使用 shift 根前的那段 N 根 K 线
+    sma_klines = klines[-(period + shift):-shift]
+    sma_old = sum(k.close for k in sma_klines) / period
+
+    dpo = klines[-1].close - sma_old
+    _save_indicator(code, 'DPO', period, date, str(dpo), use_adjusted)
+    return dpo
+
+
+def get_bbi(code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
+    """多空指标 BBI（Bull and Bear Index）
+
+    四条均线（3/6/12/24日）的简单平均，综合短中长期趋势。
+    BBI = (MA3 + MA6 + MA12 + MA24) / 4
+    价格上穿 BBI 为买入信号，下穿为卖出信号；比单一均线更平滑稳定。
+
+    Args:
+        code:         股票代码，如 '000001.SZ'
+        date:         计算截止日期，格式 'YYYY-MM-DD'
+        use_adjusted: 是否使用后复权价格，默认 True
+
+    Returns:
+        float: 当日 BBI 值（元）；数据不足 24 根时返回 None
+    """
+    cached = _get_cached_indicator(code, 'BBI', 24, date, use_adjusted)
+    if cached is not None:
+        return float(cached)
+
+    klines = _get_klines_before_date(code, date, 24)
+    if len(klines) < 24:
+        return None
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
+    closes = [k.close for k in klines]
+    ma3  = sum(closes[-3:])  / 3
+    ma6  = sum(closes[-6:])  / 6
+    ma12 = sum(closes[-12:]) / 12
+    ma24 = sum(closes[-24:]) / 24
+
+    bbi = (ma3 + ma6 + ma12 + ma24) / 4.0
+    _save_indicator(code, 'BBI', 24, date, str(bbi), use_adjusted)
+    return bbi
+
+
+def get_mass(code: str, date: str, period: int = 25, use_adjusted: bool = True) -> Optional[float]:
+    """梅斯线 MASS（Mass Index）
+
+    通过计算高低价之差的两次 EMA 之比，并累加，识别价格反转信号。
+    EMA1 = EMA(High-Low, 9)，EMA2 = EMA(EMA1, 9)，MASS = sum(EMA1/EMA2, period)
+    MASS 超过 27 后回落至 26.5 以下，为"反转隆起"，预示趋势反转。
+
+    Args:
+        code:         股票代码，如 '000001.SZ'
+        date:         计算截止日期，格式 'YYYY-MM-DD'
+        period:       累加周期，默认 25
+        use_adjusted: 是否使用后复权价格，默认 True
+
+    Returns:
+        float: 当日 MASS 值；数据不足时返回 None
+    """
+    cached = _get_cached_indicator(code, 'MASS', period, date, use_adjusted)
+    if cached is not None:
+        return float(cached)
+
+    ema_period = 9
+    needed = ema_period * 2 + period
+    klines = _get_klines_before_date(code, date, needed)
+    if len(klines) < needed:
+        return None
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
+    hl = [k.high - k.low for k in klines]
+    ema1 = _ema_series(hl, ema_period)
+    ema2 = _ema_series(ema1, ema_period)
+
+    ratios = [e1 / e2 if e2 != 0 else 1.0 for e1, e2 in zip(ema1, ema2)]
+    if len(ratios) < period:
+        return None
+
+    mass = sum(ratios[-period:])
+    _save_indicator(code, 'MASS', period, date, str(mass), use_adjusted)
+    return mass
+
+
+def get_xue_channel(code: str, date: str, period: int = 20, pct: float = 3.0, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
+    """薛斯通道（Xue's Channel）
+
+    以 SMA 为中轨，向上/下按固定百分比扩展形成通道，类似布林带但用固定比例替代标准差。
+    上轨 = SMA * (1 + pct/100)，下轨 = SMA * (1 - pct/100)
+    价格触及上轨为短期超买，触及下轨为超卖，通道内震荡则看中轨支撑/压力。
+
+    Args:
+        code:         股票代码，如 '000001.SZ'
+        date:         计算截止日期，格式 'YYYY-MM-DD'
+        period:       SMA 周期，默认 20
+        pct:          通道偏移百分比，默认 3.0（即 ±3%）
+        use_adjusted: 是否使用后复权价格，默认 True
+
+    Returns:
+        dict: {'upper': 上轨, 'middle': 中轨, 'lower': 下轨}（元）；数据不足时返回 None
+    """
+    period_key = period * 1000 + int(pct * 10)
+    cached = _get_cached_indicator(code, 'XUE', period_key, date, use_adjusted)
+    if cached is not None:
+        return eval(cached)
+
+    klines = _get_klines_before_date(code, date, period)
+    if len(klines) < period:
+        return None
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
+    middle = sum(k.close for k in klines) / period
+    upper  = middle * (1.0 + pct / 100.0)
+    lower  = middle * (1.0 - pct / 100.0)
+
+    result = {'upper': upper, 'middle': middle, 'lower': lower}
+    _save_indicator(code, 'XUE', period_key, date, str(result), use_adjusted)
+    return result
+
+
+def get_consecutive_rise(code: str, date: str, max_days: int = 60, use_adjusted: bool = True) -> Optional[int]:
+    """连涨天数
+
+    从 date 向前数，连续收盘价高于前一日的天数。
+    使用复权价格，避免除权除息日的价格跳空被误判为下跌。
+    连涨天数过长（如 >7）往往预示短期超买，注意回调风险。
+
+    Args:
+        code:         股票代码，如 '000001.SZ'
+        date:         统计截止日期，格式 'YYYY-MM-DD'
+        max_days:     最多回溯天数，默认 60（防止数据量过大）
+        use_adjusted: 是否使用后复权价格，默认 True
+
+    Returns:
+        int: 连涨天数（0 表示当日未上涨）；数据不足时返回 None
+    """
+    klines = _get_klines_before_date(code, date, max_days + 1)
+    if len(klines) < 2:
+        return None
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
+    count = 0
+    for i in range(len(klines) - 1, 0, -1):
+        if klines[i].close > klines[i - 1].close:
+            count += 1
+        else:
+            break
+    return count
+
+
+def get_consecutive_fall(code: str, date: str, max_days: int = 60, use_adjusted: bool = True) -> Optional[int]:
+    """连跌天数
+
+    从 date 向前数，连续收盘价低于前一日的天数。
+    使用复权价格，避免除权除息日的价格跳空被误判为下跌。
+    连跌天数过长（如 >7）往往预示短期超卖，可能存在反弹机会。
+
+    Args:
+        code:         股票代码，如 '000001.SZ'
+        date:         统计截止日期，格式 'YYYY-MM-DD'
+        max_days:     最多回溯天数，默认 60（防止数据量过大）
+        use_adjusted: 是否使用后复权价格，默认 True
+
+    Returns:
+        int: 连跌天数（0 表示当日未下跌）；数据不足时返回 None
+    """
+    klines = _get_klines_before_date(code, date, max_days + 1)
+    if len(klines) < 2:
+        return None
+
+    if use_adjusted:
+        adj_factors = _get_adj_factors_for_klines(klines)
+        klines = _adjust_klines(klines, adj_factors)
+
+    count = 0
+    for i in range(len(klines) - 1, 0, -1):
+        if klines[i].close < klines[i - 1].close:
+            count += 1
+        else:
+            break
+    return count
 
 
 if __name__ == "__main__":
