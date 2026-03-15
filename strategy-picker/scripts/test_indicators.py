@@ -63,7 +63,20 @@ CODE = 'sz.000001'
 DATE = '2024-01-30'
 KLINES30 = _build_klines(30)
 KLINES2  = _build_klines(2)
+KLINES50 = _build_klines(50)
 ADJ      = _build_adj(KLINES30)
+
+def _build_klines_mixed(n=30, code='sz.000001', base_close=10.0):
+    """奇偶日涨跌交替 (+0.1 / -0.05)，保证 VR 有上涨日也有下跌日"""
+    klines = []
+    close = base_close
+    for i in range(n):
+        date = f"2024-{(i // 28) + 1:02d}-{(i % 28) + 1:02d}"
+        close = close + 0.1 if i % 2 == 0 else max(0.1, close - 0.05)
+        klines.append(make_kline(date, code, close))
+    return klines
+
+KLINES_MIXED = _build_klines_mixed(30)
 
 def _patch(mock_klines, mock_adj=None, no_cache=True):
     """返回通用 patch 上下文字典"""
@@ -158,6 +171,17 @@ def check_none_on_insufficient(name, val):
         fail(name + "[insufficient→None]", f"expected None but got {val!r}")
     else:
         ok(name + "[insufficient→None]")
+
+def check_int_nonneg(name, val):
+    """验证返回值为非负整数"""
+    if val is None:
+        fail(name, "returned None")
+    elif not isinstance(val, int):
+        fail(name, f"expected int, got {type(val)}")
+    elif val < 0:
+        fail(name, f"expected non-negative int, got {val}")
+    else:
+        ok(name)
 
 # ── 各指标测试函数 ─────────────────────────────────────────────────────────
 
@@ -276,9 +300,13 @@ test_dict_indicator('DMI',
     lambda: indicators.get_dmi(CODE, DATE, 14, True),
 )
 
-# TRIX 当前是 stub（返回 0.0），仅验证非 None
-v = run_with_patches(lambda: indicators.get_trix(CODE, DATE, 12, True))
-check_not_none('TRIX', v)
+# TRIX 需要 period*3+5=41 根 K 线，使用 KLINES50
+_v_trix_adj = run_with_patches(lambda: indicators.get_trix(CODE, DATE, 12, True),  klines=KLINES50)
+_v_trix_raw = run_with_patches(lambda: indicators.get_trix(CODE, DATE, 12, False), klines=KLINES50)
+_v_trix_ins = run_with_patches(lambda: indicators.get_trix(CODE, DATE, 12, True),  klines=KLINES2)
+check_float('TRIX', _v_trix_adj)
+check_adj_diff('TRIX', _v_trix_adj, _v_trix_raw)
+check_none_on_insufficient('TRIX', _v_trix_ins)
 
 test_dict_indicator('SAR',
     lambda: indicators.get_sar(CODE, DATE, 0.02, 0.2, True),
@@ -519,6 +547,86 @@ for _name, _fn_adj, _fn_raw in [
     v_r = run_with_patches(_fn_raw)
     check_float(_name, v_a)
     check_adj_diff(_name, v_a, v_r, skip_reason=_single_kline_note)
+
+print("\n── 新增指标 ──")
+
+# ASI  需要 period+1=27 根 K 线
+test_float_indicator('ASI',
+    lambda: indicators.get_asi(CODE, DATE, 26, True),
+    lambda: indicators.get_asi(CODE, DATE, 26, False),
+    lambda: indicators.get_asi(CODE, DATE, 26, True),
+)
+
+# VR  需要奇偶交替涨跌的 K 线避免分母为 0
+# adj_diff: 方向分类在 mock 下不改变（只有最后一根因子不同但方向相同），volumes 不受复权影响
+_v_vr_adj = run_with_patches(lambda: indicators.get_vr(CODE, DATE, 26, True),  klines=KLINES_MIXED)
+_v_vr_raw = run_with_patches(lambda: indicators.get_vr(CODE, DATE, 26, False), klines=KLINES_MIXED)
+check_float('VR', _v_vr_adj)
+check_adj_diff('VR', _v_vr_adj, _v_vr_raw,
+    skip_reason='close direction classification unchanged with single factor=2.0 tail; volume unaffected by adj')
+
+# AR  adj_diff: sum(H-O)/sum(O-L)*100, 分子分母按相同因子同比缩放 → 比值不变
+_v_ar_adj = run_with_patches(lambda: indicators.get_ar(CODE, DATE, 26, True))
+_v_ar_raw = run_with_patches(lambda: indicators.get_ar(CODE, DATE, 26, False))
+check_float('AR', _v_ar_adj)
+check_adj_diff('AR', _v_ar_adj, _v_ar_raw,
+    skip_reason='AR = sum(H-O)/sum(O-L)*100; H-O and O-L both scale by adj_factor → ratio scale-invariant')
+
+# BR  相邻 K 线用不同因子 → prev.close_adj 与 cur.high_adj 跨两个因子，adj != raw
+test_float_indicator('BR',
+    lambda: indicators.get_br(CODE, DATE, 26, True),
+    lambda: indicators.get_br(CODE, DATE, 26, False),
+    lambda: indicators.get_br(CODE, DATE, 26, True),
+)
+
+# BRAR  dict 首键 'ar' 是尺度不变量，用 skip；BR 已在上面单独验证
+_v_brar_adj = run_with_patches(lambda: indicators.get_brar(CODE, DATE, 26, True))
+_v_brar_raw = run_with_patches(lambda: indicators.get_brar(CODE, DATE, 26, False))
+check_dict('BRAR', _v_brar_adj, ['ar', 'br'])
+check_adj_diff('BRAR', _v_brar_adj, _v_brar_raw,
+    skip_reason="first key 'ar' is scale-invariant; BR component verified separately")
+
+# DPO  period=10 → needed=10+6+1=17 根 K 线，KLINES30 满足
+test_float_indicator('DPO',
+    lambda: indicators.get_dpo(CODE, DATE, 10, True),
+    lambda: indicators.get_dpo(CODE, DATE, 10, False),
+    lambda: indicators.get_dpo(CODE, DATE, 10, True),
+)
+
+# BBI  需要 24 根 K 线
+test_float_indicator('BBI',
+    lambda: indicators.get_bbi(CODE, DATE, True),
+    lambda: indicators.get_bbi(CODE, DATE, False),
+    lambda: indicators.get_bbi(CODE, DATE, True),
+)
+
+# MASS  需要 ema_period*2+period=43 根 K 线，使用 KLINES50
+_v_mass_adj = run_with_patches(lambda: indicators.get_mass(CODE, DATE, 25, True),  klines=KLINES50)
+_v_mass_raw = run_with_patches(lambda: indicators.get_mass(CODE, DATE, 25, False), klines=KLINES50)
+_v_mass_ins = run_with_patches(lambda: indicators.get_mass(CODE, DATE, 25, True),  klines=KLINES2)
+check_float('MASS', _v_mass_adj)
+check_adj_diff('MASS', _v_mass_adj, _v_mass_raw)
+check_none_on_insufficient('MASS', _v_mass_ins)
+
+# 薛斯通道 XUE_CHANNEL
+test_dict_indicator('XUE_CHANNEL',
+    lambda: indicators.get_xue_channel(CODE, DATE, 20, 3.0, True),
+    lambda: indicators.get_xue_channel(CODE, DATE, 20, 3.0, False),
+    ['upper', 'middle', 'lower'],
+    lambda: indicators.get_xue_channel(CODE, DATE, 20, 3.0, True),
+)
+
+# 连涨天数：KLINES30 单调递增，raw=29；最后一根 factor=2.0 导致复权后反转 → adj=0
+_v_rise_adj = run_with_patches(lambda: indicators.get_consecutive_rise(CODE, DATE, 60, True))
+_v_rise_raw = run_with_patches(lambda: indicators.get_consecutive_rise(CODE, DATE, 60, False))
+check_int_nonneg('CONSECUTIVE_RISE', _v_rise_adj)
+check_adj_diff('CONSECUTIVE_RISE', _v_rise_adj, _v_rise_raw)
+
+# 连跌天数：KLINES30 单调递增，raw=0；复权后最后一根价格反转 → adj=1
+_v_fall_adj = run_with_patches(lambda: indicators.get_consecutive_fall(CODE, DATE, 60, True))
+_v_fall_raw = run_with_patches(lambda: indicators.get_consecutive_fall(CODE, DATE, 60, False))
+check_int_nonneg('CONSECUTIVE_FALL', _v_fall_adj)
+check_adj_diff('CONSECUTIVE_FALL', _v_fall_adj, _v_fall_raw)
 
 # ── 汇总 ─────────────────────────────────────────────────────────────────────
 print(f"\n{'='*50}")
