@@ -16,8 +16,14 @@ indicators.py - 技术指标计算模块
 from typing import Optional, Dict, List, Tuple
 from sqlalchemy import text
 from db_engine import getEngine
-from data_fetcher import query_daily_kline, query_daily_basic
-from define import DailyKline, DailyBasic
+from data_fetcher import (
+    query_daily_kline,
+    query_daily_basic,
+    query_stock_limit,
+    query_daily_limit_list,
+    query_daily_bomb_list,
+)
+from define import DailyKline, DailyBasic, StockLimit, DailyLimitList, DailyBombList
 import math
 
 
@@ -2975,6 +2981,114 @@ def get_consecutive_fall(code: str, date: str, max_days: int = 60, use_adjusted:
         else:
             break
     return count
+
+
+def get_bomb_board(code: str, date: str) -> Optional[int]:
+    """炸板判断
+
+    判断指定日期该股票是否发生炸板：当日价格曾触及涨停价，但收盘时未封住（收盘价 < 涨停价）。
+    炸板往往意味着多头动能不足，短期筹码松动，可作为规避信号。
+
+    不使用复权价格——炸板依据的是市场实际涨停价，与复权无关。
+
+    数据来源：
+    - 有效交易日判断：stock_limit 表
+    - 炸板记录：daily_bomb_list 表（bomb_type='U'，曾涨停炸板）
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 判断日期，格式 'YYYY-MM-DD'
+
+    Returns:
+        int: 1=当日炸板，0=当日未炸板；无数据（非交易日/数据缺失）返回 None
+    """
+    cached = _get_cached_indicator(code, 'BOMB_BOARD', 0, date, False)
+    if cached is not None:
+        return int(cached)
+
+    # 用 stock_limit 确认是否为有效交易日
+    limits = query_stock_limit(ts_codes=[code], trade_date=date)
+    if not limits:
+        return None
+
+    bombs = query_daily_bomb_list(ts_codes=[code], trade_date=date, bomb_type='U')
+    result = 1 if bombs else 0
+
+    _save_indicator(code, 'BOMB_BOARD', 0, date, str(result), False)
+    return result
+
+
+def get_bomb_board_count(code: str, date: str, period: int = 20) -> Optional[int]:
+    """近N个交易日炸板次数
+
+    统计截至指定日期最近 period 个交易日内的炸板次数（含当日）。
+    炸板频繁说明股票多次冲板失败，多头信心不足，高频炸板个股追高风险较大。
+
+    不使用复权价格——炸板依据的是市场实际涨停价，与复权无关。
+
+    数据来源：daily_bomb_list 表（bomb_type='U'）
+
+    Args:
+        code:   股票代码，如 '000001.SZ'
+        date:   统计截止日期，格式 'YYYY-MM-DD'
+        period: 回溯的交易日天数，默认 20
+
+    Returns:
+        int: 近 period 个交易日内炸板次数（0 表示无炸板）；数据不足时返回 None
+    """
+    cached = _get_cached_indicator(code, 'BOMB_BOARD_COUNT', period, date, False)
+    if cached is not None:
+        return int(cached)
+
+    klines = _get_klines_before_date(code, date, period)
+    if not klines:
+        return None
+
+    start_date = klines[0].date
+    bombs = query_daily_bomb_list(ts_codes=[code], start_date=start_date, end_date=date, bomb_type='U')
+    result = len(bombs)
+
+    _save_indicator(code, 'BOMB_BOARD_COUNT', period, date, str(result), False)
+    return result
+
+
+def get_consecutive_limit_up(code: str, date: str) -> Optional[int]:
+    """连续涨停天数（连板数）
+
+    返回截至指定日期连续收盘涨停的天数。直接读取 daily_limit_list.limit_streak 字段，
+    该字段由数据源维护，是官方连板计数，比自行计算更准确（含一字板等特殊情形）。
+
+    连板数可用于：
+    - 筛选高位连板股（>= 3 板往往已属强势）
+    - 衡量涨停板的持续性与封板质量
+
+    不使用复权价格——涨停判断基于市场实际价格。
+
+    数据来源：
+    - 有效交易日判断：stock_limit 表
+    - 连板数：daily_limit_list 表（limit_type='U'，limit_streak 字段）
+
+    Args:
+        code: 股票代码，如 '000001.SZ'
+        date: 判断日期，格式 'YYYY-MM-DD'
+
+    Returns:
+        int: 连板数（0 表示当日未涨停）；无数据（非交易日/数据缺失）返回 None
+    """
+    cached = _get_cached_indicator(code, 'CONSEC_LIMIT_UP', 0, date, False)
+    if cached is not None:
+        return int(cached)
+
+    # 用 stock_limit 确认是否为有效交易日
+    limits = query_stock_limit(ts_codes=[code], trade_date=date)
+    if not limits:
+        return None
+
+    records = query_daily_limit_list(ts_codes=[code], trade_date=date, limit_type='U')
+    result = records[0].limit_streak if records else 0
+
+    _save_indicator(code, 'CONSEC_LIMIT_UP', 0, date, str(result), False)
+    return result
 
 
 if __name__ == "__main__":

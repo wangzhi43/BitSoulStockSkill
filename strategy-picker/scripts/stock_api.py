@@ -134,6 +134,9 @@ from indicators import (
     get_xue_channel,
     get_consecutive_rise,
     get_consecutive_fall,
+    get_bomb_board,
+    get_bomb_board_count,
+    get_consecutive_limit_up,
     init_indicators_db,
 )
 
@@ -1804,6 +1807,70 @@ class StockApi:
             n = api.get_consecutive_fall('600519.SH', '2026-03-01')
         """
         return get_consecutive_fall(code, date, use_adjusted)
+
+    def get_bomb_board(self, code: str, date: str) -> Optional[int]:
+        """
+        判断指定日期是否发生炸板（曾涨停但收盘未封板）。
+
+        炸板意味着多头动能不足，当日虽冲击涨停但尾盘筹码松动，
+        可作为规避追高或观察多空博弈的参考信号。
+
+        不使用复权价格——炸板基于市场实际涨停价判断。
+
+        Args:
+            code: 股票代码
+            date: 判断日期，格式 YYYY-MM-DD
+
+        Returns:
+            1=当日炸板，0=当日未炸板，None=非交易日或数据缺失
+
+        Example:
+            is_bomb = api.get_bomb_board('000001.SZ', '2026-03-01')
+        """
+        return get_bomb_board(code, date)
+
+    def get_bomb_board_count(self, code: str, date: str, period: int = 20) -> Optional[int]:
+        """
+        统计近N个交易日内的炸板次数。
+
+        炸板频繁说明个股多次冲板失败，多头信心不足；高频炸板的股票追高风险较大，
+        可结合连板数综合评估封板质量。
+
+        不使用复权价格——炸板基于市场实际涨停价判断。
+
+        Args:
+            code: 股票代码
+            date: 统计截止日期，格式 YYYY-MM-DD
+            period: 回溯交易日天数，默认20
+
+        Returns:
+            近period个交易日内炸板次数（int ≥ 0），数据不足时返回None
+
+        Example:
+            cnt = api.get_bomb_board_count('000001.SZ', '2026-03-01', 20)
+        """
+        return get_bomb_board_count(code, date, period)
+
+    def get_consecutive_limit_up(self, code: str, date: str) -> Optional[int]:
+        """
+        获取截至指定日期的连续涨停天数（连板数）。
+
+        直接读取数据源维护的 limit_streak 字段，含一字板等特殊情形，
+        比自行计算更准确。连板数 >= 3 通常视为强势股，高连板存在高位风险。
+
+        不使用复权价格——涨停判断基于市场实际价格。
+
+        Args:
+            code: 股票代码
+            date: 判断日期，格式 YYYY-MM-DD
+
+        Returns:
+            连板数（int ≥ 0，0表示当日未涨停），非交易日或数据缺失返回None
+
+        Example:
+            streak = api.get_consecutive_limit_up('000001.SZ', '2026-03-01')
+        """
+        return get_consecutive_limit_up(code, date)
 
     # ============================================================
     # 裸K形态信号类接口（带缓存）

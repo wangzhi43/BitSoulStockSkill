@@ -628,6 +628,144 @@ _v_fall_raw = run_with_patches(lambda: indicators.get_consecutive_fall(CODE, DAT
 check_int_nonneg('CONSECUTIVE_FALL', _v_fall_adj)
 check_adj_diff('CONSECUTIVE_FALL', _v_fall_adj, _v_fall_raw)
 
+print("\n── 涨跌停与炸板指标 ──")
+
+# 公共 mock 对象（不依赖真实 DB 结构，只需满足访问属性的代码路径）
+_mock_limit_price  = MagicMock()        # StockLimit 占位
+_mock_bomb_record  = MagicMock()        # DailyBombList 占位
+_mock_limit_record = MagicMock()        # DailyLimitList 占位
+_mock_limit_record.limit_streak = 3    # 连板数 = 3
+
+def _run_limit(fn, limits=None, bombs=None, limit_list=None, klines=None):
+    """执行带涨跌停/炸板表 mock 的指标函数。
+
+    与 run_with_patches 独立：这组指标不走复权路径，需要 mock
+    query_stock_limit / query_daily_bomb_list / query_daily_limit_list。
+    """
+    _lim = limits     if limits     is not None else []
+    _bom = bombs      if bombs      is not None else []
+    _lst = limit_list if limit_list is not None else []
+    _kl  = klines     if klines     is not None else KLINES30
+    with patch('indicators._get_cached_indicator',  lambda *a, **kw: None),      \
+         patch('indicators._save_indicator',        lambda *a, **kw: None),      \
+         patch('indicators.query_stock_limit',      lambda **kw: _lim),          \
+         patch('indicators.query_daily_bomb_list',  lambda **kw: _bom),          \
+         patch('indicators.query_daily_limit_list', lambda **kw: _lst),          \
+         patch('indicators._get_klines_before_date',
+               lambda code, date, limit: _kl[-limit:] if limit <= len(_kl) else _kl):
+        return fn()
+
+# ─── BOMB_BOARD ───────────────────────────────────────────────────────────────
+
+# 炸板命中：stock_limit 有记录（有效交易日）+ bomb_list 有记录 → 1
+_v = _run_limit(lambda: indicators.get_bomb_board(CODE, DATE),
+                limits=[_mock_limit_price], bombs=[_mock_bomb_record])
+if _v == 1:
+    ok('BOMB_BOARD[hit=1]')
+else:
+    fail('BOMB_BOARD[hit=1]', f"expected 1, got {_v!r}")
+
+# 未炸板：有效交易日，但 bomb_list 无记录 → 0
+_v = _run_limit(lambda: indicators.get_bomb_board(CODE, DATE),
+                limits=[_mock_limit_price], bombs=[])
+if _v == 0:
+    ok('BOMB_BOARD[miss=0]')
+else:
+    fail('BOMB_BOARD[miss=0]', f"expected 0, got {_v!r}")
+
+# 非交易日/数据缺失：stock_limit 无记录 → None
+_v = _run_limit(lambda: indicators.get_bomb_board(CODE, DATE), limits=[])
+check_none_on_insufficient('BOMB_BOARD', _v)
+
+# 缓存命中：直接返回缓存值，不触发任何 DB 查询
+try:
+    with patch('indicators._get_cached_indicator', return_value='1'),              \
+         patch('indicators._save_indicator',        lambda *a, **kw: None),        \
+         patch('indicators.query_stock_limit',
+               side_effect=AssertionError('query_stock_limit should not be called')),   \
+         patch('indicators.query_daily_bomb_list',
+               side_effect=AssertionError('query_daily_bomb_list should not be called')):
+        _v_cache = indicators.get_bomb_board(CODE, DATE)
+    if _v_cache == 1:
+        ok('BOMB_BOARD[cache_hit]')
+    else:
+        fail('BOMB_BOARD[cache_hit]', f"expected 1, got {_v_cache!r}")
+except Exception as _e:
+    fail('BOMB_BOARD[cache_hit]', str(_e))
+
+# ─── BOMB_BOARD_COUNT ─────────────────────────────────────────────────────────
+
+# 近20个交易日内有3次炸板 → 3
+_v = _run_limit(lambda: indicators.get_bomb_board_count(CODE, DATE, 20),
+                bombs=[_mock_bomb_record] * 3)
+if _v == 3:
+    ok('BOMB_BOARD_COUNT[3炸板]')
+else:
+    fail('BOMB_BOARD_COUNT[3炸板]', f"expected 3, got {_v!r}")
+
+# 近20个交易日内无炸板 → 0
+_v = _run_limit(lambda: indicators.get_bomb_board_count(CODE, DATE, 20), bombs=[])
+if _v == 0:
+    ok('BOMB_BOARD_COUNT[0炸板]')
+else:
+    fail('BOMB_BOARD_COUNT[0炸板]', f"expected 0, got {_v!r}")
+
+# 无K线数据（数据不足）→ None
+_v = _run_limit(lambda: indicators.get_bomb_board_count(CODE, DATE, 20), klines=[])
+check_none_on_insufficient('BOMB_BOARD_COUNT', _v)
+
+# 缓存命中：不回查 K 线
+try:
+    with patch('indicators._get_cached_indicator', return_value='5'),              \
+         patch('indicators._save_indicator',        lambda *a, **kw: None),        \
+         patch('indicators._get_klines_before_date',
+               side_effect=AssertionError('klines should not be fetched')):
+        _v_cache = indicators.get_bomb_board_count(CODE, DATE, 20)
+    if _v_cache == 5:
+        ok('BOMB_BOARD_COUNT[cache_hit]')
+    else:
+        fail('BOMB_BOARD_COUNT[cache_hit]', f"expected 5, got {_v_cache!r}")
+except Exception as _e:
+    fail('BOMB_BOARD_COUNT[cache_hit]', str(_e))
+
+# ─── CONSECUTIVE_LIMIT_UP ─────────────────────────────────────────────────────
+
+# 连板3天：limit_list 有记录且 limit_streak=3 → 3
+_v = _run_limit(lambda: indicators.get_consecutive_limit_up(CODE, DATE),
+                limits=[_mock_limit_price], limit_list=[_mock_limit_record])
+if _v == 3:
+    ok('CONSECUTIVE_LIMIT_UP[streak=3]')
+else:
+    fail('CONSECUTIVE_LIMIT_UP[streak=3]', f"expected 3, got {_v!r}")
+
+# 当日未涨停：有效交易日，但 limit_list 无涨停记录 → 0
+_v = _run_limit(lambda: indicators.get_consecutive_limit_up(CODE, DATE),
+                limits=[_mock_limit_price], limit_list=[])
+if _v == 0:
+    ok('CONSECUTIVE_LIMIT_UP[no_limit=0]')
+else:
+    fail('CONSECUTIVE_LIMIT_UP[no_limit=0]', f"expected 0, got {_v!r}")
+
+# 非交易日/数据缺失：stock_limit 无记录 → None
+_v = _run_limit(lambda: indicators.get_consecutive_limit_up(CODE, DATE), limits=[])
+check_none_on_insufficient('CONSECUTIVE_LIMIT_UP', _v)
+
+# 缓存命中：不触发任何 DB 查询
+try:
+    with patch('indicators._get_cached_indicator', return_value='7'),              \
+         patch('indicators._save_indicator',        lambda *a, **kw: None),        \
+         patch('indicators.query_stock_limit',
+               side_effect=AssertionError('query_stock_limit should not be called')),   \
+         patch('indicators.query_daily_limit_list',
+               side_effect=AssertionError('query_daily_limit_list should not be called')):
+        _v_cache = indicators.get_consecutive_limit_up(CODE, DATE)
+    if _v_cache == 7:
+        ok('CONSECUTIVE_LIMIT_UP[cache_hit]')
+    else:
+        fail('CONSECUTIVE_LIMIT_UP[cache_hit]', f"expected 7, got {_v_cache!r}")
+except Exception as _e:
+    fail('CONSECUTIVE_LIMIT_UP[cache_hit]', str(_e))
+
 # ── 汇总 ─────────────────────────────────────────────────────────────────────
 print(f"\n{'='*50}")
 print(f"结果: {PASS} 通过  {FAIL} 失败")
