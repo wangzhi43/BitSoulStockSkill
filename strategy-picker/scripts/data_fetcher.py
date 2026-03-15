@@ -882,7 +882,7 @@ class PatchItem:
         self.patch_name:str = ""
         self.version:int = int
 
-def request_patch_list() -> list[PatchItem]:
+def request_patch_list() -> List[PatchItem]:
     """
     获取所有表的patch列表
     返回json说明：
@@ -947,7 +947,7 @@ def syn_table_datas() -> List[str]:
             conn.commit()
 
     remote_patchs: List[PatchItem] = request_patch_list()
-    log(f"remote patch list:{",".join([str(r_patch.version) for r_patch in remote_patchs])}")
+    log(f"remote patch list:{','.join([str(r_patch.version) for r_patch in remote_patchs])}")
     for r_patch in remote_patchs:
         if r_patch.version > local_patch_ver:
             request_and_import_remote_patch_by_name(r_patch.patch_name, r_patch.version)
