@@ -4,7 +4,7 @@ indicators.py - 技术指标计算模块
 功能：
 1. 技术指标计算（SMA, EMA, RSI, MACD, BB, ATR等100+指标）
 2. 计算结果缓存到数据库
-3. 默认使用复权价格（前复权）
+3. 默认使用复权价格（后复权）
 
 设计原则：
 - 函数功能单一、最小粒度
@@ -166,30 +166,28 @@ def _get_adj_factors_for_klines(klines: List[DailyKline]) -> Dict[str, float]:
     return {basic.trade_date: basic.adj_factor for basic in daily_basics}
 
 
-def _adjust_price(price: float, adj_factor: float, base_adj_factor: float = 1.0) -> float:
-    """计算前复权价格
+def _adjust_price(price: float, adj_factor: float) -> float:
+    """计算后复权价格
 
-    前复权以最新日期为基准（base_adj_factor），历史价格乘以比率还原。
-    公式：复权价 = 原始价 * (该日复权因子 / 最新日复权因子)
+    后复权从上市日起累积复权，公式：复权价 = 原始价 * 该日复权因子
 
     Args:
         price: 原始价格
         adj_factor: 该K线日期对应的复权因子
-        base_adj_factor: 最新K线的复权因子（作为基准，最新日比率=1.0）
 
     Returns:
-        float: 前复权后的价格，因子为0时原样返回原始价格
+        float: 后复权后的价格，因子为0时原样返回原始价格
     """
-    if base_adj_factor == 0 or adj_factor == 0:
+    if adj_factor == 0:
         return price
-    return price * (adj_factor / base_adj_factor)
+    return price * adj_factor
 
 
 def _adjust_klines(klines: List[DailyKline], adj_factors: Dict[str, float]) -> List[DailyKline]:
-    """对K线列表执行前复权处理
+    """对K线列表执行后复权处理
 
-    以最新K线的复权因子为基准，等比缩放所有历史K线的价格字段
-    （open/high/low/close/amount/pre_close/change），成交量不做调整。
+    每根K线的价格字段（open/high/low/close/amount/pre_close/change）乘以对应日期的
+    复权因子，成交量不做调整。
 
     Args:
         klines: 原始K线列表
@@ -201,32 +199,27 @@ def _adjust_klines(klines: List[DailyKline], adj_factors: Dict[str, float]) -> L
     """
     if not klines or not adj_factors:
         return klines
-    
-    base_adj_factor = 1.0
-    last_date = klines[-1].date
-    if last_date in adj_factors:
-        base_adj_factor = adj_factors[last_date]
-    
+
     adjusted_klines = []
     for kline in klines:
         adj_factor = adj_factors.get(kline.date, 1.0)
         adjusted_kline = DailyKline(
             date=kline.date,
             code=kline.code,
-            open=_adjust_price(kline.open, adj_factor, base_adj_factor),
-            high=_adjust_price(kline.high, adj_factor, base_adj_factor),
-            low=_adjust_price(kline.low, adj_factor, base_adj_factor),
-            close=_adjust_price(kline.close, adj_factor, base_adj_factor),
+            open=_adjust_price(kline.open, adj_factor),
+            high=_adjust_price(kline.high, adj_factor),
+            low=_adjust_price(kline.low, adj_factor),
+            close=_adjust_price(kline.close, adj_factor),
             volume=kline.volume,
-            amount=_adjust_price(kline.amount, adj_factor, base_adj_factor) if kline.amount else 0.0,
+            amount=_adjust_price(kline.amount, adj_factor) if kline.amount else 0.0,
             adjustflag=kline.adjustflag,
             turn=kline.turn,
             pctChg=kline.pctChg,
-            pre_close=_adjust_price(kline.pre_close, adj_factor, base_adj_factor) if kline.pre_close else 0.0,
-            change=_adjust_price(kline.change, adj_factor, base_adj_factor) if kline.change else 0.0
+            pre_close=_adjust_price(kline.pre_close, adj_factor) if kline.pre_close else 0.0,
+            change=_adjust_price(kline.change, adj_factor) if kline.change else 0.0
         )
         adjusted_klines.append(adjusted_kline)
-    
+
     return adjusted_klines
 
 
@@ -244,7 +237,7 @@ def get_sma(code: str, date: str, period: int = 20, use_adjusted: bool = True) -
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 均线周期，默认20（即20日均线）
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日SMA值（元）；数据不足 period 根K线时返回 None
@@ -276,7 +269,7 @@ def get_ema(code: str, date: str, period: int = 12, use_adjusted: bool = True) -
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 周期，默认12（常用12/26/9组合配合MACD）
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日EMA值（元）；数据不足时返回 None
@@ -313,7 +306,7 @@ def get_wma(code: str, date: str, period: int = 20, use_adjusted: bool = True) -
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 周期，默认20
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日WMA值（元）；数据不足时返回 None
@@ -348,7 +341,7 @@ def get_tema(code: str, date: str, period: int = 20, use_adjusted: bool = True) 
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 周期，默认20
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日TEMA值（元）；数据不足时返回 None
@@ -384,7 +377,7 @@ def get_rsi(code: str, date: str, period: int = 14, use_adjusted: bool = True) -
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 周期，默认14
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日RSI值（0-100）；数据不足时返回 None
@@ -436,7 +429,7 @@ def get_macd(code: str, date: str, fast: int = 12, slow: int = 26, signal: int =
         fast: 快线EMA周期，默认12
         slow: 慢线EMA周期，默认26
         signal: 信号线EMA周期，默认9（当前近似处理）
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         dict: {'macd': MACD线, 'signal': 信号线, 'histogram': 柱状图}（单位：元）；
@@ -471,7 +464,7 @@ def get_bollinger_bands(code: str, date: str, period: int = 20, std_dev: int = 2
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 周期，默认20
         std_dev: 标准差倍数，默认2（即±2σ，覆盖约95%的波动区间）
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         dict: {'upper': 上轨, 'middle': 中轨, 'lower': 下轨}（单位：元）；
@@ -513,7 +506,7 @@ def get_atr(code: str, date: str, period: int = 14, use_adjusted: bool = True) -
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 周期，默认14
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日ATR值（元）；数据不足时返回 None
@@ -552,7 +545,7 @@ def get_mom(code: str, date: str, period: int = 10, use_adjusted: bool = True) -
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 回溯天数，默认10
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日动量值（元）；数据不足时返回 None
@@ -583,7 +576,7 @@ def get_roc(code: str, date: str, period: int = 10, use_adjusted: bool = True) -
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 回溯天数，默认10
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日ROC值（%）；数据不足或N日前收盘为0时返回 None
@@ -617,7 +610,7 @@ def get_cci(code: str, date: str, period: int = 20, use_adjusted: bool = True) -
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 周期，默认20
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日CCI值（无量纲）；数据不足时返回 None
@@ -656,7 +649,7 @@ def get_obv(code: str, date: str, period: int = 20, use_adjusted: bool = True) -
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 统计K线根数，默认20
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日OBV累计值（手）；数据不足时返回 None
@@ -693,7 +686,7 @@ def get_volume(code: str, date: str, period: int = 20, use_adjusted: bool = True
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 均量计算周期，默认20
-        use_adjusted: 是否使用前复权价格，默认True（不影响成交量本身）
+        use_adjusted: 是否使用后复权价格，默认True（不影响成交量本身）
 
     Returns:
         dict: {'current': 当日成交量, 'sma': period日均量}（单位：手）；
@@ -730,7 +723,7 @@ def get_kdj(code: str, date: str, n: int = 9, m1: int = 3, m2: int = 3, use_adju
         n: 计算RSV的周期，默认9
         m1: K线平滑系数（1/m1），默认3
         m2: D线平滑系数（1/m2），默认3
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         dict: {'k': K值, 'd': D值, 'j': J值}（取值大致0-100，J可超出范围）；
@@ -775,7 +768,7 @@ def get_dmi(code: str, date: str, period: int = 14, use_adjusted: bool = True) -
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 周期，默认14
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         dict: {'pdi': +DI值, 'mdi': -DI值, 'adx': ADX值}（取值0-100）；
@@ -834,7 +827,7 @@ def get_trix(code: str, date: str, period: int = 12, use_adjusted: bool = True) 
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 周期，默认12
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当前固定返回 0.0（未完整实现）；数据不足时返回 None
@@ -863,7 +856,7 @@ def get_sar(code: str, date: str, af_start: float = 0.02, af_max: float = 0.2, u
         date: 计算截止日期，格式 'YYYY-MM-DD'
         af_start: 加速因子初始值，默认0.02
         af_max: 加速因子最大值，默认0.2
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         dict: {'sar': SAR价格（元）, 'trend': 趋势方向（1=上涨, -1=下跌）}；
@@ -902,7 +895,7 @@ def get_williams_r(code: str, date: str, period: int = 14, use_adjusted: bool = 
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 周期，默认14
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日WR值（0-100）；数据不足时返回 None
@@ -940,7 +933,7 @@ def get_psycho(code: str, date: str, period: int = 12, use_adjusted: bool = True
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 统计周期，默认12
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日PSY值（%，0-100）；数据不足时返回 None
@@ -976,7 +969,7 @@ def get_bias(code: str, date: str, period: int = 20, use_adjusted: bool = True) 
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 均线周期，默认20
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日乖离率（%）；数据不足或SMA为0时返回 None
@@ -1011,7 +1004,7 @@ def get_tr(code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
     Args:
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日TR值（元）；少于2根K线时返回 None
@@ -1047,7 +1040,7 @@ def get_natr(code: str, date: str, period: int = 14, use_adjusted: bool = True) 
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: ATR计算周期，默认14
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日NATR值（%）；数据不足或收盘价为0时返回 None
@@ -1081,7 +1074,7 @@ def get_vwap(code: str, date: str, period: int = 20, use_adjusted: bool = True) 
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 统计周期，默认20
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日VWAP值（元）；成交量为0或数据不足时返回 None
@@ -1124,7 +1117,7 @@ def get_ad(code: str, date: str, period: int = 20, use_adjusted: bool = True) ->
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 统计K线根数，默认20
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日AD累积值（量纲：手）；数据不足时返回 None
@@ -1165,7 +1158,7 @@ def get_adosc(code: str, date: str, fast: int = 3, slow: int = 10, use_adjusted:
         date: 计算截止日期，格式 'YYYY-MM-DD'
         fast: 快速AD的周期，默认3
         slow: 慢速AD的周期，默认10
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日ADOSC值；数据不足时返回 None
@@ -1196,7 +1189,7 @@ def get_mfi(code: str, date: str, period: int = 14, use_adjusted: bool = True) -
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 周期，默认14
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日MFI值（0-100）；数据不足时返回 None
@@ -1246,7 +1239,7 @@ def get_cmo(code: str, date: str, period: int = 14, use_adjusted: bool = True) -
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 周期，默认14
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日CMO值（-100到100）；数据不足时返回 None
@@ -1292,7 +1285,7 @@ def get_rocp(code: str, date: str, period: int = 10, use_adjusted: bool = True) 
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 回溯天数，默认10
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日ROCP值（小数，非百分比）；数据不足或N日前收盘为0时返回 None
@@ -1324,7 +1317,7 @@ def get_rocr(code: str, date: str, period: int = 10, use_adjusted: bool = True) 
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 回溯天数，默认10
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日ROCR值（倍数）；数据不足或N日前收盘为0时返回 None
@@ -1357,7 +1350,7 @@ def get_aroon(code: str, date: str, period: int = 14, use_adjusted: bool = True)
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 周期，默认14
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         dict: {'up': 上行强度（0-100）, 'down': 下行强度（0-100）, 'osc': 震荡值（-100到100）}；
@@ -1400,7 +1393,7 @@ def get_ultosc(code: str, date: str, period1: int = 7, period2: int = 14, period
         period1: 短周期，默认7
         period2: 中周期，默认14
         period3: 长周期，默认28
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当前固定返回 50.0（未完整实现）；数据不足时返回 None
@@ -1435,7 +1428,7 @@ def get_dema(code: str, date: str, period: int = 20, use_adjusted: bool = True) 
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 周期，默认20
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日DEMA值（元）；数据不足时返回 None
@@ -1465,7 +1458,7 @@ def get_kama(code: str, date: str, period: int = 10, use_adjusted: bool = True) 
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 效率比率计算周期，默认10
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日KAMA值（元），当前近似为最新收盘价；数据不足时返回 None
@@ -1496,7 +1489,7 @@ def get_midpoint(code: str, date: str, period: int = 14, use_adjusted: bool = Tr
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 回看周期，默认14
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 过去period日的中点价格（元）；数据不足时返回 None
@@ -1530,7 +1523,7 @@ def get_midprice(code: str, date: str, period: int = 14, use_adjusted: bool = Tr
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 回看周期，默认14
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 过去period日的中点价格（元）；数据不足时返回 None
@@ -1548,7 +1541,7 @@ def get_pvi(code: str, date: str, period: int = 20, use_adjusted: bool = True) -
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 统计K线根数，默认20
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当前固定返回 100.0（未完整实现）；数据不足时返回 None
@@ -1576,7 +1569,7 @@ def get_nvi(code: str, date: str, period: int = 20, use_adjusted: bool = True) -
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 统计K线根数，默认20
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当前固定返回 100.0（未完整实现）；数据不足时返回 None
@@ -1606,7 +1599,7 @@ def get_ppo(code: str, date: str, fast: int = 12, slow: int = 26, signal: int = 
         fast: 快线EMA周期，默认12
         slow: 慢线EMA周期，默认26
         signal: 信号线周期，默认9（当前近似处理）
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         dict: {'ppo': PPO线(%), 'signal': 信号线(%), 'histogram': 柱状图}；
@@ -1638,7 +1631,7 @@ def get_roc_r(code: str, date: str, period: int = 10, use_adjusted: bool = True)
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 回溯天数，默认10
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 今收盘 / N日前收盘的比值；数据不足时返回 None
@@ -1658,7 +1651,7 @@ def get_stoch(code: str, date: str, fastk_period: int = 14, slowk_period: int = 
         fastk_period: 快速K值计算的高低价范围周期，默认14
         slowk_period: 慢速K的平滑周期，默认3（当前近似处理）
         slowd_period: 慢速D的平滑周期，默认3（当前近似处理）
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         dict: {'slowk': 慢速K值, 'slowd': 慢速D值}（0-100）；数据不足时返回 None
@@ -1700,7 +1693,7 @@ def get_stochf(code: str, date: str, fastk_period: int = 14, fastd_period: int =
         date: 计算截止日期，格式 'YYYY-MM-DD'
         fastk_period: 快速K值计算周期，默认14
         fastd_period: 快速D的平滑周期，默认3
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         dict: {'fastk': 快速K值, 'fastd': 快速D值}；当前固定返回各50.0（未完整实现）
@@ -1726,7 +1719,7 @@ def get_stochrsi(code: str, date: str, rsi_period: int = 14, stoch_period: int =
         date: 计算截止日期，格式 'YYYY-MM-DD'
         rsi_period: RSI计算周期，默认14
         stoch_period: STOCH计算周期，默认14
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         dict: {'fastk': K值, 'fastd': D值}；当前固定返回各50.0（未完整实现）
@@ -1749,7 +1742,7 @@ def get_trange(code: str, date: str, use_adjusted: bool = True) -> Optional[floa
     Args:
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日TR值（元）；数据不足时返回 None
@@ -1772,7 +1765,7 @@ def get_ma_channel(code: str, date: str, period: int = 20, multiplier: float = 2
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: SMA和ATR的计算周期，默认20
         multiplier: ATR倍数，控制通道宽窄，默认2.0
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         dict: {'upper': 上轨, 'middle': 中轨(SMA), 'lower': 下轨}（单位：元）；
@@ -1807,7 +1800,7 @@ def get_donchian(code: str, date: str, period: int = 20, use_adjusted: bool = Tr
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 通道计算周期，默认20
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         dict: {'upper': 上轨, 'middle': 中轨, 'lower': 下轨}（单位：元）；
@@ -1846,7 +1839,7 @@ def get_keltner(code: str, date: str, ma_period: int = 20, atr_period: int = 10,
         ma_period: EMA计算周期，默认20
         atr_period: ATR计算周期，默认10
         multiplier: ATR倍数，控制通道宽窄，默认2.0
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         dict: {'upper': 上轨, 'middle': 中轨(EMA), 'lower': 下轨}（单位：元）；
@@ -1883,7 +1876,7 @@ def get_bbands_width(code: str, date: str, period: int = 20, std_dev: int = 2, u
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 布林带周期，默认20
         std_dev: 标准差倍数，默认2
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日布林带宽度（%）；数据不足或中轨为0时返回 None
@@ -1913,7 +1906,7 @@ def get_bbands_pct(code: str, date: str, period: int = 20, std_dev: int = 2, use
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 布林带周期，默认20
         std_dev: 标准差倍数，默认2
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日%B值（通常0-1，极端时可超出范围）；数据不足时返回 None
@@ -1956,7 +1949,7 @@ def get_linearreg(code: str, date: str, period: int = 14, use_adjusted: bool = T
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 回归窗口大小，默认14
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日线性回归预测价（元）；数据不足时返回 None
@@ -2002,7 +1995,7 @@ def get_linearreg_angle(code: str, date: str, period: int = 14, use_adjusted: bo
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 回归窗口大小，默认14
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日回归线角度（度，-90到90）；数据不足时返回 None
@@ -2047,7 +2040,7 @@ def get_linearreg_intercept(code: str, date: str, period: int = 14, use_adjusted
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 回归窗口大小，默认14
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 线性回归截距值（元）；数据不足时返回 None
@@ -2092,7 +2085,7 @@ def get_linearreg_slope(code: str, date: str, period: int = 14, use_adjusted: bo
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 回归窗口大小，默认14
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 线性回归斜率（元/天）；数据不足时返回 None
@@ -2136,7 +2129,7 @@ def get_stddev(code: str, date: str, period: int = 20, nbdev: int = 1, use_adjus
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 计算周期，默认20
         nbdev: 标准差倍数，默认1
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日标准差值（元）；数据不足时返回 None
@@ -2172,7 +2165,7 @@ def get_tsf(code: str, date: str, period: int = 14, use_adjusted: bool = True) -
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 回归窗口大小，默认14
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日线性回归预测价（元）；数据不足时返回 None
@@ -2191,7 +2184,7 @@ def get_var(code: str, date: str, period: int = 20, nbdev: int = 1, use_adjusted
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 计算周期，默认20
         nbdev: 倍数，默认1（实际方差再乘以nbdev²）
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日方差值（元²）；数据不足时返回 None
@@ -2228,7 +2221,7 @@ def get_correl(code: str, date: str, period: int = 20, use_adjusted: bool = True
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 统计周期，默认20
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当前固定返回 1.0（未完整实现）
@@ -2252,7 +2245,7 @@ def get_beta(code: str, date: str, period: int = 20, use_adjusted: bool = True) 
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
         period: 统计周期，默认20
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当前固定返回 1.0（未完整实现）
@@ -2275,7 +2268,7 @@ def get_ht_dcperiod(code: str, date: str, use_adjusted: bool = True) -> Optional
     Args:
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当前固定返回 10.0（未完整实现），单位：天
@@ -2298,7 +2291,7 @@ def get_ht_dcphase(code: str, date: str, use_adjusted: bool = True) -> Optional[
     Args:
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当前固定返回 0.0（未完整实现），单位：度
@@ -2321,7 +2314,7 @@ def get_ht_phasor(code: str, date: str, use_adjusted: bool = True) -> Optional[D
     Args:
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         dict: {'inphase': 同相分量, 'quadrature': 正交分量}；当前固定返回各0.0（未完整实现）
@@ -2344,7 +2337,7 @@ def get_ht_sine(code: str, date: str, use_adjusted: bool = True) -> Optional[Dic
     Args:
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         dict: {'sine': 正弦值, 'leadsine': 超前正弦值}；当前固定返回各0.0（未完整实现）
@@ -2367,7 +2360,7 @@ def get_ht_trendmode(code: str, date: str, use_adjusted: bool = True) -> Optiona
     Args:
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         int: 1=趋势行情，0=周期性震荡；当前固定返回 1（未完整实现）
@@ -2394,7 +2387,7 @@ def get_typical_price(code: str, date: str, use_adjusted: bool = True) -> Option
     Args:
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日典型价格（元）；数据不足时返回 None
@@ -2425,7 +2418,7 @@ def get_median_price(code: str, date: str, use_adjusted: bool = True) -> Optiona
     Args:
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日中位数价格（元）；数据不足时返回 None
@@ -2456,7 +2449,7 @@ def get_weighted_close(code: str, date: str, use_adjusted: bool = True) -> Optio
     Args:
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日加权收盘价（元）；数据不足时返回 None
@@ -2487,7 +2480,7 @@ def get_avgp(code: str, date: str, use_adjusted: bool = True) -> Optional[float]
     Args:
         code: 股票代码，如 '000001.SZ'
         date: 计算截止日期，格式 'YYYY-MM-DD'
-        use_adjusted: 是否使用前复权价格，默认True
+        use_adjusted: 是否使用后复权价格，默认True
 
     Returns:
         float: 当日四价平均价格（元）；数据不足时返回 None
