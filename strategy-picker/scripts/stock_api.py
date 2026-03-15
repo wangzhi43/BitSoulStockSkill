@@ -206,12 +206,12 @@ class StockApi:
     # ─────────────────────────────────────────────
     def get_realtime_stock_info(self, code:str) -> RealtimeStockQuote:
         """
-        根据条件获取股票实时信息
+        获取指定股票代码的股票实时信息
 
         参数:
-            code  股票代码
+            code  股票代码，如000001.SZ
         返回:
-            int 价格
+            RealtimeStockQuote 实时股票报价信息
         """
         return RealTimeDataFetcher().request_stock_info(code)
 
