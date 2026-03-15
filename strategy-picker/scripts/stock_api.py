@@ -2096,6 +2096,257 @@ class StockApi:
         return get_top_pattern(code, date, period, use_adjusted)
 
     # ============================================================
+    # 复合筛选与分析类接口
+    # ============================================================
+
+    def get_stocks_by_industry_keyword(
+        self,
+        keyword: str,
+        market: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> List[StockBasic]:
+        """
+        按行业关键词模糊搜索股票（industry LIKE %keyword%）。
+
+        支持不精确的行业名称，如"半导体"可匹配"半导体及元件"、"集成电路"等。
+        可叠加 market 过滤（主板/创业板/科创板）。
+
+        Args:
+            keyword: 行业关键词，如"半导体"、"芯片"、"银行"、"新能源"
+            market: 市场类型过滤，如"主板"、"创业板"、"科创板"，None 表示不限
+            limit: 最大返回数量，None 表示不限
+
+        Returns:
+            匹配的 StockBasic 列表
+
+        Example:
+            chip = api.get_stocks_by_industry_keyword('半导体')
+            kechuang = api.get_stocks_by_industry_keyword('半导体', market='科创板')
+        """
+        return query_stock_basic(industry_keyword=keyword, market=market, limit=limit)
+
+    def get_latest_income(self, code: str) -> Optional[Income]:
+        """
+        获取股票最新一期财务数据（合并报表）。
+
+        从 income 表取 end_date 最新的一条合并报表记录，
+        包含 ROE、ROA、毛利率、净利率、净利润增速等常用财务指标。
+
+        Args:
+            code: 股票代码，如 '000001.SZ'
+
+        Returns:
+            最新一期 Income 对象，无数据返回 None
+
+        Example:
+            inc = api.get_latest_income('600519.SH')
+            print(f"ROE={inc.roe:.2f}%  毛利率={inc.gross_margin:.2f}%")
+        """
+        records = query_income(ts_codes=[code], report_type="1",
+                               order_by="end_date DESC", limit=1)
+        return records[0] if records else None
+
+    def filter_stocks_by_fundamentals(
+        self,
+        date: str,
+        pe_ttm_max: Optional[float] = None,
+        roe_min: Optional[float] = None,
+        mv_min_yi: Optional[float] = None,
+        top_n: Optional[int] = None,
+        order_by: str = "total_mv DESC",
+    ) -> List[Dict]:
+        """
+        按基本面条件多维筛选股票，支持 PE/ROE/市值三重过滤。
+
+        跨 daily_basic（PE、市值）与 income（ROE）两张表联合筛选，
+        全部过滤在 Python 侧完成，结果按指定字段排序后返回。
+
+        pe_ttm <= 0（亏损股）始终被排除在外。
+
+        Args:
+            date: 基本面数据日期，格式 YYYY-MM-DD（取当日 daily_basic 快照）
+            pe_ttm_max: PE(TTM) 上限（不含），None 表示不过滤
+            roe_min: ROE 下限（%，不含），None 表示不过滤
+            mv_min_yi: 总市值下限（亿元），None 表示不过滤
+            top_n: 最终返回数量，None 表示全部
+            order_by: 排序字段，可选 'total_mv DESC'/'pe_ttm ASC'/'roe DESC' 等
+
+        Returns:
+            字典列表，每项含 ts_code / pe_ttm / total_mv_yi / roe（亿元，roe 仅在
+            roe_min 不为 None 时出现），按 order_by 排序后取前 top_n 条
+
+        Example:
+            results = api.filter_stocks_by_fundamentals(
+                '2026-03-14', pe_ttm_max=20, roe_min=15, mv_min_yi=100, top_n=20
+            )
+            for r in results:
+                print(r['ts_code'], r['pe_ttm'], r['total_mv_yi'], r.get('roe'))
+        """
+        # ── Step 1: 全市场当日基本面快照 ───────────────────────────────────
+        basics = query_daily_basic(trade_date=date)
+        if not basics:
+            return []
+
+        # ── Step 2: PE + 市值过滤（数据来源 daily_basic）───────────────────
+        mv_min_wan = (mv_min_yi * 10000) if mv_min_yi is not None else None
+        candidates = []
+        for b in basics:
+            if b.pe_ttm <= 0:                  # 亏损股排除
+                continue
+            if pe_ttm_max is not None and b.pe_ttm > pe_ttm_max:
+                continue
+            if mv_min_wan is not None and b.total_mv < mv_min_wan:
+                continue
+            candidates.append(b)
+
+        # ── Step 3: ROE 过滤（数据来源 income，批量查询后 Python 聚合）─────
+        if roe_min is not None and candidates:
+            codes = [b.ts_code for b in candidates]
+            all_income = query_income(ts_codes=codes, report_type="1")
+            # 每只股票取 end_date 最新的一期
+            latest: Dict[str, Income] = {}
+            for inc in sorted(all_income, key=lambda x: x.end_date):
+                latest[inc.ts_code] = inc
+            result = []
+            for b in candidates:
+                inc = latest.get(b.ts_code)
+                if inc is None or inc.roe < roe_min:
+                    continue
+                result.append({
+                    'ts_code':     b.ts_code,
+                    'pe_ttm':      b.pe_ttm,
+                    'total_mv_yi': round(b.total_mv / 10000, 2),
+                    'roe':         inc.roe,
+                })
+        else:
+            result = [{
+                'ts_code':     b.ts_code,
+                'pe_ttm':      b.pe_ttm,
+                'total_mv_yi': round(b.total_mv / 10000, 2),
+            } for b in candidates]
+
+        # ── Step 4: 排序 + 截取 ────────────────────────────────────────────
+        field_map = {
+            'total_mv':     'total_mv_yi',
+            'total_mv_yi':  'total_mv_yi',
+            'pe_ttm':       'pe_ttm',
+            'roe':          'roe',
+        }
+        parts = order_by.strip().split()
+        sort_key   = field_map.get(parts[0].lower(), 'total_mv_yi')
+        descending = len(parts) < 2 or parts[1].upper() == 'DESC'
+        result.sort(key=lambda x: x.get(sort_key) or 0, reverse=descending)
+
+        return result[:top_n] if top_n is not None else result
+
+    def scan_all_signals(
+        self,
+        signal_type: str,
+        date: str,
+        period: int = 0,
+        use_adjusted: bool = True,
+        codes: Optional[List[str]] = None,
+    ) -> Dict[str, int]:
+        """
+        全市场（或指定股票池）扫描指定裸K形态信号。
+
+        对每只股票调用对应信号函数，返回所有触发信号（值=1）的股票代码→信号值字典。
+        结果已缓存到 cached_signals 表，重复扫描同一日期无额外计算开销。
+
+        Args:
+            signal_type: 信号类型，不区分大小写，可选值：
+                MORNING_STAR / QIMING_STAR / EVENING_STAR / HUANGHUN_STAR /
+                THREE_WHITE_SOLDIERS / THREE_BLACK_CROWS / DARK_CLOUD_COVER /
+                ROUNDING_BOTTOM / ASCENDING_TRIANGLE / TOP_PATTERN
+            date: 扫描日期，格式 YYYY-MM-DD
+            period: 窗口周期（仅对 ROUNDING_BOTTOM/ASCENDING_TRIANGLE/TOP_PATTERN 有效），
+                    0 表示使用各信号默认值（60/30/60）
+            use_adjusted: 是否使用后复权价格，默认 True
+            codes: 待扫描股票代码列表，None 表示全市场扫描
+
+        Returns:
+            Dict[str, int]：{股票代码: 1}，仅包含信号值为 1 的股票；
+            若某股票数据不足（返回 None）则不计入结果
+
+        Example:
+            hits = api.scan_all_signals('EVENING_STAR', '2026-03-14')
+            print(f"黄昏之星: {list(hits.keys())}")
+
+            hits = api.scan_all_signals('ROUNDING_BOTTOM', '2026-03-14', period=60)
+        """
+        _DISPATCH: Dict[str, any] = {
+            'MORNING_STAR':        lambda c: get_morning_star(c, date, use_adjusted),
+            'QIMING_STAR':         lambda c: get_qiming_star(c, date, use_adjusted),
+            'EVENING_STAR':        lambda c: get_evening_star(c, date, use_adjusted),
+            'HUANGHUN_STAR':       lambda c: get_huanghun_star(c, date, use_adjusted),
+            'THREE_WHITE_SOLDIERS':lambda c: get_three_white_soldiers(c, date, use_adjusted),
+            'THREE_BLACK_CROWS':   lambda c: get_three_black_crows(c, date, use_adjusted),
+            'DARK_CLOUD_COVER':    lambda c: get_dark_cloud_cover(c, date, use_adjusted),
+            'ROUNDING_BOTTOM':     lambda c: get_rounding_bottom(c, date, period or 60, use_adjusted),
+            'ASCENDING_TRIANGLE':  lambda c: get_ascending_triangle(c, date, period or 30, use_adjusted),
+            'TOP_PATTERN':         lambda c: get_top_pattern(c, date, period or 60, use_adjusted),
+        }
+        fn = _DISPATCH.get(signal_type.upper())
+        if fn is None:
+            raise ValueError(
+                f"未知 signal_type: {signal_type!r}。"
+                f"可选值: {list(_DISPATCH.keys())}"
+            )
+        scan_codes = codes if codes is not None else self.get_all_symbols()
+        return {code: 1 for code in scan_codes if fn(code) == 1}
+
+    def get_period_return(
+        self,
+        code: str,
+        start_date: str,
+        end_date: str,
+        use_adjusted: bool = True,
+    ) -> Optional[float]:
+        """
+        计算股票在指定区间内的期间收益率（%）。
+
+        取区间内第一个和最后一个有效交易日的收盘价，使用后复权价格消除分红/送股影响。
+
+        Args:
+            code: 股票代码，如 '600519.SH'
+            start_date: 区间起始日期，格式 YYYY-MM-DD（取当日或之后第一个交易日）
+            end_date: 区间结束日期，格式 YYYY-MM-DD（取当日或之前最后一个交易日）
+            use_adjusted: 是否使用后复权价格，默认 True
+
+        Returns:
+            收益率（%，保留4位小数），区间内交易日不足2天返回 None
+
+        Example:
+            ret = api.get_period_return('600519.SH', '2026-01-01', '2026-03-14')
+            print(f"贵州茅台近3个月收益率: {ret:.2f}%")
+        """
+        klines = query_daily_kline(
+            codes=[code], start_date=start_date, end_date=end_date,
+            order_by="date ASC",
+        )
+        if len(klines) < 2:
+            return None
+
+        if use_adjusted:
+            basics = query_daily_basic(
+                ts_codes=[code],
+                start_date=klines[0].date,
+                end_date=klines[-1].date,
+            )
+            adj_map = {b.trade_date: b.adj_factor for b in basics}
+            adj_s = adj_map.get(klines[0].date, 1.0)
+            adj_e = adj_map.get(klines[-1].date, 1.0)
+            close_s = klines[0].close * adj_s
+            close_e = klines[-1].close * adj_e
+        else:
+            close_s = klines[0].close
+            close_e = klines[-1].close
+
+        if close_s == 0:
+            return None
+        return round((close_e - close_s) / close_s * 100, 4)
+
+    # ============================================================
     # 性能指标类接口
     # ============================================================
 

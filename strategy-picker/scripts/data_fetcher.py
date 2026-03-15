@@ -266,6 +266,7 @@ def init_db() -> None:
 def query_stock_basic(
     ts_code: Optional[str] = None,
     industry: Optional[str] = None,
+    industry_keyword: Optional[str] = None,
     area: Optional[str] = None,
     market: Optional[str] = None,
     limit: Optional[int] = None,
@@ -275,12 +276,14 @@ def query_stock_basic(
     从本地 SQLite 数据库查询 stock_basic 表，返回 StockBasic 对象列表。
 
     参数:
-        ts_code   按股票代码精确过滤
-        industry  按行业名称精确过滤
-        area      按地区精确过滤
-        market    按市场精确过滤
-        limit     返回最大记录数；为 None 表示不限
-        offset    分页偏移量，默认 0
+        ts_code          按股票代码精确过滤
+        industry         按行业名称精确过滤
+        industry_keyword 按行业名称关键词模糊过滤（LIKE %keyword%），与 industry 互斥，
+                         优先使用 industry_keyword
+        area             按地区精确过滤
+        market           按市场精确过滤
+        limit            返回最大记录数；为 None 表示不限
+        offset           分页偏移量，默认 0
 
     返回:
         List[StockBasic]  符合条件的股票基础信息对象列表
@@ -288,6 +291,7 @@ def query_stock_basic(
     示例:
         all_stocks   = query_stock_basic()
         bank_stocks  = query_stock_basic(industry="银行")
+        chip_stocks  = query_stock_basic(industry_keyword="半导体")
         single_stock = query_stock_basic(ts_code="000001.SZ")
     """
 
@@ -297,7 +301,10 @@ def query_stock_basic(
     if ts_code is not None:
         conditions.append("ts_code = :ts_code")
         params["ts_code"] = ts_code
-    if industry is not None:
+    if industry_keyword is not None:
+        conditions.append("industry LIKE :industry_keyword")
+        params["industry_keyword"] = f"%{industry_keyword}%"
+    elif industry is not None:
         conditions.append("industry = :industry")
         params["industry"] = industry
     if area is not None:
