@@ -123,7 +123,32 @@ from indicators import (
     get_median_price,
     get_weighted_close,
     get_avgp,
+    get_asi,
+    get_vr,
+    get_ar,
+    get_br,
+    get_brar,
+    get_dpo,
+    get_bbi,
+    get_mass,
+    get_xue_channel,
+    get_consecutive_rise,
+    get_consecutive_fall,
     init_indicators_db,
+)
+
+from signals import (
+    get_morning_star,
+    get_qiming_star,
+    get_evening_star,
+    get_huanghun_star,
+    get_three_white_soldiers,
+    get_three_black_crows,
+    get_dark_cloud_cover,
+    get_rounding_bottom,
+    get_ascending_triangle,
+    get_top_pattern,
+    init_signals_db,
 )
 
 from metrics import (
@@ -181,6 +206,7 @@ class StockApi:
         data_fetcher.init_db()
         data_fetcher.syn_table_datas()
         init_indicators_db()
+        init_signals_db()
 
     # ============================================================
     # 股票基础信息类接口
@@ -1545,6 +1571,462 @@ class StockApi:
             平均价格，若数据不足返回None
         """
         return get_avgp(code, date, use_adjusted)
+
+    def get_asi(self, code: str, date: str, period: int = 26, use_adjusted: bool = True) -> Optional[float]:
+        """
+        获取累积摆动指数 ASI（Accumulative Swing Index）。
+
+        ASI 基于开高低收四价构造，用于衡量价格摆动的累积强度，
+        值域无固定范围，正值表示多头动能积累，负值表示空头动能积累。
+
+        Args:
+            code: 股票代码
+            date: 计算日期，格式 YYYY-MM-DD
+            period: 历史K线根数，默认26
+            use_adjusted: 是否使用后复权价格，默认True
+
+        Returns:
+            ASI值（float），数据不足时返回None
+
+        Example:
+            asi = api.get_asi('600519.SH', '2026-03-01', 26)
+        """
+        return get_asi(code, date, period, use_adjusted)
+
+    def get_vr(self, code: str, date: str, period: int = 26, use_adjusted: bool = True) -> Optional[float]:
+        """
+        获取成交量比率指标 VR（Volume Ratio）。
+
+        VR = (上涨日成交量之和 + 0.5 * 平盘日成交量) / (下跌日成交量之和 + 0.5 * 平盘日成交量)。
+        VR > 1 表示量价配合偏多，VR < 1 表示量价配合偏空，正常区间约 0.5 ~ 1.5。
+
+        Args:
+            code: 股票代码
+            date: 计算日期，格式 YYYY-MM-DD
+            period: 统计周期，默认26
+            use_adjusted: 是否使用后复权价格，默认True
+
+        Returns:
+            VR值（float），数据不足时返回None
+
+        Example:
+            vr = api.get_vr('600519.SH', '2026-03-01', 26)
+        """
+        return get_vr(code, date, period, use_adjusted)
+
+    def get_ar(self, code: str, date: str, period: int = 26, use_adjusted: bool = True) -> Optional[float]:
+        """
+        获取人气指标 AR（Atmosphere/Rally）。
+
+        AR = sum(High - Open) / sum(Open - Low) * 100，衡量多空双方相对强弱，
+        100 为均衡，> 100 多头占优，< 100 空头占优，一般正常范围 50 ~ 150。
+
+        Args:
+            code: 股票代码
+            date: 计算日期，格式 YYYY-MM-DD
+            period: 统计周期，默认26
+            use_adjusted: 是否使用后复权价格，默认True
+
+        Returns:
+            AR值（float），数据不足时返回None
+
+        Example:
+            ar = api.get_ar('600519.SH', '2026-03-01', 26)
+        """
+        return get_ar(code, date, period, use_adjusted)
+
+    def get_br(self, code: str, date: str, period: int = 26, use_adjusted: bool = True) -> Optional[float]:
+        """
+        获取意愿指标 BR（Buyer/Seller Ratio）。
+
+        BR = sum(High - Close_prev) / sum(Close_prev - Low) * 100，衡量多空力量对比，
+        与 AR 配合使用：BR > AR 多头强势，BR < AR 空头强势。
+
+        Args:
+            code: 股票代码
+            date: 计算日期，格式 YYYY-MM-DD
+            period: 统计周期，默认26
+            use_adjusted: 是否使用后复权价格，默认True
+
+        Returns:
+            BR值（float），数据不足时返回None
+
+        Example:
+            br = api.get_br('600519.SH', '2026-03-01', 26)
+        """
+        return get_br(code, date, period, use_adjusted)
+
+    def get_brar(self, code: str, date: str, period: int = 26, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
+        """
+        同时获取人气指标 AR 和意愿指标 BR。
+
+        BRAR 是 AR 与 BR 的组合指标，二者结合判断市场多空力量：
+        - AR 衡量当日多空（基于开盘价）
+        - BR 衡量跨日多空（基于前收价）
+
+        Args:
+            code: 股票代码
+            date: 计算日期，格式 YYYY-MM-DD
+            period: 统计周期，默认26
+            use_adjusted: 是否使用后复权价格，默认True
+
+        Returns:
+            字典 {'ar': float, 'br': float}，数据不足时返回None
+
+        Example:
+            brar = api.get_brar('600519.SH', '2026-03-01', 26)
+            ar, br = brar['ar'], brar['br']
+        """
+        return get_brar(code, date, period, use_adjusted)
+
+    def get_dpo(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
+        """
+        获取去趋势震荡指标 DPO（Detrended Price Oscillator）。
+
+        DPO = Close - SMA(Close, period)[-(period/2 + 1)]，通过去除长期趋势
+        来识别价格的短中期周期性波动，穿越零轴可作为买卖参考信号。
+
+        Args:
+            code: 股票代码
+            date: 计算日期，格式 YYYY-MM-DD
+            period: 周期，默认20
+            use_adjusted: 是否使用后复权价格，默认True
+
+        Returns:
+            DPO值（float），数据不足时返回None
+
+        Example:
+            dpo = api.get_dpo('600519.SH', '2026-03-01', 20)
+        """
+        return get_dpo(code, date, period, use_adjusted)
+
+    def get_bbi(self, code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
+        """
+        获取多空指标 BBI（Bull and Bear Index）。
+
+        BBI = (MA3 + MA6 + MA12 + MA24) / 4，是四条均线的算术平均值，
+        价格上穿 BBI 为多头信号，下穿为空头信号。固定使用 3/6/12/24 周期。
+
+        Args:
+            code: 股票代码
+            date: 计算日期，格式 YYYY-MM-DD
+            use_adjusted: 是否使用后复权价格，默认True
+
+        Returns:
+            BBI值（float），数据不足时返回None
+
+        Example:
+            bbi = api.get_bbi('600519.SH', '2026-03-01')
+        """
+        return get_bbi(code, date, use_adjusted)
+
+    def get_mass(self, code: str, date: str, ema_period: int = 9, period: int = 25, use_adjusted: bool = True) -> Optional[float]:
+        """
+        获取梅斯线 MASS Index（Mass Index）。
+
+        MASS = sum(EMA(H-L, p) / EMA(EMA(H-L, p), p), period)，通过高低价差
+        的双重 EMA 比值累加来识别价格反转，值升破 27 后回落至 26.5 以下为
+        "反转鼓"信号。
+
+        Args:
+            code: 股票代码
+            date: 计算日期，格式 YYYY-MM-DD
+            ema_period: EMA平滑周期，默认9
+            period: 累积周期，默认25
+            use_adjusted: 是否使用后复权价格，默认True
+
+        Returns:
+            MASS值（float），数据不足时返回None
+
+        Example:
+            mass = api.get_mass('600519.SH', '2026-03-01', 9, 25)
+        """
+        return get_mass(code, date, ema_period, period, use_adjusted)
+
+    def get_xue_channel(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
+        """
+        获取雪球通道（薛斯通道）。
+
+        雪球通道由中轨（MA）、上轨（MA + k*ATR）、下轨（MA - k*ATR）构成，
+        价格突破上轨为超买，跌破下轨为超卖，常用于趋势跟踪和止损设置。
+
+        Args:
+            code: 股票代码
+            date: 计算日期，格式 YYYY-MM-DD
+            period: 均线和ATR周期，默认20
+            use_adjusted: 是否使用后复权价格，默认True
+
+        Returns:
+            字典 {'upper': float, 'middle': float, 'lower': float}，数据不足时返回None
+
+        Example:
+            ch = api.get_xue_channel('600519.SH', '2026-03-01', 20)
+            upper, middle, lower = ch['upper'], ch['middle'], ch['lower']
+        """
+        return get_xue_channel(code, date, period, use_adjusted)
+
+    def get_consecutive_rise(self, code: str, date: str, use_adjusted: bool = True) -> Optional[int]:
+        """
+        获取截至指定日期连续上涨的天数。
+
+        从指定日期向前追溯，统计收盘价连续高于前一日的天数，
+        0 表示当日未上涨，1 表示仅当日上涨，依此类推。
+
+        Args:
+            code: 股票代码
+            date: 计算日期，格式 YYYY-MM-DD
+            use_adjusted: 是否使用后复权价格，默认True
+
+        Returns:
+            连续上涨天数（int ≥ 0），数据不足时返回None
+
+        Example:
+            n = api.get_consecutive_rise('600519.SH', '2026-03-01')
+        """
+        return get_consecutive_rise(code, date, use_adjusted)
+
+    def get_consecutive_fall(self, code: str, date: str, use_adjusted: bool = True) -> Optional[int]:
+        """
+        获取截至指定日期连续下跌的天数。
+
+        从指定日期向前追溯，统计收盘价连续低于前一日的天数，
+        0 表示当日未下跌，1 表示仅当日下跌，依此类推。
+
+        Args:
+            code: 股票代码
+            date: 计算日期，格式 YYYY-MM-DD
+            use_adjusted: 是否使用后复权价格，默认True
+
+        Returns:
+            连续下跌天数（int ≥ 0），数据不足时返回None
+
+        Example:
+            n = api.get_consecutive_fall('600519.SH', '2026-03-01')
+        """
+        return get_consecutive_fall(code, date, use_adjusted)
+
+    # ============================================================
+    # 裸K形态信号类接口（带缓存）
+    # ============================================================
+
+    def get_morning_star(self, code: str, date: str, use_adjusted: bool = True) -> Optional[int]:
+        """
+        检测早晨之星（Morning Star）形态。
+
+        早晨之星是底部反转信号，由三根K线构成：第一根大阴线、第二根十字星
+        （开低收于阴线实体下方）、第三根大阳线并收回阴线实体一半以上。
+
+        结果会缓存到 cached_signals 表，相同参数直接读缓存。
+
+        Args:
+            code: 股票代码
+            date: 判断日期，格式 YYYY-MM-DD（以该日为第三根K线）
+            use_adjusted: 是否使用后复权价格，默认True
+
+        Returns:
+            1 表示出现形态，0 表示未出现，None 表示数据不足
+
+        Example:
+            signal = api.get_morning_star('600519.SH', '2026-03-01')
+        """
+        return get_morning_star(code, date, use_adjusted)
+
+    def get_qiming_star(self, code: str, date: str, use_adjusted: bool = True) -> Optional[int]:
+        """
+        检测启明星形态（早晨之星别名）。
+
+        启明星即早晨之星（Morning Star），共享同一缓存键 MORNING_STAR，
+        结果与 get_morning_star 完全一致。
+
+        Args:
+            code: 股票代码
+            date: 判断日期，格式 YYYY-MM-DD
+            use_adjusted: 是否使用后复权价格，默认True
+
+        Returns:
+            1 表示出现形态，0 表示未出现，None 表示数据不足
+
+        Example:
+            signal = api.get_qiming_star('600519.SH', '2026-03-01')
+        """
+        return get_qiming_star(code, date, use_adjusted)
+
+    def get_evening_star(self, code: str, date: str, use_adjusted: bool = True) -> Optional[int]:
+        """
+        检测黄昏之星（Evening Star）形态。
+
+        黄昏之星是顶部反转信号，与早晨之星相反：第一根大阳线、第二根十字星
+        （开高收于阳线实体上方）、第三根大阴线并收回阳线实体一半以上。
+
+        结果会缓存到 cached_signals 表，相同参数直接读缓存。
+
+        Args:
+            code: 股票代码
+            date: 判断日期，格式 YYYY-MM-DD（以该日为第三根K线）
+            use_adjusted: 是否使用后复权价格，默认True
+
+        Returns:
+            1 表示出现形态，0 表示未出现，None 表示数据不足
+
+        Example:
+            signal = api.get_evening_star('600519.SH', '2026-03-01')
+        """
+        return get_evening_star(code, date, use_adjusted)
+
+    def get_huanghun_star(self, code: str, date: str, use_adjusted: bool = True) -> Optional[int]:
+        """
+        检测黄昏星形态（黄昏之星别名）。
+
+        黄昏星即黄昏之星（Evening Star），共享同一缓存键 EVENING_STAR，
+        结果与 get_evening_star 完全一致。
+
+        Args:
+            code: 股票代码
+            date: 判断日期，格式 YYYY-MM-DD
+            use_adjusted: 是否使用后复权价格，默认True
+
+        Returns:
+            1 表示出现形态，0 表示未出现，None 表示数据不足
+
+        Example:
+            signal = api.get_huanghun_star('600519.SH', '2026-03-01')
+        """
+        return get_huanghun_star(code, date, use_adjusted)
+
+    def get_three_white_soldiers(self, code: str, date: str, use_adjusted: bool = True) -> Optional[int]:
+        """
+        检测红三兵（Three White Soldiers）形态。
+
+        红三兵是强势上涨信号，由连续三根阳线构成，每根实体占比≥50%，
+        上影线≤20%，且每根K线的开盘价在前一根实体范围内（逐步跳空上行）。
+
+        结果会缓存到 cached_signals 表，相同参数直接读缓存。
+
+        Args:
+            code: 股票代码
+            date: 判断日期，格式 YYYY-MM-DD（以该日为第三根K线）
+            use_adjusted: 是否使用后复权价格，默认True
+
+        Returns:
+            1 表示出现形态，0 表示未出现，None 表示数据不足
+
+        Example:
+            signal = api.get_three_white_soldiers('600519.SH', '2026-03-01')
+        """
+        return get_three_white_soldiers(code, date, use_adjusted)
+
+    def get_three_black_crows(self, code: str, date: str, use_adjusted: bool = True) -> Optional[int]:
+        """
+        检测三只乌鸦（Three Black Crows）形态。
+
+        三只乌鸦是强势下跌信号，由连续三根阴线构成，每根实体占比≥50%，
+        下影线≤20%，且每根K线的开盘价在前一根实体范围内（逐步跳空下行）。
+
+        结果会缓存到 cached_signals 表，相同参数直接读缓存。
+
+        Args:
+            code: 股票代码
+            date: 判断日期，格式 YYYY-MM-DD（以该日为第三根K线）
+            use_adjusted: 是否使用后复权价格，默认True
+
+        Returns:
+            1 表示出现形态，0 表示未出现，None 表示数据不足
+
+        Example:
+            signal = api.get_three_black_crows('600519.SH', '2026-03-01')
+        """
+        return get_three_black_crows(code, date, use_adjusted)
+
+    def get_dark_cloud_cover(self, code: str, date: str, use_adjusted: bool = True) -> Optional[int]:
+        """
+        检测乌云盖顶（Dark Cloud Cover）形态。
+
+        乌云盖顶是顶部反转信号，由两根K线构成：第一根大阳线，第二根阴线
+        高开（开盘高于前收）后下跌，收盘深入阳线实体一半以上但不低于阳线开盘。
+
+        结果会缓存到 cached_signals 表，相同参数直接读缓存。
+
+        Args:
+            code: 股票代码
+            date: 判断日期，格式 YYYY-MM-DD（以该日为第二根K线）
+            use_adjusted: 是否使用后复权价格，默认True
+
+        Returns:
+            1 表示出现形态，0 表示未出现，None 表示数据不足
+
+        Example:
+            signal = api.get_dark_cloud_cover('600519.SH', '2026-03-01')
+        """
+        return get_dark_cloud_cover(code, date, use_adjusted)
+
+    def get_rounding_bottom(self, code: str, date: str, period: int = 60, use_adjusted: bool = True) -> Optional[int]:
+        """
+        检测圆弧底（Rounding Bottom / Saucer）形态。
+
+        圆弧底是长期底部反转形态，价格在 period 根K线内呈现 U 形走势：
+        左侧缓慢下跌，底部盘整，右侧缓慢回升，最低点出现在中间三分之一区段。
+
+        结果会缓存到 cached_signals 表，相同参数直接读缓存。
+
+        Args:
+            code: 股票代码
+            date: 判断日期，格式 YYYY-MM-DD
+            period: 观察窗口（K线根数），默认60
+            use_adjusted: 是否使用后复权价格，默认True
+
+        Returns:
+            1 表示出现形态，0 表示未出现，None 表示数据不足
+
+        Example:
+            signal = api.get_rounding_bottom('600519.SH', '2026-03-01', 60)
+        """
+        return get_rounding_bottom(code, date, period, use_adjusted)
+
+    def get_ascending_triangle(self, code: str, date: str, period: int = 30, use_adjusted: bool = True) -> Optional[int]:
+        """
+        检测上升三角形（Ascending Triangle）形态。
+
+        上升三角形是整理后向上突破的形态：水平阻力位保持不变，
+        支撑位持续上移（低点逐步抬高），是多头蓄力信号。
+
+        结果会缓存到 cached_signals 表，相同参数直接读缓存。
+
+        Args:
+            code: 股票代码
+            date: 判断日期，格式 YYYY-MM-DD
+            period: 观察窗口（K线根数），默认30
+            use_adjusted: 是否使用后复权价格，默认True
+
+        Returns:
+            1 表示出现形态，0 表示未出现，None 表示数据不足
+
+        Example:
+            signal = api.get_ascending_triangle('600519.SH', '2026-03-01', 30)
+        """
+        return get_ascending_triangle(code, date, period, use_adjusted)
+
+    def get_top_pattern(self, code: str, date: str, period: int = 60, use_adjusted: bool = True) -> Optional[int]:
+        """
+        检测顶部形态（双顶 / M头）。
+
+        顶部形态由两个相近高点和中间颈线构成：两个高点高度接近（误差在容忍范围内），
+        颈线低点跌幅达到一定比例，当前价格已从第二高点回落，确认顶部。
+
+        结果会缓存到 cached_signals 表，相同参数直接读缓存。
+
+        Args:
+            code: 股票代码
+            date: 判断日期，格式 YYYY-MM-DD
+            period: 观察窗口（K线根数），默认60
+            use_adjusted: 是否使用后复权价格，默认True
+
+        Returns:
+            1 表示出现形态，0 表示未出现，None 表示数据不足
+
+        Example:
+            signal = api.get_top_pattern('600519.SH', '2026-03-01', 60)
+        """
+        return get_top_pattern(code, date, period, use_adjusted)
 
     # ============================================================
     # 性能指标类接口
