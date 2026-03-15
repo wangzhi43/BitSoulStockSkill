@@ -23,7 +23,7 @@ import requests
 import os
 from sqlalchemy import create_engine, text, Engine
 from typing import List, Optional
-from define import BASE_URL, HTTP_TIMEOUT, DB_PATH, StockBasic, DailyKline, HourKline, WeeklyKline, MonthlyKline, DailyBasic, Income
+from define import BASE_URL, HTTP_TIMEOUT, DB_PATH, StockBasic, DailyKline, HourKline, WeeklyKline, MonthlyKline, DailyBasic, Income, StockLimit, DailyLimitList, DailyBombList
 import utils
 from logger import log
 from db_engine import getEngine
@@ -34,7 +34,10 @@ g_table_name_to_pk = {
     "weekly_kline" : ["code","date"],
     "monthly_kline" : ["code","date"],
     "daily_basic": ["ts_code", "trade_date"],
-    "income": ["ts_code", "report_type", "end_date"]
+    "income": ["ts_code", "report_type", "end_date"],
+    "stock_limit": ["trade_date", "ts_code"],
+    "daily_limit_list": ["trade_date", "ts_code"],
+    "daily_bomb_list": ["trade_date", "ts_code"],
 }
  
 class TablePatch:
@@ -208,6 +211,45 @@ def init_db() -> None:
                 pcf               REAL,
                 free_circ_mv      REAL,
                 PRIMARY KEY (ts_code, report_type, end_date)
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS stock_limit (
+                trade_date  TEXT NOT NULL,
+                ts_code     TEXT NOT NULL,
+                pre_close   REAL,
+                up_limit    REAL,
+                down_limit  REAL,
+                PRIMARY KEY (trade_date, ts_code)
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS daily_limit_list (
+                trade_date   TEXT NOT NULL,
+                ts_code      TEXT NOT NULL,
+                name         TEXT,
+                limit_type   TEXT,
+                limit_price  REAL,
+                pct_chg      REAL,
+                volume       REAL,
+                amount       REAL,
+                limit_streak INTEGER,
+                sector       TEXT,
+                PRIMARY KEY (trade_date, ts_code)
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS daily_bomb_list (
+                trade_date  TEXT NOT NULL,
+                ts_code     TEXT NOT NULL,
+                name        TEXT,
+                bomb_type   TEXT,
+                limit_price REAL,
+                pct_chg     REAL,
+                volume      REAL,
+                amount      REAL,
+                sector      TEXT,
+                PRIMARY KEY (trade_date, ts_code)
             )
         """))
         conn.execute(text("""
@@ -638,6 +680,202 @@ def query_income(
         return [Income.from_dict(dict(row._mapping)) for row in rows]
 
 
+def query_stock_limit(
+    ts_codes: List[str] = [],
+    trade_date: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: Optional[int] = None,
+    offset: int = 0,
+    order_by: str = "trade_date ASC",
+) -> List[StockLimit]:
+    """
+    从本地 SQLite 数据库查询 stock_limit 表，返回 StockLimit 对象列表。
+
+    参数:
+        ts_codes    按股票代码列表过滤
+        trade_date  按具体交易日期精确过滤，格式 "YYYY-MM-DD"
+        start_date  按日期范围过滤下限（含），格式 "YYYY-MM-DD"
+        end_date    按日期范围过滤上限（含），格式 "YYYY-MM-DD"
+        limit       返回最大记录数；为 None 表示不限
+        offset      分页偏移量，默认 0
+        order_by    排序表达式，默认 "trade_date ASC"
+
+    返回:
+        List[StockLimit]  符合条件的每日涨跌停价格对象列表
+
+    示例:
+        # 查询某只股票的涨跌停价格历史
+        limits = query_stock_limit(ts_codes=["000001.SZ"])
+
+        # 查询某天全市场涨跌停价格
+        limits = query_stock_limit(trade_date="2024-06-03")
+    """
+    conditions = []
+    params: dict = {}
+
+    if len(ts_codes) != 0:
+        keys = [f"ts_code_{i}" for i in range(len(ts_codes))]
+        placeholders = ",".join(f":{k}" for k in keys)
+        conditions.append(f"ts_code IN ({placeholders})")
+        for k, v in zip(keys, ts_codes):
+            params[k] = v
+    if trade_date is not None:
+        conditions.append("DATE(trade_date) = :trade_date")
+        params["trade_date"] = trade_date
+    else:
+        if start_date is not None:
+            conditions.append("DATE(trade_date) >= DATE('{0}')".format(start_date))
+        if end_date is not None:
+            conditions.append("DATE(trade_date) <= DATE('{0}')".format(end_date))
+
+    sql = "SELECT * FROM stock_limit"
+    if conditions:
+        sql += " WHERE " + " AND ".join(conditions)
+    sql += f" ORDER BY {order_by}"
+    if limit is not None:
+        sql += f" LIMIT {int(limit)} OFFSET {int(offset)}"
+
+    with getEngine().connect() as conn:
+        cursor = conn.execute(text(sql), params)
+        rows = cursor.fetchall()
+        return [StockLimit.from_dict(dict(row._mapping)) for row in rows]
+
+
+def query_daily_limit_list(
+    ts_codes: List[str] = [],
+    trade_date: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit_type: Optional[str] = None,
+    limit: Optional[int] = None,
+    offset: int = 0,
+    order_by: str = "trade_date ASC",
+) -> List[DailyLimitList]:
+    """
+    从本地 SQLite 数据库查询 daily_limit_list 表，返回 DailyLimitList 对象列表。
+
+    参数:
+        ts_codes    按股票代码列表过滤
+        trade_date  按具体交易日期精确过滤，格式 "YYYY-MM-DD"
+        start_date  按日期范围过滤下限（含），格式 "YYYY-MM-DD"
+        end_date    按日期范围过滤上限（含），格式 "YYYY-MM-DD"
+        limit_type  按榜单类型过滤（U=涨停, D=跌停）
+        limit       返回最大记录数；为 None 表示不限
+        offset      分页偏移量，默认 0
+        order_by    排序表达式，默认 "trade_date ASC"
+
+    返回:
+        List[DailyLimitList]  符合条件的每日涨跌停榜单对象列表
+
+    示例:
+        # 查询某天所有涨停股
+        records = query_daily_limit_list(trade_date="2024-06-03", limit_type="U")
+
+        # 查询某只股票历史上榜记录
+        records = query_daily_limit_list(ts_codes=["000001.SZ"])
+    """
+    conditions = []
+    params: dict = {}
+
+    if len(ts_codes) != 0:
+        keys = [f"ts_code_{i}" for i in range(len(ts_codes))]
+        placeholders = ",".join(f":{k}" for k in keys)
+        conditions.append(f"ts_code IN ({placeholders})")
+        for k, v in zip(keys, ts_codes):
+            params[k] = v
+    if trade_date is not None:
+        conditions.append("DATE(trade_date) = :trade_date")
+        params["trade_date"] = trade_date
+    else:
+        if start_date is not None:
+            conditions.append("DATE(trade_date) >= DATE('{0}')".format(start_date))
+        if end_date is not None:
+            conditions.append("DATE(trade_date) <= DATE('{0}')".format(end_date))
+    if limit_type is not None:
+        conditions.append("limit_type = :limit_type")
+        params["limit_type"] = limit_type
+
+    sql = "SELECT * FROM daily_limit_list"
+    if conditions:
+        sql += " WHERE " + " AND ".join(conditions)
+    sql += f" ORDER BY {order_by}"
+    if limit is not None:
+        sql += f" LIMIT {int(limit)} OFFSET {int(offset)}"
+
+    with getEngine().connect() as conn:
+        cursor = conn.execute(text(sql), params)
+        rows = cursor.fetchall()
+        return [DailyLimitList.from_dict(dict(row._mapping)) for row in rows]
+
+
+def query_daily_bomb_list(
+    ts_codes: List[str] = [],
+    trade_date: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    bomb_type: Optional[str] = None,
+    limit: Optional[int] = None,
+    offset: int = 0,
+    order_by: str = "trade_date ASC",
+) -> List[DailyBombList]:
+    """
+    从本地 SQLite 数据库查询 daily_bomb_list 表，返回 DailyBombList 对象列表。
+
+    参数:
+        ts_codes    按股票代码列表过滤
+        trade_date  按具体交易日期精确过滤，格式 "YYYY-MM-DD"
+        start_date  按日期范围过滤下限（含），格式 "YYYY-MM-DD"
+        end_date    按日期范围过滤上限（含），格式 "YYYY-MM-DD"
+        bomb_type   按炸板类型过滤（U=曾涨停, D=曾跌停/撬板）
+        limit       返回最大记录数；为 None 表示不限
+        offset      分页偏移量，默认 0
+        order_by    排序表达式，默认 "trade_date ASC"
+
+    返回:
+        List[DailyBombList]  符合条件的每日炸板榜单对象列表
+
+    示例:
+        # 查询某天所有炸板（曾涨停）股票
+        records = query_daily_bomb_list(trade_date="2024-06-03", bomb_type="U")
+
+        # 查询某只股票历史炸板记录
+        records = query_daily_bomb_list(ts_codes=["000001.SZ"])
+    """
+    conditions = []
+    params: dict = {}
+
+    if len(ts_codes) != 0:
+        keys = [f"ts_code_{i}" for i in range(len(ts_codes))]
+        placeholders = ",".join(f":{k}" for k in keys)
+        conditions.append(f"ts_code IN ({placeholders})")
+        for k, v in zip(keys, ts_codes):
+            params[k] = v
+    if trade_date is not None:
+        conditions.append("DATE(trade_date) = :trade_date")
+        params["trade_date"] = trade_date
+    else:
+        if start_date is not None:
+            conditions.append("DATE(trade_date) >= DATE('{0}')".format(start_date))
+        if end_date is not None:
+            conditions.append("DATE(trade_date) <= DATE('{0}')".format(end_date))
+    if bomb_type is not None:
+        conditions.append("bomb_type = :bomb_type")
+        params["bomb_type"] = bomb_type
+
+    sql = "SELECT * FROM daily_bomb_list"
+    if conditions:
+        sql += " WHERE " + " AND ".join(conditions)
+    sql += f" ORDER BY {order_by}"
+    if limit is not None:
+        sql += f" LIMIT {int(limit)} OFFSET {int(offset)}"
+
+    with getEngine().connect() as conn:
+        cursor = conn.execute(text(sql), params)
+        rows = cursor.fetchall()
+        return [DailyBombList.from_dict(dict(row._mapping)) for row in rows]
+
+
 class PatchItem:
     def __init__(self):
         self.patch_date:str = ""
@@ -766,106 +1004,171 @@ def import_data_to_table(input_file:str, table_name:str):
         conn.commit()
 
 def testfunc():
-     
+
     # ================================================================
     # 1. query_stock_basic
     # ================================================================
     all_stocks = query_stock_basic()
-     
+
     bank = query_stock_basic(industry="银行")
-   
+
     single = query_stock_basic(ts_code="600519.SH")
-     
+
     area_stocks = query_stock_basic(area="广东")
-     
+
     market_stocks = query_stock_basic(market="主板")
-    
+
     paged = query_stock_basic(limit=2, offset=0)
-    
+
     empty = query_stock_basic(ts_code="999999.SZ")
-     
+
     log("query_stock_basic: 全部测试通过")
 
     # ================================================================
     # 2. query_hour_kline
     # ================================================================
     all_hour = query_hour_kline()
-    
+
     code_hour = query_hour_kline(codes=["sz.000001"])
-    
+
     date_hour = query_hour_kline(date="2024-06-03")
-    
+
     range_hour = query_hour_kline(start_date="2024-06-04", end_date="2024-06-04")
-    
+
     lim_hour = query_hour_kline(codes=["sz.000001"], limit=2)
-    
+
     multi_code_hour = query_hour_kline(codes=["sz.000001", "sh.600519"], date="2024-06-03")
-    
+
     log("query_hour_kline: 全部测试通过")
 
     # ================================================================
     # 3. query_daily_kline
     # ================================================================
     all_daily = query_daily_kline()
-    
+
     code_daily = query_daily_kline(codes=["sz.000001"])
-    
+
     date_daily = query_daily_kline(date="2024-06-03")
-    
+
     range_daily = query_daily_kline(start_date="2024-06-04", end_date="2024-06-05")
-    
+
     desc_daily = query_daily_kline(codes=["sz.000001"], order_by="date DESC", limit=1)
-    
+
     paged_daily = query_daily_kline(codes=["sz.000001"], limit=2, offset=1)
-    
+
     log("query_daily_kline: 全部测试通过")
 
     # ================================================================
     # 4. query_weekly_kline
     # ================================================================
     all_weekly = query_weekly_kline()
-    
+
     code_weekly = query_weekly_kline(codes=["sz.000001"])
-    
+
     date_weekly = query_weekly_kline(date="2024-05-31")
-    
+
     range_weekly = query_weekly_kline(start_date="2024-06-01", end_date="2024-06-30")
-    
+
     lim_weekly = query_weekly_kline(limit=1)
-    
+
     log("query_weekly_kline: 全部测试通过")
 
     # ================================================================
     # 5. query_monthly_kline
     # ================================================================
     all_monthly = query_monthly_kline()
-    
+
     code_monthly = query_monthly_kline(codes=["sz.000001"])
-    
+
     date_monthly = query_monthly_kline(date="2024-05-31")
-    
+
     range_monthly = query_monthly_kline(start_date="2024-06-01", end_date="2024-06-30")
-    
+
     desc_monthly = query_monthly_kline(codes=["sz.000001"], order_by="date DESC", limit=1)
-    
+
     log("query_monthly_kline: 全部测试通过")
 
     # ================================================================
     # 6. query_daily_basic
     # ================================================================
     all_basic = query_daily_basic()
-    
+
     code_basic = query_daily_basic(ts_codes=["000001.SZ"])
-    
+
     date_basic = query_daily_basic(trade_date="2024-06-03")
-    
+
     range_basic = query_daily_basic(start_date="2024-06-04", end_date="2024-06-04")
-    
+
     desc_basic = query_daily_basic(ts_codes=["000001.SZ"], order_by="trade_date DESC", limit=1)
-    
+
     multi_code_basic = query_daily_basic(ts_codes=["000001.SZ", "600519.SH"], trade_date="2024-06-03")
-    
+
     log("query_daily_basic: 全部测试通过")
+
+    # ================================================================
+    # 7. query_stock_limit
+    # ================================================================
+    all_limit = query_stock_limit()
+
+    code_limit = query_stock_limit(ts_codes=["000001.SZ"])
+
+    date_limit = query_stock_limit(trade_date="2024-06-03")
+
+    range_limit = query_stock_limit(start_date="2024-06-04", end_date="2024-06-05")
+
+    desc_limit = query_stock_limit(ts_codes=["000001.SZ"], order_by="trade_date DESC", limit=1)
+
+    multi_code_limit = query_stock_limit(ts_codes=["000001.SZ", "600519.SH"], trade_date="2024-06-03")
+
+    paged_limit = query_stock_limit(limit=2, offset=0)
+
+    log("query_stock_limit: 全部测试通过")
+
+    # ================================================================
+    # 8. query_daily_limit_list
+    # ================================================================
+    all_dll = query_daily_limit_list()
+
+    date_dll = query_daily_limit_list(trade_date="2024-06-03")
+
+    up_dll = query_daily_limit_list(trade_date="2024-06-03", limit_type="U")
+
+    down_dll = query_daily_limit_list(trade_date="2024-06-03", limit_type="D")
+
+    code_dll = query_daily_limit_list(ts_codes=["000001.SZ"])
+
+    range_dll = query_daily_limit_list(start_date="2024-06-04", end_date="2024-06-05")
+
+    desc_dll = query_daily_limit_list(ts_codes=["000001.SZ"], order_by="trade_date DESC", limit=1)
+
+    multi_code_dll = query_daily_limit_list(ts_codes=["000001.SZ", "600519.SH"], limit_type="U")
+
+    paged_dll = query_daily_limit_list(limit=2, offset=0)
+
+    log("query_daily_limit_list: 全部测试通过")
+
+    # ================================================================
+    # 9. query_daily_bomb_list
+    # ================================================================
+    all_dbl = query_daily_bomb_list()
+
+    date_dbl = query_daily_bomb_list(trade_date="2024-06-03")
+
+    up_dbl = query_daily_bomb_list(trade_date="2024-06-03", bomb_type="U")
+
+    down_dbl = query_daily_bomb_list(trade_date="2024-06-03", bomb_type="D")
+
+    code_dbl = query_daily_bomb_list(ts_codes=["000001.SZ"])
+
+    range_dbl = query_daily_bomb_list(start_date="2024-06-04", end_date="2024-06-05")
+
+    desc_dbl = query_daily_bomb_list(ts_codes=["000001.SZ"], order_by="trade_date DESC", limit=1)
+
+    multi_code_dbl = query_daily_bomb_list(ts_codes=["000001.SZ", "600519.SH"], bomb_type="U")
+
+    paged_dbl = query_daily_bomb_list(limit=2, offset=0)
+
+    log("query_daily_bomb_list: 全部测试通过")
 
     log("===== testfunc: 所有测试全部通过 =====")
 
@@ -873,4 +1176,5 @@ def testfunc():
 if __name__ == "__main__":
     log(f"数据库路径:{DB_PATH}")
     init_db()
-    syn_table_datas()
+    # syn_table_datas()
+    testfunc()

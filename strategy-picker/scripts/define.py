@@ -563,3 +563,169 @@ class Income:
     def __repr__(self) -> str:
         return (f"Income(ts_code={self.ts_code!r}, end_date={self.end_date!r}, "
                 f"report_type={self.report_type!r}, n_income={self.n_income})")
+
+
+class StockLimit:
+    """
+    每日涨跌停价格数据，对应本地 stock_limit 表。
+
+    字段说明:
+        trade_date  交易日期（PK）
+        ts_code     股票代码（PK）
+        pre_close   昨日收盘价
+        up_limit    涨停价
+        down_limit  跌停价
+    """
+
+    __slots__ = ("trade_date", "ts_code", "pre_close", "up_limit", "down_limit")
+
+    def __init__(self, trade_date: str, ts_code: str,
+                 pre_close: float, up_limit: float, down_limit: float):
+        self.trade_date = trade_date
+        self.ts_code = ts_code
+        self.pre_close = pre_close
+        self.up_limit = up_limit
+        self.down_limit = down_limit
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "StockLimit":
+        def _f(v):
+            try:
+                return float(v) if v is not None and v != "" else 0.0
+            except (TypeError, ValueError):
+                return 0.0
+
+        return cls(
+            trade_date=d.get("trade_date") or "",
+            ts_code=d.get("ts_code") or "",
+            pre_close=_f(d.get("pre_close")),
+            up_limit=_f(d.get("up_limit")),
+            down_limit=_f(d.get("down_limit")),
+        )
+
+    def __repr__(self) -> str:
+        return (f"StockLimit(trade_date={self.trade_date!r}, ts_code={self.ts_code!r}, "
+                f"up_limit={self.up_limit}, down_limit={self.down_limit})")
+
+
+class DailyLimitList:
+    """
+    每日涨跌停榜单数据，对应本地 daily_limit_list 表。
+
+    字段说明:
+        trade_date   交易日期（PK）
+        ts_code      股票代码（PK）
+        name         股票名称
+        limit_type   榜单类型（U=涨停, D=跌停）
+        limit_price  涨跌停价格
+        pct_chg      涨跌幅（%）
+        volume       成交量
+        amount       成交额
+        limit_streak 连板数（涨停板）
+        sector       所属板块
+    """
+
+    __slots__ = ("trade_date", "ts_code", "name", "limit_type", "limit_price",
+                 "pct_chg", "volume", "amount", "limit_streak", "sector")
+
+    def __init__(self, trade_date: str, ts_code: str, name: str, limit_type: str,
+                 limit_price: float, pct_chg: float, volume: float, amount: float,
+                 limit_streak: int, sector: str):
+        self.trade_date = trade_date
+        self.ts_code = ts_code
+        self.name = name
+        self.limit_type = limit_type
+        self.limit_price = limit_price
+        self.pct_chg = pct_chg
+        self.volume = volume
+        self.amount = amount
+        self.limit_streak = limit_streak
+        self.sector = sector
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "DailyLimitList":
+        def _f(v):
+            try:
+                return float(v) if v is not None and v != "" else 0.0
+            except (TypeError, ValueError):
+                return 0.0
+
+        def _i(v):
+            try:
+                return int(v) if v is not None and v != "" else 0
+            except (TypeError, ValueError):
+                return 0
+
+        return cls(
+            trade_date=d.get("trade_date") or "",
+            ts_code=d.get("ts_code") or "",
+            name=d.get("name") or "",
+            limit_type=d.get("limit_type") or "",
+            limit_price=_f(d.get("limit_price")),
+            pct_chg=_f(d.get("pct_chg")),
+            volume=_f(d.get("volume")),
+            amount=_f(d.get("amount")),
+            limit_streak=_i(d.get("limit_streak")),
+            sector=d.get("sector") or "",
+        )
+
+    def __repr__(self) -> str:
+        return (f"DailyLimitList(trade_date={self.trade_date!r}, ts_code={self.ts_code!r}, "
+                f"name={self.name!r}, limit_type={self.limit_type!r}, limit_streak={self.limit_streak})")
+
+
+class DailyBombList:
+    """
+    每日炸板榜单数据，对应本地 daily_bomb_list 表。
+
+    字段说明:
+        trade_date  交易日期（PK）
+        ts_code     股票代码（PK）
+        name        股票名称
+        bomb_type   炸板类型（U=曾涨停, D=曾跌停/撬板）
+        limit_price 触及的涨跌停价格
+        pct_chg     涨跌幅（%）
+        volume      成交量
+        amount      成交额
+        sector      所属板块
+    """
+
+    __slots__ = ("trade_date", "ts_code", "name", "bomb_type", "limit_price",
+                 "pct_chg", "volume", "amount", "sector")
+
+    def __init__(self, trade_date: str, ts_code: str, name: str, bomb_type: str,
+                 limit_price: float, pct_chg: float, volume: float, amount: float,
+                 sector: str):
+        self.trade_date = trade_date
+        self.ts_code = ts_code
+        self.name = name
+        self.bomb_type = bomb_type
+        self.limit_price = limit_price
+        self.pct_chg = pct_chg
+        self.volume = volume
+        self.amount = amount
+        self.sector = sector
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "DailyBombList":
+        def _f(v):
+            try:
+                return float(v) if v is not None and v != "" else 0.0
+            except (TypeError, ValueError):
+                return 0.0
+
+        return cls(
+            trade_date=d.get("trade_date") or "",
+            ts_code=d.get("ts_code") or "",
+            name=d.get("name") or "",
+            bomb_type=d.get("bomb_type") or "",
+            limit_price=_f(d.get("limit_price")),
+            pct_chg=_f(d.get("pct_chg")),
+            volume=_f(d.get("volume")),
+            amount=_f(d.get("amount")),
+            sector=d.get("sector") or "",
+        )
+
+    def __repr__(self) -> str:
+        return (f"DailyBombList(trade_date={self.trade_date!r}, ts_code={self.ts_code!r}, "
+                f"name={self.name!r}, bomb_type={self.bomb_type!r})")

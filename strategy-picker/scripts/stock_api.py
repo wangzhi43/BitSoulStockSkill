@@ -38,15 +38,21 @@ from data_fetcher import (
     query_monthly_kline,
     query_daily_basic,
     query_income,
+    query_stock_limit,
+    query_daily_limit_list,
+    query_daily_bomb_list,
 )
 from define import (
-    DailyKline, 
-    HourKline, 
-    WeeklyKline, 
-    MonthlyKline, 
+    DailyKline,
+    HourKline,
+    WeeklyKline,
+    MonthlyKline,
     StockBasic,
     DailyBasic,
-    Income
+    Income,
+    StockLimit,
+    DailyLimitList,
+    DailyBombList,
 )
 
 
@@ -297,6 +303,138 @@ class StockApi:
             trade_date=trade_date,
             start_date=start_date,
             end_date=end_date,
+            limit=limit,
+            offset=offset,
+            order_by=order_by,
+        )
+
+    def get_stock_limit(
+        self,
+        ts_codes: List[str] = [],
+        trade_date: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        order_by: str = "trade_date ASC",
+    ) -> List[StockLimit]:
+        """
+        查询每日涨跌停价格列表
+
+        参数:
+            ts_codes    按股票代码列表过滤
+            trade_date  按具体交易日期精确过滤，格式 "YYYY-MM-DD"
+            start_date  按日期范围过滤下限（含），格式 "YYYY-MM-DD"
+            end_date    按日期范围过滤上限（含），格式 "YYYY-MM-DD"
+            limit       返回最大记录数；为 None 表示不限
+            offset      分页偏移量，默认 0
+            order_by    排序表达式，默认 "trade_date ASC"
+
+        返回:
+            List[StockLimit]  符合条件的每日涨跌停价格对象列表
+
+        示例:
+            # 查询某只股票的涨跌停价格历史
+            limits = api.get_stock_limit(ts_codes=["000001.SZ"])
+
+            # 查询某天全市场涨跌停价格
+            limits = api.get_stock_limit(trade_date="2024-06-03")
+        """
+        return query_stock_limit(
+            ts_codes=ts_codes,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+            offset=offset,
+            order_by=order_by,
+        )
+
+    def get_daily_limit_list(
+        self,
+        ts_codes: List[str] = [],
+        trade_date: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        limit_type: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        order_by: str = "trade_date ASC",
+    ) -> List[DailyLimitList]:
+        """
+        查询每日涨跌停榜单列表
+
+        参数:
+            ts_codes    按股票代码列表过滤
+            trade_date  按具体交易日期精确过滤，格式 "YYYY-MM-DD"
+            start_date  按日期范围过滤下限（含），格式 "YYYY-MM-DD"
+            end_date    按日期范围过滤上限（含），格式 "YYYY-MM-DD"
+            limit_type  按榜单类型过滤（U=涨停, D=跌停）
+            limit       返回最大记录数；为 None 表示不限
+            offset      分页偏移量，默认 0
+            order_by    排序表达式，默认 "trade_date ASC"
+
+        返回:
+            List[DailyLimitList]  符合条件的每日涨跌停榜单对象列表
+
+        示例:
+            # 查询某天所有涨停股
+            records = api.get_daily_limit_list(trade_date="2024-06-03", limit_type="U")
+
+            # 查询某只股票历史上榜记录
+            records = api.get_daily_limit_list(ts_codes=["000001.SZ"])
+        """
+        return query_daily_limit_list(
+            ts_codes=ts_codes,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            limit_type=limit_type,
+            limit=limit,
+            offset=offset,
+            order_by=order_by,
+        )
+
+    def get_daily_bomb_list(
+        self,
+        ts_codes: List[str] = [],
+        trade_date: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        bomb_type: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        order_by: str = "trade_date ASC",
+    ) -> List[DailyBombList]:
+        """
+        查询每日炸板榜单列表
+
+        参数:
+            ts_codes    按股票代码列表过滤
+            trade_date  按具体交易日期精确过滤，格式 "YYYY-MM-DD"
+            start_date  按日期范围过滤下限（含），格式 "YYYY-MM-DD"
+            end_date    按日期范围过滤上限（含），格式 "YYYY-MM-DD"
+            bomb_type   按炸板类型过滤（U=曾涨停, D=曾跌停/撬板）
+            limit       返回最大记录数；为 None 表示不限
+            offset      分页偏移量，默认 0
+            order_by    排序表达式，默认 "trade_date ASC"
+
+        返回:
+            List[DailyBombList]  符合条件的每日炸板榜单对象列表
+
+        示例:
+            # 查询某天所有炸板（曾涨停）股票
+            records = api.get_daily_bomb_list(trade_date="2024-06-03", bomb_type="U")
+
+            # 查询某只股票历史炸板记录
+            records = api.get_daily_bomb_list(ts_codes=["000001.SZ"])
+        """
+        return query_daily_bomb_list(
+            ts_codes=ts_codes,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            bomb_type=bomb_type,
             limit=limit,
             offset=offset,
             order_by=order_by,
