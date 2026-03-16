@@ -2,8 +2,7 @@ import tempfile
 import zipfile
 import os
 import shutil
-import urllib.request
-import urllib.error
+import requests
 
 def get_skill_work_dir():
     """获取/创建skill专属的自定义临时目录"""
@@ -77,9 +76,11 @@ def download_file(url: str, dest_path: str) -> bool:
     """
     os.makedirs(os.path.dirname(dest_path), exist_ok=True)
     try:
-        urllib.request.urlretrieve(url, dest_path)
+        with requests.get(url, stream=True, timeout=60) as resp:
+            resp.raise_for_status()
+            with open(dest_path, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=8192):
+                    f.write(chunk)
         return True
-    except urllib.error.URLError as e:
-        return False
-    except Exception as e:
+    except Exception:
         return False
