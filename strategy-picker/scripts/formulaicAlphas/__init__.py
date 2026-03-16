@@ -30,7 +30,7 @@ formulaicAlphas — WorldQuant《101 Formulaic Alphas》实现包
 """
 
 from .data_loader import AlphaDataLoader
-from .alpha101 import Alpha101
+from .alpha101 import Alpha101, ALPHA_DESCRIPTIONS
 from . import operators
 
-__all__ = ["AlphaDataLoader", "Alpha101", "operators"]
+__all__ = ["AlphaDataLoader", "Alpha101", "ALPHA_DESCRIPTIONS", "operators"]

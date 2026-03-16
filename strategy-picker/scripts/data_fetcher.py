@@ -522,6 +522,23 @@ def query_daily_kline(
     if limit is not None:
         sql += f" LIMIT {int(limit)} OFFSET {int(offset)}"
 
+    # SQLite IN 子句上限 999，codes 过多时分批查询后合并
+    if len(codes) > 900:
+        result = []
+        for i in range(0, len(codes), 900):
+            result.extend(
+                query_daily_kline(
+                    codes=codes[i: i + 900],
+                    date=date,
+                    start_date=start_date,
+                    end_date=end_date,
+                    limit=limit,
+                    offset=offset,
+                    order_by=order_by,
+                )
+            )
+        return result
+
     with getEngine().connect() as conn:
         cursor = conn.execute(text(sql), params)
         rows = cursor.fetchall()

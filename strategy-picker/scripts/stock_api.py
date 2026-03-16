@@ -74,7 +74,7 @@ from define import (
 )
 
 
-from formulaicAlphas import AlphaDataLoader, Alpha101
+from formulaicAlphas import AlphaDataLoader, Alpha101, ALPHA_DESCRIPTIONS
 
 from indicators import (
     get_sma,
@@ -3616,6 +3616,229 @@ class StockApi:
         if df is None:
             return None
         return df.iloc[-1].dropna().sort_values(ascending=False)
+
+    def random_alpha_backtest(
+        self,
+        codes: Optional[List[str]] = None,
+        max_factors: int = 5,
+        n_factors: Optional[int] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        top_pct: float = 0.25,
+        initial_cash: float = 1_000_000.0,
+        warmup_days: int = 365,
+        random_seed: Optional[int] = None,
+    ) -> Dict:
+        """
+        随机抽取 Alpha101 因子，多轮过滤选股，并对最终股票池进行等权重回测。
+
+        流程：
+          1. 随机抽取 k 个不重复因子（k ∈ [0, max_factors]）
+          2. 以 start_date 为截面日，按每个因子值依次保留前 top_pct 的股票
+          3. 对最终股票池从 start_date 到 end_date 做等权重持仓回测
+
+        Args:
+            codes:        股票池代码列表；None 时调用 get_all_symbols()
+            max_factors:  随机因子数量上限（默认 5），实际个数 k 在 [0, max_factors] 随机
+            start_date:   回测起始日，None 取 end_date 前 90 天
+            end_date:     回测截止日，None 取今日
+            top_pct:      每轮保留比例（默认 0.25，即 25%）
+            initial_cash: 初始资金（默认 100 万）
+            warmup_days:  因子预热所需历史天数（默认 365）
+            random_seed:  随机种子，None 表示不固定
+
+        Returns:
+            Dict，包含：
+              random_k          — 实际抽取因子数
+              selected_factors  — 因子名列表，如 ['alpha003', 'alpha027']
+              initial_pool      — 初始股票数
+              filter_log        — 每轮过滤记录（factor / before / after / status）
+              final_pool        — 最终入选股票代码列表
+              final_pool_count  — 最终入选股票数
+              backtest          — 回测结果（含 total_return_pct / annualized_return_pct /
+                                  max_drawdown_pct / sharpe_ratio / equity_curve 等）
+              error             — 仅在出错时出现
+
+        Example:
+            result = api.random_alpha_backtest(
+                codes=['000001.SZ', '600519.SH', '000858.SZ', '300750.SZ'],
+                max_factors=3,
+                start_date='2025-06-01',
+                end_date='2025-12-31',
+            )
+            bt = result['backtest']
+            print(f"因子: {result['selected_factors']}")
+            print(f"入选股票: {result['final_pool']}")
+            print(f"总收益: {bt['total_return_pct']:.2f}%  夏普: {bt['sharpe_ratio']:.2f}")
+        """
+        import random
+        from datetime import datetime, timedelta
+        import pandas as pd
+
+        # ── 1. 日期默认值 ──────────────────────────────────────────────────────
+        if end_date is None:
+            end_date = datetime.today().strftime('%Y-%m-%d')
+        if start_date is None:
+            start_date = (
+                datetime.strptime(end_date, '%Y-%m-%d') - timedelta(days=90)
+            ).strftime('%Y-%m-%d')
+
+        # ── 2. 股票池 ──────────────────────────────────────────────────────────
+        if codes is None:
+            codes = self.get_all_symbols()
+        if not codes:
+            return {'error': '股票池为空'}
+
+        # ── 3. 随机抽取因子 ────────────────────────────────────────────────────
+        rng = random.Random(random_seed)
+        k = n_factors if n_factors is not None else rng.randint(1, max_factors)
+        k = max(1, min(k, 101))          # 至少1个，最多101个
+        selected_nums = rng.sample(range(1, 102), k)
+        selected_names = [f'alpha{n:03d}' for n in selected_nums]
+        selected_descs = {name: ALPHA_DESCRIPTIONS.get(name, '') for name in selected_names}
+
+        # ── 4. 加载面板数据（含预热段）────────────────────────────────────────
+        warmup_start = (
+            datetime.strptime(start_date, '%Y-%m-%d') - timedelta(days=warmup_days)
+        ).strftime('%Y-%m-%d')
+        panel = self.load_alpha_data(codes, warmup_start, end_date)
+        if not panel:
+            return {
+                'error': '无法加载面板数据',
+                'random_k': k,
+                'selected_factors': selected_names,
+            }
+
+        close_panel = panel['close']
+
+        # 找 start_date 对应的最近可用交易日（作为因子截面日）
+        start_ts = pd.Timestamp(start_date)
+        valid_idx = close_panel.index[close_panel.index <= start_ts]
+        ref_date = valid_idx[-1] if len(valid_idx) > 0 else close_panel.index[0]
+
+        # ── 5. 计算所选因子 ────────────────────────────────────────────────────
+        alpha_obj = Alpha101(panel)
+        factor_panels: Dict[str, object] = {}
+        for num in selected_nums:
+            name = f'alpha{num:03d}'
+            method = getattr(alpha_obj, name, None)
+            if method is None:
+                continue
+            try:
+                factor_panels[name] = method()
+            except Exception:
+                pass  # 计算失败的因子会在 filter_log 中记 skipped
+
+        # ── 6. 逐因子顺序过滤 ─────────────────────────────────────────────────
+        current_pool = set(close_panel.columns.tolist())
+        filter_log = []
+
+        for name in selected_names:
+            before = len(current_pool)
+            if current_pool == set() or name not in factor_panels:
+                filter_log.append({
+                    'factor': name, 'status': 'skipped',
+                    'before': before, 'after': before,
+                })
+                continue
+
+            fp = factor_panels[name]
+            if ref_date not in fp.index:
+                filter_log.append({
+                    'factor': name, 'status': 'no_ref_date',
+                    'before': before, 'after': before,
+                })
+                continue
+
+            # 当前候选池在截面日的因子值（去 NaN）
+            pool_cols = [c for c in current_pool if c in fp.columns]
+            snapshot = fp.loc[ref_date, pool_cols].dropna()
+            if snapshot.empty:
+                filter_log.append({
+                    'factor': name, 'status': 'all_nan',
+                    'before': before, 'after': before,
+                })
+                continue
+
+            n_keep = max(1, int(len(snapshot) * top_pct))
+            top_codes = set(snapshot.nlargest(n_keep).index)
+            current_pool &= top_codes
+            filter_log.append({
+                'factor': name, 'status': 'ok',
+                'before': before, 'after': len(current_pool),
+                'ref_date': str(ref_date.date()),
+                'snapshot_size': len(snapshot),
+                'kept': n_keep,
+            })
+
+        final_codes = sorted(current_pool)
+
+        # ── 7. 回测（等权重持仓）──────────────────────────────────────────────
+        if not final_codes:
+            return {
+                'random_k': k,
+                'selected_factors': selected_names,
+                'initial_pool': len(codes),
+                'filter_log': filter_log,
+                'final_pool': [],
+                'final_pool_count': 0,
+                'error': '过滤后股票池为空，无法回测',
+            }
+
+        end_ts = pd.Timestamp(end_date)
+        bt_mask = (close_panel.index >= start_ts) & (close_panel.index <= end_ts)
+        avail_codes = [c for c in final_codes if c in close_panel.columns]
+        bt_close = close_panel.loc[bt_mask, avail_codes]
+
+        if bt_close.empty or len(bt_close) < 2:
+            return {
+                'random_k': k,
+                'selected_factors': selected_names,
+                'initial_pool': len(codes),
+                'filter_log': filter_log,
+                'final_pool': final_codes,
+                'final_pool_count': len(final_codes),
+                'error': '回测期内收盘数据不足（< 2 个交易日）',
+            }
+
+        # 日收益率 → 等权组合收益率 → 权益曲线
+        daily_ret = bt_close.pct_change().iloc[1:]
+        daily_ret = daily_ret.dropna(axis=1, how='all')
+        port_ret = daily_ret.mean(axis=1, skipna=True)
+
+        equity: List[float] = [initial_cash]
+        for r in port_ret:
+            equity.append(equity[-1] * (1.0 + float(r)))
+
+        total_ret_dec = (equity[-1] / initial_cash) - 1.0  # 小数形式
+
+        bt_result = {
+            'start_date':              start_date,
+            'end_date':                end_date,
+            'trading_days':            len(port_ret),
+            'initial_cash':            initial_cash,
+            'final_value':             round(equity[-1], 2),
+            'total_return_pct':        round(total_ret_dec * 100, 4),
+            'annualized_return_pct':   round(
+                self.get_annualized_return(total_ret_dec, len(port_ret)) * 100, 4
+            ),
+            'max_drawdown_pct':        round(
+                self.get_max_drawdown_pct(equity) * 100, 4
+            ),
+            'sharpe_ratio':            round(self.get_sharpe_ratio(equity), 4),
+            'equity_curve':            [round(v, 2) for v in equity],
+        }
+
+        return {
+            'random_k':           k,
+            'selected_factors':   selected_names,
+            'factor_descriptions': selected_descs,
+            'initial_pool':       len(codes),
+            'filter_log':         filter_log,
+            'final_pool':         final_codes,
+            'final_pool_count':   len(final_codes),
+            'backtest':           bt_result,
+        }
 
 
 def date_to_num(date_str: str) -> int:
