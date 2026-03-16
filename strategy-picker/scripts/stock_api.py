@@ -26,6 +26,8 @@ import sys
 from typing import Optional, List, Dict, Union
 
 sys.path.insert(0, __file__.rsplit('/', 1)[0])
+from sqlalchemy import text
+from db_engine import getEngine
 from realtime_data_featcher import (
     RealtimeStockQuote,
     RealTimeDataFetcher
@@ -41,6 +43,13 @@ from data_fetcher import (
     query_stock_limit,
     query_daily_limit_list,
     query_daily_bomb_list,
+    query_sector_stock_map,
+    query_top_list,
+    query_sector_flow_daily,
+    query_index_basic,
+    query_index_daily,
+    query_index_weekly,
+    query_index_monthly,
 )
 from define import (
     DailyKline,
@@ -53,6 +62,13 @@ from define import (
     StockLimit,
     DailyLimitList,
     DailyBombList,
+    SectorStockMap,
+    TopList,
+    SectorFlowDaily,
+    IndexBasic,
+    IndexDaily,
+    IndexWeekly,
+    IndexMonthly,
 )
 
 
@@ -466,6 +482,261 @@ class StockApi:
             start_date=start_date,
             end_date=end_date,
             bomb_type=bomb_type,
+            limit=limit,
+            offset=offset,
+            order_by=order_by,
+        )
+
+    def get_sector_stock_map(
+        self,
+        sector_codes: List[str] = [],
+        stock_codes: List[str] = [],
+        source: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+    ) -> List[SectorStockMap]:
+        """
+        查询板块成分股映射列表
+
+        参数:
+            sector_codes 按板块代码列表过滤
+            stock_codes  按股票代码列表过滤
+            source       按数据来源精确过滤
+            limit        返回最大记录数；为 None 表示不限
+            offset       分页偏移量，默认 0
+
+        示例:
+            # 查询某个板块下的所有股票
+            records = api.get_sector_stock_map(sector_codes=["BK0475"])
+
+            # 查询某只股票归属的所有板块
+            records = api.get_sector_stock_map(stock_codes=["000001.SZ"])
+        """
+        return query_sector_stock_map(
+            sector_codes=sector_codes,
+            stock_codes=stock_codes,
+            source=source,
+            limit=limit,
+            offset=offset,
+        )
+
+    def get_top_list(
+        self,
+        ts_codes: List[str] = [],
+        trade_date: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        order_by: str = "trade_date ASC",
+    ) -> List[TopList]:
+        """
+        查询龙虎榜每日明细列表
+
+        参数:
+            ts_codes    按股票代码列表过滤
+            trade_date  按具体交易日期精确过滤，格式 "YYYY-MM-DD"
+            start_date  按日期范围过滤下限（含），格式 "YYYY-MM-DD"
+            end_date    按日期范围过滤上限（含），格式 "YYYY-MM-DD"
+            limit       返回最大记录数；为 None 表示不限
+            offset      分页偏移量，默认 0
+            order_by    排序表达式，默认 "trade_date ASC"
+
+        示例:
+            # 查询某天龙虎榜数据
+            records = api.get_top_list(trade_date="2024-06-03")
+
+            # 查询某只股票历史上榜记录
+            records = api.get_top_list(ts_codes=["000001.SZ"])
+        """
+        return query_top_list(
+            ts_codes=ts_codes,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+            offset=offset,
+            order_by=order_by,
+        )
+
+    def get_sector_flow_daily(
+        self,
+        sector_codes: List[str] = [],
+        trade_date: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        order_by: str = "trade_date ASC",
+    ) -> List[SectorFlowDaily]:
+        """
+        查询板块资金流向列表
+
+        参数:
+            sector_codes 按板块代码列表过滤
+            trade_date   按具体交易日期精确过滤，格式 "YYYY-MM-DD"
+            start_date   按日期范围过滤下限（含），格式 "YYYY-MM-DD"
+            end_date     按日期范围过滤上限（含），格式 "YYYY-MM-DD"
+            limit        返回最大记录数；为 None 表示不限
+            offset       分页偏移量，默认 0
+            order_by     排序表达式，默认 "trade_date ASC"
+
+        示例:
+            # 查询某天所有板块资金流向
+            records = api.get_sector_flow_daily(trade_date="2024-06-03")
+
+            # 查询某个板块历史资金流向
+            records = api.get_sector_flow_daily(sector_codes=["BK0475"])
+        """
+        return query_sector_flow_daily(
+            sector_codes=sector_codes,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+            offset=offset,
+            order_by=order_by,
+        )
+
+    def get_index_basic(
+        self,
+        ts_code: Optional[str] = None,
+        market: Optional[str] = None,
+        publisher: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+    ) -> List[IndexBasic]:
+        """
+        查询指数基础信息列表
+
+        参数:
+            ts_code   按指数代码精确过滤
+            market    按市场精确过滤
+            publisher 按发布方精确过滤
+            limit     返回最大记录数；为 None 表示不限
+            offset    分页偏移量，默认 0
+
+        示例:
+            # 查询所有指数
+            records = api.get_index_basic()
+
+            # 查询上证指数信息
+            records = api.get_index_basic(ts_code="000001.SH")
+        """
+        return query_index_basic(
+            ts_code=ts_code,
+            market=market,
+            publisher=publisher,
+            limit=limit,
+            offset=offset,
+        )
+
+    def get_index_daily(
+        self,
+        ts_codes: List[str] = [],
+        trade_date: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        order_by: str = "trade_date ASC",
+    ) -> List[IndexDaily]:
+        """
+        查询指数日线行情列表
+
+        参数:
+            ts_codes    按指数代码列表过滤
+            trade_date  按具体交易日期精确过滤，格式 "YYYY-MM-DD"
+            start_date  按日期范围过滤下限（含），格式 "YYYY-MM-DD"
+            end_date    按日期范围过滤上限（含），格式 "YYYY-MM-DD"
+            limit       返回最大记录数；为 None 表示不限
+            offset      分页偏移量，默认 0
+            order_by    排序表达式，默认 "trade_date ASC"
+
+        示例:
+            # 查询上证指数历史日线
+            records = api.get_index_daily(ts_codes=["000001.SH"])
+
+            # 查询某天所有指数行情
+            records = api.get_index_daily(trade_date="2024-06-03")
+        """
+        return query_index_daily(
+            ts_codes=ts_codes,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+            offset=offset,
+            order_by=order_by,
+        )
+
+    def get_index_weekly(
+        self,
+        ts_codes: List[str] = [],
+        trade_date: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        order_by: str = "trade_date ASC",
+    ) -> List[IndexWeekly]:
+        """
+        查询指数周线行情列表
+
+        参数:
+            ts_codes    按指数代码列表过滤
+            trade_date  按具体日期精确过滤，格式 "YYYY-MM-DD"
+            start_date  按日期范围过滤下限（含），格式 "YYYY-MM-DD"
+            end_date    按日期范围过滤上限（含），格式 "YYYY-MM-DD"
+            limit       返回最大记录数；为 None 表示不限
+            offset      分页偏移量，默认 0
+            order_by    排序表达式，默认 "trade_date ASC"
+
+        示例:
+            # 查询上证指数周线
+            records = api.get_index_weekly(ts_codes=["000001.SH"])
+        """
+        return query_index_weekly(
+            ts_codes=ts_codes,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+            offset=offset,
+            order_by=order_by,
+        )
+
+    def get_index_monthly(
+        self,
+        ts_codes: List[str] = [],
+        trade_date: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        order_by: str = "trade_date ASC",
+    ) -> List[IndexMonthly]:
+        """
+        查询指数月线行情列表
+
+        参数:
+            ts_codes    按指数代码列表过滤
+            trade_date  按具体日期精确过滤，格式 "YYYY-MM-DD"
+            start_date  按日期范围过滤下限（含），格式 "YYYY-MM-DD"
+            end_date    按日期范围过滤上限（含），格式 "YYYY-MM-DD"
+            limit       返回最大记录数；为 None 表示不限
+            offset      分页偏移量，默认 0
+            order_by    排序表达式，默认 "trade_date ASC"
+
+        示例:
+            # 查询上证指数月线
+            records = api.get_index_monthly(ts_codes=["000001.SH"])
+        """
+        return query_index_monthly(
+            ts_codes=ts_codes,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
             limit=limit,
             offset=offset,
             order_by=order_by,
@@ -1725,7 +1996,7 @@ class StockApi:
         """
         return get_bbi(code, date, use_adjusted)
 
-    def get_mass(self, code: str, date: str, ema_period: int = 9, period: int = 25, use_adjusted: bool = True) -> Optional[float]:
+    def get_mass(self, code: str, date: str, period: int = 25, use_adjusted: bool = True) -> Optional[float]:
         """
         获取梅斯线 MASS Index（Mass Index）。
 
@@ -1746,7 +2017,7 @@ class StockApi:
         Example:
             mass = api.get_mass('600519.SH', '2026-03-01', 9, 25)
         """
-        return get_mass(code, date, ema_period, period, use_adjusted)
+        return get_mass(code, date, period, use_adjusted)
 
     def get_xue_channel(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
         """
@@ -3161,16 +3432,12 @@ class StockApi:
             api.clear_indicator_cache('600519.SH')  # 清除指定股票
             api.clear_indicator_cache()  # 清除所有
         """
-        from indicators import _get_conn
-        conn = _get_conn()
-        try:
+        with getEngine().connect() as conn:
             if code:
-                conn.execute("DELETE FROM indicators WHERE code=?", (code,))
+                conn.execute(text("DELETE FROM cached_indicators WHERE code=:code"), {"code": code})
             else:
-                conn.execute("DELETE FROM indicators")
+                conn.execute(text("DELETE FROM cached_indicators"))
             conn.commit()
-        finally:
-            conn.close()
 
     # ── Alpha101 因子接口 ────────────────────────────────────────────────────
 

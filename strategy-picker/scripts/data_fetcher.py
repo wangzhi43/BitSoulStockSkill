@@ -23,7 +23,7 @@ import requests
 import os
 from sqlalchemy import create_engine, text, Engine
 from typing import List, Optional
-from define import BASE_URL, HTTP_TIMEOUT, DB_PATH, StockBasic, DailyKline, HourKline, WeeklyKline, MonthlyKline, DailyBasic, Income, StockLimit, DailyLimitList, DailyBombList
+from define import BASE_URL, HTTP_TIMEOUT, DB_PATH, StockBasic, DailyKline, HourKline, WeeklyKline, MonthlyKline, DailyBasic, Income, StockLimit, DailyLimitList, DailyBombList, SectorStockMap, TopList, SectorFlowDaily, IndexBasic, IndexDaily, IndexWeekly, IndexMonthly
 import utils
 from logger import log
 from db_engine import getEngine
@@ -38,6 +38,13 @@ g_table_name_to_pk = {
     "stock_limit": ["trade_date", "ts_code"],
     "daily_limit_list": ["trade_date", "ts_code"],
     "daily_bomb_list": ["trade_date", "ts_code"],
+    "sector_stock_map": ["sector_code", "stock_code"],
+    "top_list": ["id"],
+    "sector_flow_daily": ["trade_date", "sector_code"],
+    "index_basic": ["ts_code"],
+    "index_daily": ["trade_date", "ts_code"],
+    "index_weekly": ["trade_date", "ts_code"],
+    "index_monthly": ["trade_date", "ts_code"],
 }
  
 class TablePatch:
@@ -249,6 +256,117 @@ def init_db() -> None:
                 volume      REAL,
                 amount      REAL,
                 sector      TEXT,
+                PRIMARY KEY (trade_date, ts_code)
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS sector_stock_map (
+                sector_code  TEXT NOT NULL,
+                stock_code   TEXT NOT NULL,
+                sector_name  TEXT,
+                source       TEXT,
+                PRIMARY KEY (sector_code, stock_code)
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS top_list (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                trade_date    TEXT,
+                ts_code       TEXT,
+                name          TEXT,
+                close         REAL,
+                pct_change    REAL,
+                turnover_rate REAL,
+                amount        REAL,
+                l_sell        REAL,
+                l_buy         REAL,
+                l_amount      REAL,
+                net_amount    REAL,
+                net_rate      REAL,
+                amount_rate   REAL,
+                float_values  REAL,
+                reason        TEXT
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS sector_flow_daily (
+                trade_date              TEXT NOT NULL,
+                sector_code             TEXT NOT NULL,
+                sector_name             TEXT,
+                main_net_inflow         REAL,
+                small_net_inflow        REAL,
+                medium_net_inflow       REAL,
+                large_net_inflow        REAL,
+                super_large_net_inflow  REAL,
+                main_net_inflow_pct     REAL,
+                close_price             REAL,
+                change_pct              REAL,
+                PRIMARY KEY (trade_date, sector_code)
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS index_basic (
+                ts_code     TEXT NOT NULL,
+                name        TEXT,
+                fullname    TEXT,
+                market      TEXT,
+                publisher   TEXT,
+                index_type  TEXT,
+                category    TEXT,
+                base_date   TEXT,
+                base_point  REAL,
+                list_date   TEXT,
+                weight_rule TEXT,
+                desc        TEXT,
+                exp_date    TEXT,
+                PRIMARY KEY (ts_code)
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS index_daily (
+                trade_date  TEXT NOT NULL,
+                ts_code     TEXT NOT NULL,
+                open        REAL,
+                high        REAL,
+                low         REAL,
+                close       REAL,
+                pre_close   REAL,
+                change      REAL,
+                pct_chg     REAL,
+                vol         REAL,
+                amount      REAL,
+                PRIMARY KEY (trade_date, ts_code)
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS index_weekly (
+                trade_date  TEXT NOT NULL,
+                ts_code     TEXT NOT NULL,
+                open        REAL,
+                high        REAL,
+                low         REAL,
+                close       REAL,
+                pre_close   REAL,
+                change      REAL,
+                pct_chg     REAL,
+                vol         REAL,
+                amount      REAL,
+                PRIMARY KEY (trade_date, ts_code)
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS index_monthly (
+                trade_date  TEXT NOT NULL,
+                ts_code     TEXT NOT NULL,
+                open        REAL,
+                high        REAL,
+                low         REAL,
+                close       REAL,
+                pre_close   REAL,
+                change      REAL,
+                pct_chg     REAL,
+                vol         REAL,
+                amount      REAL,
                 PRIMARY KEY (trade_date, ts_code)
             )
         """))
@@ -883,6 +1001,399 @@ def query_daily_bomb_list(
         return [DailyBombList.from_dict(dict(row._mapping)) for row in rows]
 
 
+def query_sector_stock_map(
+    sector_codes: List[str] = [],
+    stock_codes: List[str] = [],
+    source: Optional[str] = None,
+    limit: Optional[int] = None,
+    offset: int = 0,
+) -> List[SectorStockMap]:
+    """
+    从本地 SQLite 数据库查询 sector_stock_map 表，返回 SectorStockMap 对象列表。
+
+    参数:
+        sector_codes 按板块代码列表过滤
+        stock_codes  按股票代码列表过滤
+        source       按数据来源精确过滤
+        limit        返回最大记录数；为 None 表示不限
+        offset       分页偏移量，默认 0
+
+    示例:
+        # 查询某个板块下的所有股票
+        records = query_sector_stock_map(sector_codes=["BK0475"])
+
+        # 查询某只股票归属的所有板块
+        records = query_sector_stock_map(stock_codes=["000001.SZ"])
+    """
+    conditions = []
+    params: dict = {}
+
+    if len(sector_codes) != 0:
+        keys = [f"sector_code_{i}" for i in range(len(sector_codes))]
+        placeholders = ",".join(f":{k}" for k in keys)
+        conditions.append(f"sector_code IN ({placeholders})")
+        for k, v in zip(keys, sector_codes):
+            params[k] = v
+    if len(stock_codes) != 0:
+        keys = [f"stock_code_{i}" for i in range(len(stock_codes))]
+        placeholders = ",".join(f":{k}" for k in keys)
+        conditions.append(f"stock_code IN ({placeholders})")
+        for k, v in zip(keys, stock_codes):
+            params[k] = v
+    if source is not None:
+        conditions.append("source = :source")
+        params["source"] = source
+
+    sql = "SELECT * FROM sector_stock_map"
+    if conditions:
+        sql += " WHERE " + " AND ".join(conditions)
+    if limit is not None:
+        sql += f" LIMIT {int(limit)} OFFSET {int(offset)}"
+
+    with getEngine().connect() as conn:
+        cursor = conn.execute(text(sql), params)
+        rows = cursor.fetchall()
+        return [SectorStockMap.from_dict(dict(row._mapping)) for row in rows]
+
+
+def query_top_list(
+    ts_codes: List[str] = [],
+    trade_date: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: Optional[int] = None,
+    offset: int = 0,
+    order_by: str = "trade_date ASC",
+) -> List[TopList]:
+    """
+    从本地 SQLite 数据库查询 top_list 表，返回 TopList 对象列表。
+
+    参数:
+        ts_codes    按股票代码列表过滤
+        trade_date  按具体交易日期精确过滤，格式 "YYYY-MM-DD"
+        start_date  按日期范围过滤下限（含），格式 "YYYY-MM-DD"
+        end_date    按日期范围过滤上限（含），格式 "YYYY-MM-DD"
+        limit       返回最大记录数；为 None 表示不限
+        offset      分页偏移量，默认 0
+        order_by    排序表达式，默认 "trade_date ASC"
+
+    示例:
+        # 查询某天龙虎榜数据
+        records = query_top_list(trade_date="2024-06-03")
+
+        # 查询某只股票历史上榜记录
+        records = query_top_list(ts_codes=["000001.SZ"])
+    """
+    conditions = []
+    params: dict = {}
+
+    if len(ts_codes) != 0:
+        keys = [f"ts_code_{i}" for i in range(len(ts_codes))]
+        placeholders = ",".join(f":{k}" for k in keys)
+        conditions.append(f"ts_code IN ({placeholders})")
+        for k, v in zip(keys, ts_codes):
+            params[k] = v
+    if trade_date is not None:
+        conditions.append("DATE(trade_date) = :trade_date")
+        params["trade_date"] = trade_date
+    else:
+        if start_date is not None:
+            conditions.append("DATE(trade_date) >= DATE('{0}')".format(start_date))
+        if end_date is not None:
+            conditions.append("DATE(trade_date) <= DATE('{0}')".format(end_date))
+
+    sql = "SELECT * FROM top_list"
+    if conditions:
+        sql += " WHERE " + " AND ".join(conditions)
+    sql += f" ORDER BY {order_by}"
+    if limit is not None:
+        sql += f" LIMIT {int(limit)} OFFSET {int(offset)}"
+
+    with getEngine().connect() as conn:
+        cursor = conn.execute(text(sql), params)
+        rows = cursor.fetchall()
+        return [TopList.from_dict(dict(row._mapping)) for row in rows]
+
+
+def query_sector_flow_daily(
+    sector_codes: List[str] = [],
+    trade_date: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: Optional[int] = None,
+    offset: int = 0,
+    order_by: str = "trade_date ASC",
+) -> List[SectorFlowDaily]:
+    """
+    从本地 SQLite 数据库查询 sector_flow_daily 表，返回 SectorFlowDaily 对象列表。
+
+    参数:
+        sector_codes 按板块代码列表过滤
+        trade_date   按具体交易日期精确过滤，格式 "YYYY-MM-DD"
+        start_date   按日期范围过滤下限（含），格式 "YYYY-MM-DD"
+        end_date     按日期范围过滤上限（含），格式 "YYYY-MM-DD"
+        limit        返回最大记录数；为 None 表示不限
+        offset       分页偏移量，默认 0
+        order_by     排序表达式，默认 "trade_date ASC"
+
+    示例:
+        # 查询某天所有板块资金流向
+        records = query_sector_flow_daily(trade_date="2024-06-03")
+
+        # 查询某个板块历史资金流向
+        records = query_sector_flow_daily(sector_codes=["BK0475"])
+    """
+    conditions = []
+    params: dict = {}
+
+    if len(sector_codes) != 0:
+        keys = [f"sector_code_{i}" for i in range(len(sector_codes))]
+        placeholders = ",".join(f":{k}" for k in keys)
+        conditions.append(f"sector_code IN ({placeholders})")
+        for k, v in zip(keys, sector_codes):
+            params[k] = v
+    if trade_date is not None:
+        conditions.append("DATE(trade_date) = :trade_date")
+        params["trade_date"] = trade_date
+    else:
+        if start_date is not None:
+            conditions.append("DATE(trade_date) >= DATE('{0}')".format(start_date))
+        if end_date is not None:
+            conditions.append("DATE(trade_date) <= DATE('{0}')".format(end_date))
+
+    sql = "SELECT * FROM sector_flow_daily"
+    if conditions:
+        sql += " WHERE " + " AND ".join(conditions)
+    sql += f" ORDER BY {order_by}"
+    if limit is not None:
+        sql += f" LIMIT {int(limit)} OFFSET {int(offset)}"
+
+    with getEngine().connect() as conn:
+        cursor = conn.execute(text(sql), params)
+        rows = cursor.fetchall()
+        return [SectorFlowDaily.from_dict(dict(row._mapping)) for row in rows]
+
+
+def query_index_basic(
+    ts_code: Optional[str] = None,
+    market: Optional[str] = None,
+    publisher: Optional[str] = None,
+    limit: Optional[int] = None,
+    offset: int = 0,
+) -> List[IndexBasic]:
+    """
+    从本地 SQLite 数据库查询 index_basic 表，返回 IndexBasic 对象列表。
+
+    参数:
+        ts_code   按指数代码精确过滤
+        market    按市场精确过滤
+        publisher 按发布方精确过滤
+        limit     返回最大记录数；为 None 表示不限
+        offset    分页偏移量，默认 0
+
+    示例:
+        # 查询所有指数
+        records = query_index_basic()
+
+        # 查询上证指数信息
+        records = query_index_basic(ts_code="000001.SH")
+    """
+    conditions = []
+    params: dict = {}
+
+    if ts_code is not None:
+        conditions.append("ts_code = :ts_code")
+        params["ts_code"] = ts_code
+    if market is not None:
+        conditions.append("market = :market")
+        params["market"] = market
+    if publisher is not None:
+        conditions.append("publisher = :publisher")
+        params["publisher"] = publisher
+
+    sql = "SELECT * FROM index_basic"
+    if conditions:
+        sql += " WHERE " + " AND ".join(conditions)
+    if limit is not None:
+        sql += f" LIMIT {int(limit)} OFFSET {int(offset)}"
+
+    with getEngine().connect() as conn:
+        cursor = conn.execute(text(sql), params)
+        rows = cursor.fetchall()
+        return [IndexBasic.from_dict(dict(row._mapping)) for row in rows]
+
+
+def query_index_daily(
+    ts_codes: List[str] = [],
+    trade_date: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: Optional[int] = None,
+    offset: int = 0,
+    order_by: str = "trade_date ASC",
+) -> List[IndexDaily]:
+    """
+    从本地 SQLite 数据库查询 index_daily 表，返回 IndexDaily 对象列表。
+
+    参数:
+        ts_codes    按指数代码列表过滤
+        trade_date  按具体交易日期精确过滤，格式 "YYYY-MM-DD"
+        start_date  按日期范围过滤下限（含），格式 "YYYY-MM-DD"
+        end_date    按日期范围过滤上限（含），格式 "YYYY-MM-DD"
+        limit       返回最大记录数；为 None 表示不限
+        offset      分页偏移量，默认 0
+        order_by    排序表达式，默认 "trade_date ASC"
+
+    示例:
+        # 查询上证指数历史日线
+        records = query_index_daily(ts_codes=["000001.SH"])
+
+        # 查询某天所有指数行情
+        records = query_index_daily(trade_date="2024-06-03")
+    """
+    conditions = []
+    params: dict = {}
+
+    if len(ts_codes) != 0:
+        keys = [f"ts_code_{i}" for i in range(len(ts_codes))]
+        placeholders = ",".join(f":{k}" for k in keys)
+        conditions.append(f"ts_code IN ({placeholders})")
+        for k, v in zip(keys, ts_codes):
+            params[k] = v
+    if trade_date is not None:
+        conditions.append("DATE(trade_date) = :trade_date")
+        params["trade_date"] = trade_date
+    else:
+        if start_date is not None:
+            conditions.append("DATE(trade_date) >= DATE('{0}')".format(start_date))
+        if end_date is not None:
+            conditions.append("DATE(trade_date) <= DATE('{0}')".format(end_date))
+
+    sql = "SELECT * FROM index_daily"
+    if conditions:
+        sql += " WHERE " + " AND ".join(conditions)
+    sql += f" ORDER BY {order_by}"
+    if limit is not None:
+        sql += f" LIMIT {int(limit)} OFFSET {int(offset)}"
+
+    with getEngine().connect() as conn:
+        cursor = conn.execute(text(sql), params)
+        rows = cursor.fetchall()
+        return [IndexDaily.from_dict(dict(row._mapping)) for row in rows]
+
+
+def query_index_weekly(
+    ts_codes: List[str] = [],
+    trade_date: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: Optional[int] = None,
+    offset: int = 0,
+    order_by: str = "trade_date ASC",
+) -> List[IndexWeekly]:
+    """
+    从本地 SQLite 数据库查询 index_weekly 表，返回 IndexWeekly 对象列表。
+
+    参数:
+        ts_codes    按指数代码列表过滤
+        trade_date  按具体日期精确过滤，格式 "YYYY-MM-DD"
+        start_date  按日期范围过滤下限（含），格式 "YYYY-MM-DD"
+        end_date    按日期范围过滤上限（含），格式 "YYYY-MM-DD"
+        limit       返回最大记录数；为 None 表示不限
+        offset      分页偏移量，默认 0
+        order_by    排序表达式，默认 "trade_date ASC"
+
+    示例:
+        # 查询上证指数周线
+        records = query_index_weekly(ts_codes=["000001.SH"])
+    """
+    conditions = []
+    params: dict = {}
+
+    if len(ts_codes) != 0:
+        keys = [f"ts_code_{i}" for i in range(len(ts_codes))]
+        placeholders = ",".join(f":{k}" for k in keys)
+        conditions.append(f"ts_code IN ({placeholders})")
+        for k, v in zip(keys, ts_codes):
+            params[k] = v
+    if trade_date is not None:
+        conditions.append("DATE(trade_date) = :trade_date")
+        params["trade_date"] = trade_date
+    else:
+        if start_date is not None:
+            conditions.append("DATE(trade_date) >= DATE('{0}')".format(start_date))
+        if end_date is not None:
+            conditions.append("DATE(trade_date) <= DATE('{0}')".format(end_date))
+
+    sql = "SELECT * FROM index_weekly"
+    if conditions:
+        sql += " WHERE " + " AND ".join(conditions)
+    sql += f" ORDER BY {order_by}"
+    if limit is not None:
+        sql += f" LIMIT {int(limit)} OFFSET {int(offset)}"
+
+    with getEngine().connect() as conn:
+        cursor = conn.execute(text(sql), params)
+        rows = cursor.fetchall()
+        return [IndexWeekly.from_dict(dict(row._mapping)) for row in rows]
+
+
+def query_index_monthly(
+    ts_codes: List[str] = [],
+    trade_date: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: Optional[int] = None,
+    offset: int = 0,
+    order_by: str = "trade_date ASC",
+) -> List[IndexMonthly]:
+    """
+    从本地 SQLite 数据库查询 index_monthly 表，返回 IndexMonthly 对象列表。
+
+    参数:
+        ts_codes    按指数代码列表过滤
+        trade_date  按具体日期精确过滤，格式 "YYYY-MM-DD"
+        start_date  按日期范围过滤下限（含），格式 "YYYY-MM-DD"
+        end_date    按日期范围过滤上限（含），格式 "YYYY-MM-DD"
+        limit       返回最大记录数；为 None 表示不限
+        offset      分页偏移量，默认 0
+        order_by    排序表达式，默认 "trade_date ASC"
+
+    示例:
+        # 查询上证指数月线
+        records = query_index_monthly(ts_codes=["000001.SH"])
+    """
+    conditions = []
+    params: dict = {}
+
+    if len(ts_codes) != 0:
+        keys = [f"ts_code_{i}" for i in range(len(ts_codes))]
+        placeholders = ",".join(f":{k}" for k in keys)
+        conditions.append(f"ts_code IN ({placeholders})")
+        for k, v in zip(keys, ts_codes):
+            params[k] = v
+    if trade_date is not None:
+        conditions.append("DATE(trade_date) = :trade_date")
+        params["trade_date"] = trade_date
+    else:
+        if start_date is not None:
+            conditions.append("DATE(trade_date) >= DATE('{0}')".format(start_date))
+        if end_date is not None:
+            conditions.append("DATE(trade_date) <= DATE('{0}')".format(end_date))
+
+    sql = "SELECT * FROM index_monthly"
+    if conditions:
+        sql += " WHERE " + " AND ".join(conditions)
+    sql += f" ORDER BY {order_by}"
+    if limit is not None:
+        sql += f" LIMIT {int(limit)} OFFSET {int(offset)}"
+
+    with getEngine().connect() as conn:
+        cursor = conn.execute(text(sql), params)
+        rows = cursor.fetchall()
+        return [IndexMonthly.from_dict(dict(row._mapping)) for row in rows]
+
+
 class PatchItem:
     def __init__(self):
         self.patch_date:str = ""
@@ -1177,11 +1688,134 @@ def testfunc():
 
     log("query_daily_bomb_list: 全部测试通过")
 
+    # ================================================================
+    # 10. query_sector_stock_map
+    # ================================================================
+    all_ssm = query_sector_stock_map()
+
+    sector_ssm = query_sector_stock_map(sector_codes=["BK0475"])
+
+    stock_ssm = query_sector_stock_map(stock_codes=["000001.SZ"])
+
+    multi_sector_ssm = query_sector_stock_map(sector_codes=["BK0475", "BK0001"])
+
+    paged_ssm = query_sector_stock_map(limit=2, offset=0)
+
+    log("query_sector_stock_map: 全部测试通过")
+
+    # ================================================================
+    # 11. query_top_list
+    # ================================================================
+    all_tl = query_top_list()
+
+    date_tl = query_top_list(trade_date="2024-06-03")
+
+    code_tl = query_top_list(ts_codes=["000001.SZ"])
+
+    range_tl = query_top_list(start_date="2024-06-01", end_date="2024-06-30")
+
+    desc_tl = query_top_list(ts_codes=["000001.SZ"], order_by="trade_date DESC", limit=1)
+
+    multi_code_tl = query_top_list(ts_codes=["000001.SZ", "600519.SH"])
+
+    paged_tl = query_top_list(limit=2, offset=0)
+
+    log("query_top_list: 全部测试通过")
+
+    # ================================================================
+    # 12. query_sector_flow_daily
+    # ================================================================
+    all_sfd = query_sector_flow_daily()
+
+    date_sfd = query_sector_flow_daily(trade_date="2024-06-03")
+
+    sector_sfd = query_sector_flow_daily(sector_codes=["BK0475"])
+
+    range_sfd = query_sector_flow_daily(start_date="2024-06-01", end_date="2024-06-30")
+
+    desc_sfd = query_sector_flow_daily(sector_codes=["BK0475"], order_by="trade_date DESC", limit=1)
+
+    multi_sector_sfd = query_sector_flow_daily(sector_codes=["BK0475", "BK0001"])
+
+    paged_sfd = query_sector_flow_daily(limit=2, offset=0)
+
+    log("query_sector_flow_daily: 全部测试通过")
+
+    # ================================================================
+    # 13. query_index_basic
+    # ================================================================
+    all_ib = query_index_basic()
+
+    single_ib = query_index_basic(ts_code="000001.SH")
+
+    market_ib = query_index_basic(market="SSE")
+
+    paged_ib = query_index_basic(limit=2, offset=0)
+
+    empty_ib = query_index_basic(ts_code="999999.XX")
+
+    log("query_index_basic: 全部测试通过")
+
+    # ================================================================
+    # 14. query_index_daily
+    # ================================================================
+    all_id = query_index_daily()
+
+    code_id = query_index_daily(ts_codes=["000001.SH"])
+
+    date_id = query_index_daily(trade_date="2024-06-03")
+
+    range_id = query_index_daily(start_date="2024-06-01", end_date="2024-06-30")
+
+    desc_id = query_index_daily(ts_codes=["000001.SH"], order_by="trade_date DESC", limit=1)
+
+    multi_code_id = query_index_daily(ts_codes=["000001.SH", "399001.SZ"])
+
+    paged_id = query_index_daily(limit=2, offset=0)
+
+    log("query_index_daily: 全部测试通过")
+
+    # ================================================================
+    # 15. query_index_weekly
+    # ================================================================
+    all_iw = query_index_weekly()
+
+    code_iw = query_index_weekly(ts_codes=["000001.SH"])
+
+    date_iw = query_index_weekly(trade_date="2024-05-31")
+
+    range_iw = query_index_weekly(start_date="2024-01-01", end_date="2024-06-30")
+
+    desc_iw = query_index_weekly(ts_codes=["000001.SH"], order_by="trade_date DESC", limit=1)
+
+    paged_iw = query_index_weekly(limit=2, offset=0)
+
+    log("query_index_weekly: 全部测试通过")
+
+    # ================================================================
+    # 16. query_index_monthly
+    # ================================================================
+    all_im = query_index_monthly()
+
+    code_im = query_index_monthly(ts_codes=["000001.SH"])
+
+    date_im = query_index_monthly(trade_date="2024-05-31")
+
+    range_im = query_index_monthly(start_date="2024-01-01", end_date="2024-12-31")
+
+    desc_im = query_index_monthly(ts_codes=["000001.SH"], order_by="trade_date DESC", limit=1)
+
+    multi_code_im = query_index_monthly(ts_codes=["000001.SH", "399001.SZ"])
+
+    paged_im = query_index_monthly(limit=2, offset=0)
+
+    log("query_index_monthly: 全部测试通过")
+
     log("===== testfunc: 所有测试全部通过 =====")
 
 
 if __name__ == "__main__":
     log(f"数据库路径:{DB_PATH}")
     init_db()
-    # syn_table_datas()
+    syn_table_datas()
     testfunc()

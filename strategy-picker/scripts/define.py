@@ -674,6 +674,451 @@ class DailyLimitList:
                 f"name={self.name!r}, limit_type={self.limit_type!r}, limit_streak={self.limit_streak})")
 
 
+class SectorStockMap:
+    """
+    板块成分股映射表，对应本地 sector_stock_map 表。
+
+    字段说明:
+        sector_code  板块代码（PK）
+        stock_code   股票代码（PK）
+        sector_name  板块名称（冗余字段）
+        source       数据来源
+    """
+
+    __slots__ = ("sector_code", "stock_code", "sector_name", "source")
+
+    def __init__(self, sector_code: str, stock_code: str, sector_name: str, source: str):
+        self.sector_code = sector_code
+        self.stock_code = stock_code
+        self.sector_name = sector_name
+        self.source = source
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "SectorStockMap":
+        return cls(
+            sector_code=d.get("sector_code") or "",
+            stock_code=d.get("stock_code") or "",
+            sector_name=d.get("sector_name") or "",
+            source=d.get("source") or "",
+        )
+
+    def __repr__(self) -> str:
+        return (f"SectorStockMap(sector_code={self.sector_code!r}, "
+                f"stock_code={self.stock_code!r}, sector_name={self.sector_name!r})")
+
+
+class TopList:
+    """
+    龙虎榜每日明细数据，对应本地 top_list 表。
+
+    字段说明:
+        id            自增ID（PK）
+        trade_date    交易日期
+        ts_code       股票代码
+        name          股票名称
+        close         收盘价
+        pct_change    涨跌幅（%）
+        turnover_rate 换手率（%）
+        amount        总成交额
+        l_sell        龙虎榜卖出额
+        l_buy         龙虎榜买入额
+        l_amount      龙虎榜成交额
+        net_amount    龙虎榜净买入额
+        net_rate      龙虎榜净买额占比（%）
+        amount_rate   龙虎榜成交额占比（%）
+        float_values  当日流通市值
+        reason        上榜理由
+    """
+
+    __slots__ = ("id", "trade_date", "ts_code", "name", "close", "pct_change",
+                 "turnover_rate", "amount", "l_sell", "l_buy", "l_amount",
+                 "net_amount", "net_rate", "amount_rate", "float_values", "reason")
+
+    def __init__(self, id: int, trade_date: str, ts_code: str, name: str,
+                 close: float, pct_change: float, turnover_rate: float, amount: float,
+                 l_sell: float, l_buy: float, l_amount: float, net_amount: float,
+                 net_rate: float, amount_rate: float, float_values: float, reason: str):
+        self.id = id
+        self.trade_date = trade_date
+        self.ts_code = ts_code
+        self.name = name
+        self.close = close
+        self.pct_change = pct_change
+        self.turnover_rate = turnover_rate
+        self.amount = amount
+        self.l_sell = l_sell
+        self.l_buy = l_buy
+        self.l_amount = l_amount
+        self.net_amount = net_amount
+        self.net_rate = net_rate
+        self.amount_rate = amount_rate
+        self.float_values = float_values
+        self.reason = reason
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "TopList":
+        def _f(v):
+            try:
+                return float(v) if v is not None and v != "" else 0.0
+            except (TypeError, ValueError):
+                return 0.0
+
+        def _i(v):
+            try:
+                return int(v) if v is not None and v != "" else 0
+            except (TypeError, ValueError):
+                return 0
+
+        return cls(
+            id=_i(d.get("id")),
+            trade_date=d.get("trade_date") or "",
+            ts_code=d.get("ts_code") or "",
+            name=d.get("name") or "",
+            close=_f(d.get("close")),
+            pct_change=_f(d.get("pct_change")),
+            turnover_rate=_f(d.get("turnover_rate")),
+            amount=_f(d.get("amount")),
+            l_sell=_f(d.get("l_sell")),
+            l_buy=_f(d.get("l_buy")),
+            l_amount=_f(d.get("l_amount")),
+            net_amount=_f(d.get("net_amount")),
+            net_rate=_f(d.get("net_rate")),
+            amount_rate=_f(d.get("amount_rate")),
+            float_values=_f(d.get("float_values")),
+            reason=d.get("reason") or "",
+        )
+
+    def __repr__(self) -> str:
+        return (f"TopList(trade_date={self.trade_date!r}, ts_code={self.ts_code!r}, "
+                f"name={self.name!r}, pct_change={self.pct_change})")
+
+
+class SectorFlowDaily:
+    """
+    板块资金流向数据，对应本地 sector_flow_daily 表。
+
+    字段说明:
+        trade_date              交易日期（PK）
+        sector_code             板块代码（PK）
+        sector_name             板块名称
+        main_net_inflow         主力净流入（元）
+        small_net_inflow        小单净流入（元）
+        medium_net_inflow       中单净流入（元）
+        large_net_inflow        大单净流入（元）
+        super_large_net_inflow  超大单净流入（元）
+        main_net_inflow_pct     主力净流入占比（%）
+        close_price             收盘价
+        change_pct              涨跌幅（%）
+    """
+
+    __slots__ = ("trade_date", "sector_code", "sector_name", "main_net_inflow",
+                 "small_net_inflow", "medium_net_inflow", "large_net_inflow",
+                 "super_large_net_inflow", "main_net_inflow_pct", "close_price", "change_pct")
+
+    def __init__(self, trade_date: str, sector_code: str, sector_name: str,
+                 main_net_inflow: float, small_net_inflow: float, medium_net_inflow: float,
+                 large_net_inflow: float, super_large_net_inflow: float,
+                 main_net_inflow_pct: float, close_price: float, change_pct: float):
+        self.trade_date = trade_date
+        self.sector_code = sector_code
+        self.sector_name = sector_name
+        self.main_net_inflow = main_net_inflow
+        self.small_net_inflow = small_net_inflow
+        self.medium_net_inflow = medium_net_inflow
+        self.large_net_inflow = large_net_inflow
+        self.super_large_net_inflow = super_large_net_inflow
+        self.main_net_inflow_pct = main_net_inflow_pct
+        self.close_price = close_price
+        self.change_pct = change_pct
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "SectorFlowDaily":
+        def _f(v):
+            try:
+                return float(v) if v is not None and v != "" else 0.0
+            except (TypeError, ValueError):
+                return 0.0
+
+        return cls(
+            trade_date=d.get("trade_date") or "",
+            sector_code=d.get("sector_code") or "",
+            sector_name=d.get("sector_name") or "",
+            main_net_inflow=_f(d.get("main_net_inflow")),
+            small_net_inflow=_f(d.get("small_net_inflow")),
+            medium_net_inflow=_f(d.get("medium_net_inflow")),
+            large_net_inflow=_f(d.get("large_net_inflow")),
+            super_large_net_inflow=_f(d.get("super_large_net_inflow")),
+            main_net_inflow_pct=_f(d.get("main_net_inflow_pct")),
+            close_price=_f(d.get("close_price")),
+            change_pct=_f(d.get("change_pct")),
+        )
+
+    def __repr__(self) -> str:
+        return (f"SectorFlowDaily(trade_date={self.trade_date!r}, "
+                f"sector_code={self.sector_code!r}, sector_name={self.sector_name!r}, "
+                f"main_net_inflow={self.main_net_inflow})")
+
+
+class IndexBasic:
+    """
+    指数基础信息，对应本地 index_basic 表。
+
+    字段说明:
+        ts_code     指数代码（PK）
+        name        指数名称
+        fullname    指数全称
+        market      市场
+        publisher   发布方
+        index_type  指数类型
+        category    分类
+        base_date   基准日期
+        base_point  基点
+        list_date   发布日期
+        weight_rule 加权方式
+        desc        描述
+        exp_date    终止日期
+    """
+
+    __slots__ = ("ts_code", "name", "fullname", "market", "publisher",
+                 "index_type", "category", "base_date", "base_point",
+                 "list_date", "weight_rule", "desc", "exp_date")
+
+    def __init__(self, ts_code: str, name: str, fullname: str, market: str,
+                 publisher: str, index_type: str, category: str, base_date: str,
+                 base_point: float, list_date: str, weight_rule: str,
+                 desc: str, exp_date: str):
+        self.ts_code = ts_code
+        self.name = name
+        self.fullname = fullname
+        self.market = market
+        self.publisher = publisher
+        self.index_type = index_type
+        self.category = category
+        self.base_date = base_date
+        self.base_point = base_point
+        self.list_date = list_date
+        self.weight_rule = weight_rule
+        self.desc = desc
+        self.exp_date = exp_date
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "IndexBasic":
+        def _f(v):
+            try:
+                return float(v) if v is not None and v != "" else 0.0
+            except (TypeError, ValueError):
+                return 0.0
+
+        return cls(
+            ts_code=d.get("ts_code") or "",
+            name=d.get("name") or "",
+            fullname=d.get("fullname") or "",
+            market=d.get("market") or "",
+            publisher=d.get("publisher") or "",
+            index_type=d.get("index_type") or "",
+            category=d.get("category") or "",
+            base_date=d.get("base_date") or "",
+            base_point=_f(d.get("base_point")),
+            list_date=d.get("list_date") or "",
+            weight_rule=d.get("weight_rule") or "",
+            desc=d.get("desc") or "",
+            exp_date=d.get("exp_date") or "",
+        )
+
+    def __repr__(self) -> str:
+        return (f"IndexBasic(ts_code={self.ts_code!r}, name={self.name!r}, "
+                f"market={self.market!r})")
+
+
+class IndexDaily:
+    """
+    指数日线行情数据，对应本地 index_daily 表。
+
+    字段说明:
+        trade_date  交易日期（PK）
+        ts_code     指数代码（PK）
+        open        开盘指数
+        high        最高指数
+        low         最低指数
+        close       收盘指数
+        pre_close   前收盘指数
+        change      涨跌点数
+        pct_chg     涨跌幅（%）
+        vol         成交量
+        amount      成交额
+    """
+
+    __slots__ = ("trade_date", "ts_code", "open", "high", "low", "close",
+                 "pre_close", "change", "pct_chg", "vol", "amount")
+
+    def __init__(self, trade_date: str, ts_code: str, open: float, high: float,
+                 low: float, close: float, pre_close: float, change: float,
+                 pct_chg: float, vol: float, amount: float):
+        self.trade_date = trade_date
+        self.ts_code = ts_code
+        self.open = open
+        self.high = high
+        self.low = low
+        self.close = close
+        self.pre_close = pre_close
+        self.change = change
+        self.pct_chg = pct_chg
+        self.vol = vol
+        self.amount = amount
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "IndexDaily":
+        def _f(v):
+            try:
+                return float(v) if v is not None and v != "" else 0.0
+            except (TypeError, ValueError):
+                return 0.0
+
+        return cls(
+            trade_date=d.get("trade_date") or "",
+            ts_code=d.get("ts_code") or "",
+            open=_f(d.get("open")),
+            high=_f(d.get("high")),
+            low=_f(d.get("low")),
+            close=_f(d.get("close")),
+            pre_close=_f(d.get("pre_close")),
+            change=_f(d.get("change")),
+            pct_chg=_f(d.get("pct_chg")),
+            vol=_f(d.get("vol")),
+            amount=_f(d.get("amount")),
+        )
+
+    def __repr__(self) -> str:
+        return (f"IndexDaily(trade_date={self.trade_date!r}, ts_code={self.ts_code!r}, "
+                f"close={self.close}, pct_chg={self.pct_chg})")
+
+
+class IndexWeekly:
+    """
+    指数周线行情数据，对应本地 index_weekly 表。
+
+    字段说明:
+        trade_date  交易日期（周五）（PK）
+        ts_code     指数代码（PK）
+        open        开盘指数
+        high        最高指数
+        low         最低指数
+        close       收盘指数
+        pre_close   前收盘指数
+        change      涨跌点数
+        pct_chg     涨跌幅（%）
+        vol         成交量
+        amount      成交额
+    """
+
+    __slots__ = ("trade_date", "ts_code", "open", "high", "low", "close",
+                 "pre_close", "change", "pct_chg", "vol", "amount")
+
+    def __init__(self, trade_date: str, ts_code: str, open: float, high: float,
+                 low: float, close: float, pre_close: float, change: float,
+                 pct_chg: float, vol: float, amount: float):
+        self.trade_date = trade_date
+        self.ts_code = ts_code
+        self.open = open
+        self.high = high
+        self.low = low
+        self.close = close
+        self.pre_close = pre_close
+        self.change = change
+        self.pct_chg = pct_chg
+        self.vol = vol
+        self.amount = amount
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "IndexWeekly":
+        def _f(v):
+            try:
+                return float(v) if v is not None and v != "" else 0.0
+            except (TypeError, ValueError):
+                return 0.0
+
+        return cls(
+            trade_date=d.get("trade_date") or "",
+            ts_code=d.get("ts_code") or "",
+            open=_f(d.get("open")),
+            high=_f(d.get("high")),
+            low=_f(d.get("low")),
+            close=_f(d.get("close")),
+            pre_close=_f(d.get("pre_close")),
+            change=_f(d.get("change")),
+            pct_chg=_f(d.get("pct_chg")),
+            vol=_f(d.get("vol")),
+            amount=_f(d.get("amount")),
+        )
+
+    def __repr__(self) -> str:
+        return (f"IndexWeekly(trade_date={self.trade_date!r}, ts_code={self.ts_code!r}, "
+                f"close={self.close}, pct_chg={self.pct_chg})")
+
+
+class IndexMonthly:
+    """
+    指数月线行情数据，对应本地 index_monthly 表。
+
+    字段说明:
+        trade_date  交易日期（月末）（PK）
+        ts_code     指数代码（PK）
+        open        开盘指数
+        high        最高指数
+        low         最低指数
+        close       收盘指数
+        pre_close   前收盘指数
+        change      涨跌点数
+        pct_chg     涨跌幅（%）
+        vol         成交量
+        amount      成交额
+    """
+
+    __slots__ = ("trade_date", "ts_code", "open", "high", "low", "close",
+                 "pre_close", "change", "pct_chg", "vol", "amount")
+
+    def __init__(self, trade_date: str, ts_code: str, open: float, high: float,
+                 low: float, close: float, pre_close: float, change: float,
+                 pct_chg: float, vol: float, amount: float):
+        self.trade_date = trade_date
+        self.ts_code = ts_code
+        self.open = open
+        self.high = high
+        self.low = low
+        self.close = close
+        self.pre_close = pre_close
+        self.change = change
+        self.pct_chg = pct_chg
+        self.vol = vol
+        self.amount = amount
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "IndexMonthly":
+        def _f(v):
+            try:
+                return float(v) if v is not None and v != "" else 0.0
+            except (TypeError, ValueError):
+                return 0.0
+
+        return cls(
+            trade_date=d.get("trade_date") or "",
+            ts_code=d.get("ts_code") or "",
+            open=_f(d.get("open")),
+            high=_f(d.get("high")),
+            low=_f(d.get("low")),
+            close=_f(d.get("close")),
+            pre_close=_f(d.get("pre_close")),
+            change=_f(d.get("change")),
+            pct_chg=_f(d.get("pct_chg")),
+            vol=_f(d.get("vol")),
+            amount=_f(d.get("amount")),
+        )
+
+    def __repr__(self) -> str:
+        return (f"IndexMonthly(trade_date={self.trade_date!r}, ts_code={self.ts_code!r}, "
+                f"close={self.close}, pct_chg={self.pct_chg})")
+
+
 class DailyBombList:
     """
     每日炸板榜单数据，对应本地 daily_bomb_list 表。
