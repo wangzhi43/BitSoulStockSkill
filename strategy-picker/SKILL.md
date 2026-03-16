@@ -15,7 +15,8 @@ description: 给用户提供自定义交易策略的回测、自定义策略选�
 - 策略开始必须要调用 api.initialSetup()以进行环境初始化。
 - 如果用户用的是自定义交易策略回测功能，那么策略逻辑执行完成后需要调用scripts/stock_api.py中的calculate_metrics接口生成回测报告。
 - 如果用户查询的是实时信息，那么使用scripts/stock_api.py中的get_realtime_xxx系列接口。
-- 如果用户意图是设置token，那么将用户设置的token保存到当前skill目录下的assets/user.json文件中的token字段。
+- 如果用户意图是设置token，那么将用户设置的token保存到当前skill目录下的assets/user.json文件中的token字段，设置完后回复用户"token设置成功"。
+- 如果用户意图是查询当前的token，那么将当前skill目录下的assets/user.json文件中的token字段输出给用户查看。
 - 策略实现的代码文件保存在系统临时目录下，不要放到skill目录下，并且文件名称固定为bitsoul_skill_tmp_strategy.py。
 - 所有任务执行完毕后，立刻结束回答。
 
