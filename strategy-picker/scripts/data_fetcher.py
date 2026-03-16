@@ -21,12 +21,16 @@ import shutil
 import pandas as pd
 import requests
 import os
+import decrypt_patch
 from sqlalchemy import create_engine, text, Engine
 from typing import List, Optional
 from define import BASE_URL, HTTP_TIMEOUT, DB_PATH, StockBasic, DailyKline, HourKline, WeeklyKline, MonthlyKline, DailyBasic, Income, StockLimit, DailyLimitList, DailyBombList, SectorStockMap, TopList, TopInst, SectorFlowDaily, IndexBasic, IndexDaily, IndexWeekly, IndexMonthly
 import utils
 from logger import log
 from db_engine import getEngine
+import user
+import remote_api
+from remote_api import PatchItem
 g_table_name_to_pk = {
     "stock_basic" : ["ts_code"],
     "hour_kline" : ["code","date", "time"],
@@ -1491,26 +1495,6 @@ def query_index_monthly(
         return [IndexMonthly.from_dict(dict(row._mapping)) for row in rows]
 
 
-class PatchItem:
-    def __init__(self):
-        self.patch_date:str = ""
-        self.patch_name:str = ""
-        self.version:int = int
-
-def request_patch_list() -> List[PatchItem]:
-    """
-    获取所有表的patch列表
-    返回json说明：
-        key: 表名
-        value: 所有可用patch列表
-    """
-
-    item1: PatchItem = PatchItem()
-    item1.patch_name = "patch_1.1_20260309_20260313.zip"
-    item1.patch_date = "2026-03-13 16:45:46"
-    item1.version = 11
-    return [item1]
-
 def get_local_patch_ver() -> int:
     """从 table_patch 表中读取当前本地 patch 版本号，无记录时返回 -1。"""
     with getEngine().connect() as conn:
@@ -1549,19 +1533,28 @@ def syn_table_datas() -> List[str]:
     if local_patch_ver < 0:
         log(f"导入基础数据...")
         assets_dir = utils.get_skill_assets_dir()
-        base_patch_zip = os.path.join(assets_dir, "data_1.0.zip")
-        base_patch_dir = os.path.join(utils.get_skill_work_dir(), "data_1.0")
+        name = "data_1.0.bin"
+        base_patch_zip = os.path.join(assets_dir, name)
+        base_patch_decrypt_zip = os.path.join(utils.get_skill_work_dir(), "data_1.0_decrypt.zip")
+        decrypt_key = remote_api.request_decrypt_key(name, user.get_token())
+        if len(decrypt_key) == 0:
+            log("错误:没有数据读取权限，请先注册")
+            return
+        decrypt_patch.process_file(base_patch_zip, base_patch_decrypt_zip, decrypt_key, False)
+        base_patch_dir = os.path.join(utils.get_skill_work_dir(), "data_1.0", remote_api.request_decrypt_key(name, user.get_token()))
         if os.path.exists(base_patch_dir):
             shutil.rmtree(base_patch_dir)
-        utils.unzip_file(base_patch_zip, base_patch_dir)
+        utils.unzip_file(base_patch_decrypt_zip, base_patch_dir)
         import_datas_in_dir(base_patch_dir)
 
         with getEngine().connect() as conn:
             conn.execute(text("DELETE FROM table_patch"))
             conn.execute(text("INSERT INTO table_patch (patch) VALUES (0)"))
             conn.commit()
+            os.remove(base_patch_decrypt_zip)
+            shutil.rmtree(base_patch_dir)
 
-    remote_patchs: List[PatchItem] = request_patch_list()
+    remote_patchs: List[PatchItem] = remote_api.request_patch_list()
     log(f"remote patch list:{','.join([str(r_patch.version) for r_patch in remote_patchs])}")
     for r_patch in remote_patchs:
         if r_patch.version > local_patch_ver:
@@ -1572,24 +1565,35 @@ def request_and_import_remote_patch_by_name(patch_name:str, patch_ver: int):
     url = f"{BASE_URL}/api/download_file"
     params = {
         "file_name": patch_name,
-        #ljflag todo：skill配置
-        "token_key": "8ACw66fHId31d3OWwVE62yzGkA7p9vCyg1kIV9AKSiU"
+        "token_key": user.get_token()
     }
     response = requests.get(url, params=params)
     if response.status_code == 200:
         data = response.json()
         download_url = data.get("download_url")
-        tmp_patch_zip = os.path.join(utils.get_skill_work_dir(), "tmp_patch.zip")
-        tmp_patch_dir = os.path.join(utils.get_skill_work_dir(), "tmp_patch")
+        tmp_patch_zip = os.path.join(utils.get_skill_work_dir(), patch_name)
+        tmp_patch_decrypt_zip = os.path.join(utils.get_skill_work_dir(), f"decrypt_{patch_name}")
+        tmp_patch_dir = os.path.join(utils.get_skill_work_dir(), "tmp_patch_unzip")
+        # 下载
         utils.download_file(download_url, tmp_patch_zip)
-        utils.unzip_file(tmp_patch_zip, tmp_patch_dir)
+        # 解密
+        decrypt_key = remote_api.request_decrypt_key(patch_name, user.get_token())
+        if len(decrypt_key) == 0:
+                log("错误:没有数据读取权限，请先注册")
+                return
+        decrypt_patch.process_file(tmp_patch_zip, tmp_patch_decrypt_zip, decrypt_key, False)
+        # 解压
+        utils.unzip_file(tmp_patch_decrypt_zip, tmp_patch_dir)
         import_datas_in_dir(tmp_patch_dir)
         with getEngine().connect() as conn:
             conn.execute(text("DELETE FROM table_patch"))
             conn.execute(text(f"INSERT INTO table_patch (patch) VALUES ({patch_ver})"))
             conn.commit()
+            shutil.rmtree(tmp_patch_dir)
+            os.remove(tmp_patch_zip)
+            os.remove(tmp_patch_decrypt_zip)
         log(f"更新本地数据patch ver:{patch_ver}")
-    
+
 def import_datas_in_dir(dir: str):
     files = utils.scan_files_in_dir(dir)
     for file in files:
