@@ -23,7 +23,7 @@ import requests
 import os
 from sqlalchemy import create_engine, text, Engine
 from typing import List, Optional
-from define import BASE_URL, HTTP_TIMEOUT, DB_PATH, StockBasic, DailyKline, HourKline, WeeklyKline, MonthlyKline, DailyBasic, Income, StockLimit, DailyLimitList, DailyBombList, SectorStockMap, TopList, SectorFlowDaily, IndexBasic, IndexDaily, IndexWeekly, IndexMonthly
+from define import BASE_URL, HTTP_TIMEOUT, DB_PATH, StockBasic, DailyKline, HourKline, WeeklyKline, MonthlyKline, DailyBasic, Income, StockLimit, DailyLimitList, DailyBombList, SectorStockMap, TopList, TopInst, SectorFlowDaily, IndexBasic, IndexDaily, IndexWeekly, IndexMonthly
 import utils
 from logger import log
 from db_engine import getEngine
@@ -40,6 +40,7 @@ g_table_name_to_pk = {
     "daily_bomb_list": ["trade_date", "ts_code"],
     "sector_stock_map": ["sector_code", "stock_code"],
     "top_list": ["id"],
+    "top_inst": ["id"],
     "sector_flow_daily": ["trade_date", "sector_code"],
     "index_basic": ["ts_code"],
     "index_daily": ["trade_date", "ts_code"],
@@ -286,6 +287,21 @@ def init_db() -> None:
                 amount_rate   REAL,
                 float_values  REAL,
                 reason        TEXT
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS top_inst (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                trade_date  TEXT,
+                ts_code     TEXT,
+                exalter     TEXT,
+                side        TEXT,
+                buy         REAL,
+                buy_rate    REAL,
+                sell        REAL,
+                sell_rate   REAL,
+                net_buy     REAL,
+                reason      TEXT
             )
         """))
         conn.execute(text("""
@@ -1115,6 +1131,70 @@ def query_top_list(
         return [TopList.from_dict(dict(row._mapping)) for row in rows]
 
 
+def query_top_inst(
+    ts_codes: List[str] = [],
+    trade_date: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    side: Optional[str] = None,
+    limit: Optional[int] = None,
+    offset: int = 0,
+    order_by: str = "trade_date ASC",
+) -> List[TopInst]:
+    """
+    从本地 SQLite 数据库查询 top_inst 表，返回 TopInst 对象列表。
+
+    参数:
+        ts_codes    按股票代码列表过滤
+        trade_date  按具体交易日期精确过滤，格式 "YYYY-MM-DD"
+        start_date  按日期范围过滤下限（含），格式 "YYYY-MM-DD"
+        end_date    按日期范围过滤上限（含），格式 "YYYY-MM-DD"
+        side        按买卖类型过滤（"0"=买入, "1"=卖出）
+        limit       返回最大记录数；为 None 表示不限
+        offset      分页偏移量，默认 0
+        order_by    排序表达式，默认 "trade_date ASC"
+
+    示例:
+        # 查询某天机构交易明细
+        records = query_top_inst(trade_date="2024-06-03")
+
+        # 查询某只股票历史机构上榜记录
+        records = query_top_inst(ts_codes=["000001.SZ"])
+    """
+    conditions = []
+    params: dict = {}
+
+    if len(ts_codes) != 0:
+        keys = [f"ts_code_{i}" for i in range(len(ts_codes))]
+        placeholders = ",".join(f":{k}" for k in keys)
+        conditions.append(f"ts_code IN ({placeholders})")
+        for k, v in zip(keys, ts_codes):
+            params[k] = v
+    if trade_date is not None:
+        conditions.append("DATE(trade_date) = :trade_date")
+        params["trade_date"] = trade_date
+    else:
+        if start_date is not None:
+            conditions.append("DATE(trade_date) >= DATE('{0}')".format(start_date))
+        if end_date is not None:
+            conditions.append("DATE(trade_date) <= DATE('{0}')".format(end_date))
+    if side is not None:
+        conditions.append("side = :side")
+        params["side"] = side
+
+    sql = "SELECT * FROM top_inst"
+    if conditions:
+        sql += " WHERE " + " AND ".join(conditions)
+    sql += f" ORDER BY {order_by}"
+    if limit is not None:
+        sql += f" LIMIT {int(limit)} OFFSET {int(offset)}"
+
+    with getEngine().connect() as conn:
+        cursor = conn.execute(text(sql), params)
+        rows = cursor.fetchall()
+        return [TopInst.from_dict(dict(row._mapping)) for row in rows]
+
+
 def query_sector_flow_daily(
     sector_codes: List[str] = [],
     trade_date: Optional[str] = None,
@@ -1818,4 +1898,4 @@ if __name__ == "__main__":
     log(f"数据库路径:{DB_PATH}")
     init_db()
     syn_table_datas()
-    testfunc()
+    # testfunc()

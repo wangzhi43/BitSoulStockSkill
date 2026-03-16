@@ -793,6 +793,75 @@ class TopList:
                 f"name={self.name!r}, pct_change={self.pct_change})")
 
 
+class TopInst:
+    """
+    龙虎榜机构交易明细数据，对应本地 top_inst 表。
+
+    字段说明:
+        id          自增ID（PK）
+        trade_date  交易日期
+        ts_code     股票代码
+        exalter     营业部名称/机构名称
+        side        买卖类型（0:买入最大的前5名, 1:卖出最大的前5名）
+        buy         买入额（元）
+        buy_rate    买入占总成交比例（%）
+        sell        卖出额（元）
+        sell_rate   卖出占总成交比例（%）
+        net_buy     净成交额（元）
+        reason      上榜理由
+    """
+
+    __slots__ = ("id", "trade_date", "ts_code", "exalter", "side",
+                 "buy", "buy_rate", "sell", "sell_rate", "net_buy", "reason")
+
+    def __init__(self, id: int, trade_date: str, ts_code: str, exalter: str,
+                 side: str, buy: float, buy_rate: float, sell: float,
+                 sell_rate: float, net_buy: float, reason: str):
+        self.id = id
+        self.trade_date = trade_date
+        self.ts_code = ts_code
+        self.exalter = exalter
+        self.side = side
+        self.buy = buy
+        self.buy_rate = buy_rate
+        self.sell = sell
+        self.sell_rate = sell_rate
+        self.net_buy = net_buy
+        self.reason = reason
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "TopInst":
+        def _f(v):
+            try:
+                return float(v) if v is not None and v != "" else 0.0
+            except (TypeError, ValueError):
+                return 0.0
+
+        def _i(v):
+            try:
+                return int(v) if v is not None and v != "" else 0
+            except (TypeError, ValueError):
+                return 0
+
+        return cls(
+            id=_i(d.get("id")),
+            trade_date=d.get("trade_date") or "",
+            ts_code=d.get("ts_code") or "",
+            exalter=d.get("exalter") or "",
+            side=d.get("side") or "",
+            buy=_f(d.get("buy")),
+            buy_rate=_f(d.get("buy_rate")),
+            sell=_f(d.get("sell")),
+            sell_rate=_f(d.get("sell_rate")),
+            net_buy=_f(d.get("net_buy")),
+            reason=d.get("reason") or "",
+        )
+
+    def __repr__(self) -> str:
+        return (f"TopInst(trade_date={self.trade_date!r}, ts_code={self.ts_code!r}, "
+                f"exalter={self.exalter!r}, side={self.side!r}, net_buy={self.net_buy})")
+
+
 class SectorFlowDaily:
     """
     板块资金流向数据，对应本地 sector_flow_daily 表。

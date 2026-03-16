@@ -45,6 +45,7 @@ from data_fetcher import (
     query_daily_bomb_list,
     query_sector_stock_map,
     query_top_list,
+    query_top_inst,
     query_sector_flow_daily,
     query_index_basic,
     query_index_daily,
@@ -64,6 +65,7 @@ from define import (
     DailyBombList,
     SectorStockMap,
     TopList,
+    TopInst,
     SectorFlowDaily,
     IndexBasic,
     IndexDaily,
@@ -554,6 +556,48 @@ class StockApi:
             trade_date=trade_date,
             start_date=start_date,
             end_date=end_date,
+            limit=limit,
+            offset=offset,
+            order_by=order_by,
+        )
+
+    def get_top_inst(
+        self,
+        ts_codes: List[str] = [],
+        trade_date: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        side: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        order_by: str = "trade_date ASC",
+    ) -> List[TopInst]:
+        """
+        查询龙虎榜机构交易明细列表
+
+        参数:
+            ts_codes    按股票代码列表过滤
+            trade_date  按具体交易日期精确过滤，格式 "YYYY-MM-DD"
+            start_date  按日期范围过滤下限（含），格式 "YYYY-MM-DD"
+            end_date    按日期范围过滤上限（含），格式 "YYYY-MM-DD"
+            side        按买卖类型过滤（"0"=买入最大的前5名, "1"=卖出最大的前5名）
+            limit       返回最大记录数；为 None 表示不限
+            offset      分页偏移量，默认 0
+            order_by    排序表达式，默认 "trade_date ASC"
+
+        示例:
+            # 查询某天机构交易明细
+            records = api.get_top_inst(trade_date="2024-06-03")
+
+            # 查询某只股票历史机构上榜记录
+            records = api.get_top_inst(ts_codes=["000001.SZ"])
+        """
+        return query_top_inst(
+            ts_codes=ts_codes,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            side=side,
             limit=limit,
             offset=offset,
             order_by=order_by,

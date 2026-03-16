@@ -69,6 +69,13 @@ api.get_top_list(trade_date=DATE)
 api.get_top_list(ts_codes=[CODE])
 api.get_top_list(start_date=START, end_date=END, limit=10)
 
+api.get_top_inst(trade_date=DATE)
+api.get_top_inst(ts_codes=[CODE])
+api.get_top_inst(ts_codes=[CODE], side="0")
+api.get_top_inst(ts_codes=[CODE], side="1")
+api.get_top_inst(start_date=START, end_date=END, limit=10)
+api.get_top_inst(ts_codes=[CODE], start_date=START, end_date=END, limit=5, offset=0, order_by="trade_date DESC")
+
 # ================================================================
 # 指数
 # ================================================================
