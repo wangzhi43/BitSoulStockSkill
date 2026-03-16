@@ -868,37 +868,59 @@ class SectorFlowDaily:
 
     字段说明:
         trade_date              交易日期（PK）
-        sector_code             板块代码（PK）
-        sector_name             板块名称
-        main_net_inflow         主力净流入（元）
-        small_net_inflow        小单净流入（元）
-        medium_net_inflow       中单净流入（元）
-        large_net_inflow        大单净流入（元）
-        super_large_net_inflow  超大单净流入（元）
-        main_net_inflow_pct     主力净流入占比（%）
-        close_price             收盘价
-        change_pct              涨跌幅（%）
+        ts_code                 板块代码（PK）
+        name                    板块名称
+        content_type            板块类型（行业/概念/地域）
+        pct_change              涨跌幅（%）
+        close                   收盘价
+        net_amount              净流入金额（元）
+        net_amount_rate         净流入占比（%）
+        buy_elg_amount          超大单净流入（元）
+        buy_elg_amount_rate     超大单净流入占比（%）
+        buy_lg_amount           大单净流入（元）
+        buy_lg_amount_rate      大单净流入占比（%）
+        buy_md_amount           中单净流入（元）
+        buy_md_amount_rate      中单净流入占比（%）
+        buy_sm_amount           小单净流入（元）
+        buy_sm_amount_rate      小单净流入占比（%）
+        buy_sm_amount_stock     小单净流入最大股
+        rank                    排名
     """
 
-    __slots__ = ("trade_date", "sector_code", "sector_name", "main_net_inflow",
-                 "small_net_inflow", "medium_net_inflow", "large_net_inflow",
-                 "super_large_net_inflow", "main_net_inflow_pct", "close_price", "change_pct")
+    __slots__ = ("trade_date", "ts_code", "name", "content_type",
+                 "pct_change", "close", "net_amount", "net_amount_rate",
+                 "buy_elg_amount", "buy_elg_amount_rate",
+                 "buy_lg_amount", "buy_lg_amount_rate",
+                 "buy_md_amount", "buy_md_amount_rate",
+                 "buy_sm_amount", "buy_sm_amount_rate",
+                 "buy_sm_amount_stock", "rank")
 
-    def __init__(self, trade_date: str, sector_code: str, sector_name: str,
-                 main_net_inflow: float, small_net_inflow: float, medium_net_inflow: float,
-                 large_net_inflow: float, super_large_net_inflow: float,
-                 main_net_inflow_pct: float, close_price: float, change_pct: float):
+    def __init__(self, trade_date: str, ts_code: str, name: str, content_type: str,
+                 pct_change: float, close: float,
+                 net_amount: float, net_amount_rate: float,
+                 buy_elg_amount: float, buy_elg_amount_rate: float,
+                 buy_lg_amount: float, buy_lg_amount_rate: float,
+                 buy_md_amount: float, buy_md_amount_rate: float,
+                 buy_sm_amount: float, buy_sm_amount_rate: float,
+                 buy_sm_amount_stock: str, rank: int):
         self.trade_date = trade_date
-        self.sector_code = sector_code
-        self.sector_name = sector_name
-        self.main_net_inflow = main_net_inflow
-        self.small_net_inflow = small_net_inflow
-        self.medium_net_inflow = medium_net_inflow
-        self.large_net_inflow = large_net_inflow
-        self.super_large_net_inflow = super_large_net_inflow
-        self.main_net_inflow_pct = main_net_inflow_pct
-        self.close_price = close_price
-        self.change_pct = change_pct
+        self.ts_code = ts_code
+        self.name = name
+        self.content_type = content_type
+        self.pct_change = pct_change
+        self.close = close
+        self.net_amount = net_amount
+        self.net_amount_rate = net_amount_rate
+        self.buy_elg_amount = buy_elg_amount
+        self.buy_elg_amount_rate = buy_elg_amount_rate
+        self.buy_lg_amount = buy_lg_amount
+        self.buy_lg_amount_rate = buy_lg_amount_rate
+        self.buy_md_amount = buy_md_amount
+        self.buy_md_amount_rate = buy_md_amount_rate
+        self.buy_sm_amount = buy_sm_amount
+        self.buy_sm_amount_rate = buy_sm_amount_rate
+        self.buy_sm_amount_stock = buy_sm_amount_stock
+        self.rank = rank
 
     @classmethod
     def from_dict(cls, d: dict) -> "SectorFlowDaily":
@@ -908,24 +930,37 @@ class SectorFlowDaily:
             except (TypeError, ValueError):
                 return 0.0
 
+        def _i(v):
+            try:
+                return int(v) if v is not None and v != "" else 0
+            except (TypeError, ValueError):
+                return 0
+
         return cls(
             trade_date=d.get("trade_date") or "",
-            sector_code=d.get("sector_code") or "",
-            sector_name=d.get("sector_name") or "",
-            main_net_inflow=_f(d.get("main_net_inflow")),
-            small_net_inflow=_f(d.get("small_net_inflow")),
-            medium_net_inflow=_f(d.get("medium_net_inflow")),
-            large_net_inflow=_f(d.get("large_net_inflow")),
-            super_large_net_inflow=_f(d.get("super_large_net_inflow")),
-            main_net_inflow_pct=_f(d.get("main_net_inflow_pct")),
-            close_price=_f(d.get("close_price")),
-            change_pct=_f(d.get("change_pct")),
+            ts_code=d.get("ts_code") or "",
+            name=d.get("name") or "",
+            content_type=d.get("content_type") or "",
+            pct_change=_f(d.get("pct_change")),
+            close=_f(d.get("close")),
+            net_amount=_f(d.get("net_amount")),
+            net_amount_rate=_f(d.get("net_amount_rate")),
+            buy_elg_amount=_f(d.get("buy_elg_amount")),
+            buy_elg_amount_rate=_f(d.get("buy_elg_amount_rate")),
+            buy_lg_amount=_f(d.get("buy_lg_amount")),
+            buy_lg_amount_rate=_f(d.get("buy_lg_amount_rate")),
+            buy_md_amount=_f(d.get("buy_md_amount")),
+            buy_md_amount_rate=_f(d.get("buy_md_amount_rate")),
+            buy_sm_amount=_f(d.get("buy_sm_amount")),
+            buy_sm_amount_rate=_f(d.get("buy_sm_amount_rate")),
+            buy_sm_amount_stock=d.get("buy_sm_amount_stock") or "",
+            rank=_i(d.get("rank")),
         )
 
     def __repr__(self) -> str:
         return (f"SectorFlowDaily(trade_date={self.trade_date!r}, "
-                f"sector_code={self.sector_code!r}, sector_name={self.sector_name!r}, "
-                f"main_net_inflow={self.main_net_inflow})")
+                f"ts_code={self.ts_code!r}, name={self.name!r}, "
+                f"net_amount={self.net_amount})")
 
 
 class IndexBasic:

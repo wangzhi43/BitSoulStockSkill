@@ -605,7 +605,7 @@ class StockApi:
 
     def get_sector_flow_daily(
         self,
-        sector_codes: List[str] = [],
+        ts_codes: List[str] = [],
         trade_date: Optional[str] = None,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
@@ -617,7 +617,7 @@ class StockApi:
         查询板块资金流向列表
 
         参数:
-            sector_codes 按板块代码列表过滤
+            ts_codes     按板块代码列表过滤
             trade_date   按具体交易日期精确过滤，格式 "YYYY-MM-DD"
             start_date   按日期范围过滤下限（含），格式 "YYYY-MM-DD"
             end_date     按日期范围过滤上限（含），格式 "YYYY-MM-DD"
@@ -630,10 +630,10 @@ class StockApi:
             records = api.get_sector_flow_daily(trade_date="2024-06-03")
 
             # 查询某个板块历史资金流向
-            records = api.get_sector_flow_daily(sector_codes=["BK0475"])
+            records = api.get_sector_flow_daily(ts_codes=["BK0475"])
         """
         return query_sector_flow_daily(
-            sector_codes=sector_codes,
+            ts_codes=ts_codes,
             trade_date=trade_date,
             start_date=start_date,
             end_date=end_date,

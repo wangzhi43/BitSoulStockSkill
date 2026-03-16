@@ -45,7 +45,7 @@ g_table_name_to_pk = {
     "sector_stock_map": ["sector_code", "stock_code"],
     "top_list": ["id"],
     "top_inst": ["id"],
-    "sector_flow_daily": ["trade_date", "sector_code"],
+    "sector_flow_daily": ["trade_date", "ts_code"],
     "index_basic": ["ts_code"],
     "index_daily": ["trade_date", "ts_code"],
     "index_weekly": ["trade_date", "ts_code"],
@@ -311,17 +311,24 @@ def init_db() -> None:
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS sector_flow_daily (
                 trade_date              TEXT NOT NULL,
-                sector_code             TEXT NOT NULL,
-                sector_name             TEXT,
-                main_net_inflow         REAL,
-                small_net_inflow        REAL,
-                medium_net_inflow       REAL,
-                large_net_inflow        REAL,
-                super_large_net_inflow  REAL,
-                main_net_inflow_pct     REAL,
-                close_price             REAL,
-                change_pct              REAL,
-                PRIMARY KEY (trade_date, sector_code)
+                ts_code                 TEXT NOT NULL,
+                name                    TEXT,
+                content_type            TEXT,
+                pct_change              REAL,
+                close                   REAL,
+                net_amount              REAL,
+                net_amount_rate         REAL,
+                buy_elg_amount          REAL,
+                buy_elg_amount_rate     REAL,
+                buy_lg_amount           REAL,
+                buy_lg_amount_rate      REAL,
+                buy_md_amount           REAL,
+                buy_md_amount_rate      REAL,
+                buy_sm_amount           REAL,
+                buy_sm_amount_rate      REAL,
+                buy_sm_amount_stock     TEXT,
+                rank                    INTEGER,
+                PRIMARY KEY (trade_date, ts_code)
             )
         """))
         conn.execute(text("""
@@ -1217,7 +1224,7 @@ def query_top_inst(
 
 
 def query_sector_flow_daily(
-    sector_codes: List[str] = [],
+    ts_codes: List[str] = [],
     trade_date: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
@@ -1229,7 +1236,7 @@ def query_sector_flow_daily(
     从本地 SQLite 数据库查询 sector_flow_daily 表，返回 SectorFlowDaily 对象列表。
 
     参数:
-        sector_codes 按板块代码列表过滤
+        ts_codes     按板块代码列表过滤
         trade_date   按具体交易日期精确过滤，格式 "YYYY-MM-DD"
         start_date   按日期范围过滤下限（含），格式 "YYYY-MM-DD"
         end_date     按日期范围过滤上限（含），格式 "YYYY-MM-DD"
@@ -1242,16 +1249,16 @@ def query_sector_flow_daily(
         records = query_sector_flow_daily(trade_date="2024-06-03")
 
         # 查询某个板块历史资金流向
-        records = query_sector_flow_daily(sector_codes=["BK0475"])
+        records = query_sector_flow_daily(ts_codes=["BK0475"])
     """
     conditions = []
     params: dict = {}
 
-    if len(sector_codes) != 0:
-        keys = [f"sector_code_{i}" for i in range(len(sector_codes))]
+    if len(ts_codes) != 0:
+        keys = [f"ts_code_{i}" for i in range(len(ts_codes))]
         placeholders = ",".join(f":{k}" for k in keys)
-        conditions.append(f"sector_code IN ({placeholders})")
-        for k, v in zip(keys, sector_codes):
+        conditions.append(f"ts_code IN ({placeholders})")
+        for k, v in zip(keys, ts_codes):
             params[k] = v
     if trade_date is not None:
         conditions.append("DATE(trade_date) = :trade_date")
@@ -1541,7 +1548,7 @@ def syn_table_datas() -> List[str]:
             log("错误:没有数据读取权限，请先注册")
             return
         decrypt_patch.process_file(base_patch_zip, base_patch_decrypt_zip, decrypt_key, False)
-        base_patch_dir = os.path.join(utils.get_skill_work_dir(), "data_1.0", remote_api.request_decrypt_key(name, user.get_token()))
+        base_patch_dir = os.path.join(utils.get_skill_work_dir(), "data_1.0")
         if os.path.exists(base_patch_dir):
             shutil.rmtree(base_patch_dir)
         utils.unzip_file(base_patch_decrypt_zip, base_patch_dir)
@@ -1830,13 +1837,13 @@ def testfunc():
 
     date_sfd = query_sector_flow_daily(trade_date="2024-06-03")
 
-    sector_sfd = query_sector_flow_daily(sector_codes=["BK0475"])
+    sector_sfd = query_sector_flow_daily(ts_codes=["BK0475"])
 
     range_sfd = query_sector_flow_daily(start_date="2024-06-01", end_date="2024-06-30")
 
-    desc_sfd = query_sector_flow_daily(sector_codes=["BK0475"], order_by="trade_date DESC", limit=1)
+    desc_sfd = query_sector_flow_daily(ts_codes=["BK0475"], order_by="trade_date DESC", limit=1)
 
-    multi_sector_sfd = query_sector_flow_daily(sector_codes=["BK0475", "BK0001"])
+    multi_sector_sfd = query_sector_flow_daily(ts_codes=["BK0475", "BK0001"])
 
     paged_sfd = query_sector_flow_daily(limit=2, offset=0)
 
