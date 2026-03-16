@@ -11,8 +11,9 @@ import sys
 import os
 from unittest.mock import MagicMock, patch
 
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+_scripts_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(_scripts_dir)
+sys.path.insert(0, _scripts_dir)
 
 # mock 外部依赖
 for _mod in ['sqlalchemy', 'sqlalchemy.orm', 'sqlalchemy.engine',

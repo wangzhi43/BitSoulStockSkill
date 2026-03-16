@@ -23,7 +23,7 @@ stock_api.py — 股票数据与回测API接口
 """
 
 import sys
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Union
 
 sys.path.insert(0, __file__.rsplit('/', 1)[0])
 from realtime_data_featcher import (
@@ -55,6 +55,8 @@ from define import (
     DailyBombList,
 )
 
+
+from formulaicAlphas import AlphaDataLoader, Alpha101
 
 from indicators import (
     get_sma,
@@ -3169,6 +3171,140 @@ class StockApi:
             conn.commit()
         finally:
             conn.close()
+
+    # ── Alpha101 因子接口 ────────────────────────────────────────────────────
+
+    def load_alpha_data(
+        self,
+        codes: List[str],
+        start_date: str,
+        end_date: str,
+        fill_method: str = "ffill",
+    ) -> dict:
+        """
+        加载 Alpha 因子计算所需的面板数据。
+
+        Args:
+            codes:       股票代码列表，如 ['000001.SZ', '600519.SH']
+            start_date:  起始日期，格式 'YYYY-MM-DD'
+            end_date:    截止日期，格式 'YYYY-MM-DD'
+            fill_method: 缺失值填充方式（'ffill' / 'bfill' / None）
+
+        Returns:
+            字典，key 为字段名，value 为 DataFrame（行=日期，列=股票代码）：
+              open, high, low, close, volume, amount, vwap, returns, ind
+
+        Example:
+            data = api.load_alpha_data(['000001.SZ', '600519.SH'], '2025-01-01', '2026-03-01')
+        """
+        loader = AlphaDataLoader()
+        return loader.load(codes=codes, start_date=start_date, end_date=end_date, fill_method=fill_method)
+
+    def compute_alpha(
+        self,
+        codes: List[str],
+        start_date: str,
+        end_date: str,
+        alpha_num: int,
+        fill_method: str = "ffill",
+    ):
+        """
+        计算单个 Alpha 因子面板。
+
+        Args:
+            codes:      股票代码列表
+            start_date: 起始日期
+            end_date:   截止日期
+            alpha_num:  因子编号（1~101）
+            fill_method: 缺失值填充方式
+
+        Returns:
+            pd.DataFrame（行=日期，列=股票代码），或 None（数据为空时）
+
+        Example:
+            df = api.compute_alpha(['000001.SZ', '600519.SH'], '2025-01-01', '2026-03-01', 1)
+            latest = df.iloc[-1].dropna().sort_values(ascending=False)
+        """
+        data = self.load_alpha_data(codes, start_date, end_date, fill_method)
+        if not data:
+            return None
+        a = Alpha101(data)
+        method_name = f"alpha{alpha_num:03d}"
+        method = getattr(a, method_name, None)
+        if method is None:
+            raise ValueError(f"Alpha101 不存在因子 {method_name}（编号需在 1~101 范围内）")
+        return method()
+
+    def compute_alphas(
+        self,
+        codes: List[str],
+        start_date: str,
+        end_date: str,
+        alphas: Optional[List[int]] = None,
+        fill_method: str = "ffill",
+    ) -> Dict:
+        """
+        批量计算多个 Alpha 因子面板。
+
+        Args:
+            codes:      股票代码列表
+            start_date: 起始日期
+            end_date:   截止日期
+            alphas:     因子编号列表（如 [1, 5, 12]），None 表示计算全部 101 个
+            fill_method: 缺失值填充方式
+
+        Returns:
+            Dict[str, pd.DataFrame]，key 为 'alpha001' 等，value 为面板 DataFrame。
+            计算出错的因子会被跳过并打印警告，不影响其他因子。
+
+        Example:
+            results = api.compute_alphas(
+                ['000001.SZ', '600519.SH'],
+                '2025-01-01', '2026-03-01',
+                alphas=[1, 5, 12, 101],
+            )
+            for name, df in results.items():
+                print(name, df.iloc[-1].describe())
+        """
+        data = self.load_alpha_data(codes, start_date, end_date, fill_method)
+        if not data:
+            return {}
+        a = Alpha101(data)
+        return a.compute_all(alphas=alphas)
+
+    def get_alpha_latest(
+        self,
+        codes: List[str],
+        start_date: str,
+        end_date: str,
+        alpha_num: int,
+        fill_method: str = "ffill",
+    ):
+        """
+        计算单个 Alpha 因子并返回最新一日横截面（已去 NaN，按因子值降序排列）。
+
+        Args:
+            codes:      股票代码列表
+            start_date: 起始日期（建议给出足够的历史数据，通常 1 年以上）
+            end_date:   截止日期（即"最新日"）
+            alpha_num:  因子编号（1~101）
+            fill_method: 缺失值填充方式
+
+        Returns:
+            pd.Series（index=股票代码，values=因子值，降序排列），或 None（数据为空时）
+
+        Example:
+            latest = api.get_alpha_latest(
+                ['000001.SZ', '600519.SH', '000858.SZ'],
+                '2025-01-01', '2026-03-14',
+                alpha_num=1,
+            )
+            print(latest.head(10))   # 因子值最高的 10 只股票
+        """
+        df = self.compute_alpha(codes, start_date, end_date, alpha_num, fill_method)
+        if df is None:
+            return None
+        return df.iloc[-1].dropna().sort_values(ascending=False)
 
 
 def date_to_num(date_str: str) -> int:

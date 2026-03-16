@@ -11,8 +11,9 @@ import math
 from unittest.mock import MagicMock, patch
 
 # ── 在导入 indicators 前, mock 掉所有外部依赖 ────────────────────────────────
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+_scripts_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(_scripts_dir)
+sys.path.insert(0, _scripts_dir)
 
 # mock 第三方包
 for _mod in ['sqlalchemy', 'sqlalchemy.orm', 'sqlalchemy.engine',
