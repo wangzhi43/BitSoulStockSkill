@@ -114,3 +114,6 @@ def download_file(url: str, dest_path: str) -> bool:
         return True
     except Exception:
         return False
+    
+if __name__ == "__main__":
+    print(get_skill_work_dir())
