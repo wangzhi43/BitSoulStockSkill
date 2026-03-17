@@ -3939,6 +3939,125 @@ class StockApi:
             'equity_curve':          [round(v, 2) for v in equity_curve],
         }
 
+        # ── 8.5. 基准线对比 ────────────────────────────────────────────────────
+        _BENCHMARKS = [
+            ('000001.SH', '上证指数'),
+            ('000300.SH', '沪深300'),
+            ('000905.SH', '中证500'),
+            ('399006.SZ', '创业板指'),
+        ]
+        benchmarks_result: List[Dict] = []
+
+        def _fetch_bench_close(ts_code: str, s_date: str, e_date: str) -> Dict[str, float]:
+            """优先查本地 index_daily 表；若表不存在则 fallback 到东方财富爬虫。返回 {YYYY-MM-DD: close}"""
+            # ① 尝试本地 DB
+            try:
+                rows = self.get_index_daily(
+                    ts_codes=[ts_code], start_date=s_date, end_date=e_date)
+                if rows:
+                    return {r.trade_date: r.close for r in rows}
+            except Exception:
+                pass
+            # ② fallback：东方财富历史 K 线接口
+            import requests as _req
+            code, mkt = ts_code.split('.')
+            secid = f"1.{code}" if mkt == 'SH' else f"0.{code}"
+            url = 'https://push2his.eastmoney.com/api/qt/stock/kline/get'
+            params = {
+                'secid': secid,
+                'fields1': 'f1,f2,f3,f4,f5,f6',
+                'fields2': 'f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61',
+                'klt': '101', 'fqt': '0',
+                'beg': s_date.replace('-', ''), 'end': e_date.replace('-', ''),
+                'lmt': '2000',
+            }
+            headers = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://www.eastmoney.com/'}
+            resp = _req.get(url, params=params, headers=headers, timeout=10)
+            klines = resp.json().get('data', {}).get('klines', [])
+            # 字段: 日期,开盘,收盘,最高,最低,成交量,...
+            result: Dict[str, float] = {}
+            for kl in klines:
+                parts = kl.split(',')
+                if len(parts) >= 3:
+                    result[parts[0]] = float(parts[2])
+            return result
+
+        try:
+            # 按代码分组：{code: {trade_date: close}}
+            bench_map: Dict[str, Dict[str, float]] = {}
+            for bcode, _ in _BENCHMARKS:
+                try:
+                    bench_map[bcode] = _fetch_bench_close(bcode, start_date, end_date)
+                except Exception:
+                    bench_map[bcode] = {}
+
+            strat_daily_rets = []
+            for i in range(1, len(equity_curve)):
+                prev = equity_curve[i - 1]
+                strat_daily_rets.append((equity_curve[i] / prev - 1.0) if prev else 0.0)
+
+            for bcode, bname in _BENCHMARKS:
+                date_close = bench_map.get(bcode, {})
+                # 按 trading_dates 对齐，前向填充
+                aligned: List[float] = []
+                last_val: Optional[float] = None
+                for d in trading_dates:
+                    v = date_close.get(str(d.date()))
+                    if v is not None:
+                        last_val = v
+                    if last_val is not None:
+                        aligned.append(last_val)
+                    elif aligned:
+                        aligned.append(aligned[-1])
+                    # else: 跳过前导无数据日
+
+                if len(aligned) < 2:
+                    benchmarks_result.append({
+                        'code': bcode, 'name': bname, 'error': '数据不足'})
+                    continue
+
+                base0 = aligned[0]
+                bench_curve = [initial_cash] + [
+                    round(initial_cash * v / base0, 2) for v in aligned]
+
+                b_total_ret_dec = (bench_curve[-1] / initial_cash) - 1.0
+                b_td = len(bench_curve) - 1
+                b_ann = self.get_annualized_return(b_total_ret_dec, b_td) if b_td > 0 else 0.0
+                b_dd  = self.get_max_drawdown_pct(bench_curve)
+
+                # 超额收益率（百分点）
+                excess_ret_pct = round(bt_result['total_return_pct'] - b_total_ret_dec * 100, 4)
+
+                # 信息比率：超额日收益序列年化均值/std
+                bench_daily_rets = []
+                for i in range(1, len(bench_curve)):
+                    prev = bench_curve[i - 1]
+                    bench_daily_rets.append((bench_curve[i] / prev - 1.0) if prev else 0.0)
+                n_common = min(len(strat_daily_rets), len(bench_daily_rets))
+                if n_common > 1:
+                    excess_daily = [
+                        strat_daily_rets[i] - bench_daily_rets[i]
+                        for i in range(n_common)]
+                    import statistics as _stat
+                    mu  = sum(excess_daily) / n_common
+                    std = _stat.stdev(excess_daily) if n_common > 1 else 0.0
+                    ir  = round((mu / std) * (252 ** 0.5), 4) if std > 1e-10 else 0.0
+                else:
+                    ir = 0.0
+
+                benchmarks_result.append({
+                    'code':                 bcode,
+                    'name':                 bname,
+                    'total_return_pct':     round(b_total_ret_dec * 100, 4),
+                    'annualized_return_pct': round(b_ann * 100, 4),
+                    'max_drawdown_pct':     round(b_dd * 100, 4),
+                    'excess_return_pct':    excess_ret_pct,
+                    'information_ratio':    ir,
+                    'equity_curve':         bench_curve,
+                })
+        except Exception as _e:
+            benchmarks_result = [{'error': str(_e)}]
+
         # ── 9. 统计各股表现，取 Top N ──────────────────────────────────────────
         stock_pnl: Dict[str, float] = {}
         for tr in trade_log:
@@ -3973,6 +4092,7 @@ class StockApi:
             'final_pool_count':   len(final_codes),
             'trade_log':          trade_log,
             'backtest':           bt_result,
+            'benchmarks':         benchmarks_result,
             'top_stocks':         top_stocks_detail,
         }
 

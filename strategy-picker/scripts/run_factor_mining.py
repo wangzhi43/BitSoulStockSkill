@@ -64,6 +64,34 @@ if result.get('backtest'):
     print(f'  最大回撤:   ▼ {dd:>10.4f} %')
     print(f'  夏普比率:     {bt["sharpe_ratio"]:>10.4f}')
     print(f'  交易笔数:   买入 {n_buy} 笔 / 卖出 {n_sell} 笔（共 {n_buy+n_sell} 笔）')
+
+# ── 基准对比表 ────────────────────────────────────────────────────────────
+benchmarks = result.get('benchmarks', [])
+if benchmarks and result.get('backtest') and not any('error' in b and len(b) == 1 for b in benchmarks):
+    bt = result['backtest']
+    strat_ret = bt['total_return_pct']
+    strat_ann = bt['annualized_return_pct']
+    strat_dd  = bt['max_drawdown_pct']
+    print(f'  {"─"*54}')
+    print(f'  {"基准对比（同期）":<10}  {"总收益":>8}  {"年化收益":>8}  {"最大回撤":>8}  {"超额收益":>9}  {"信息比率":>8}')
+    print(f'  {"─"*54}')
+    ret_sym = '▲' if strat_ret >= 0 else '▼'
+    ann_sym = '▲' if strat_ann >= 0 else '▼'
+    print(f'  {"策略本身":<10}  {ret_sym}{abs(strat_ret):>7.2f}%  {ann_sym}{abs(strat_ann):>7.2f}%  ▼{strat_dd:>7.2f}%  {"—":>9}  {"—":>8}')
+    for b in benchmarks:
+        if 'error' in b:
+            print(f'  {b.get("name", b.get("code", "?")):<10}  {"数据不足":>38}')
+            continue
+        b_ret  = b['total_return_pct']
+        b_ann  = b['annualized_return_pct']
+        b_dd   = b['max_drawdown_pct']
+        exc    = b['excess_return_pct']
+        ir     = b['information_ratio']
+        rs = '▲' if b_ret >= 0 else '▼'
+        as_ = '▲' if b_ann >= 0 else '▼'
+        es = '▲' if exc >= 0 else '▼'
+        print(f'  {b["name"]:<10}  {rs}{abs(b_ret):>7.2f}%  {as_}{abs(b_ann):>7.2f}%  ▼{abs(b_dd):>7.2f}%  {es}{abs(exc):>8.2f}%  {ir:>8.2f}')
+    print(f'  {"─"*54}')
 print(sep)
 
 # ── 选股因子 ─────────────────────────────────────────────────────────────────
@@ -353,6 +381,20 @@ def _print_strategy_summary(r: dict) -> None:
         print(f'    最大回撤   {dd:.2f}%  {dd_eval}')
         print(f'    持仓集中度 {final_count}只  {conc_eval}')
         print()
+
+        # 基准对比
+        benchmarks = r.get('benchmarks', [])
+        valid_bm = [b for b in benchmarks if 'error' not in b]
+        if valid_bm:
+            print(f'  基准对比（超额收益 / 信息比率）:')
+            for b in valid_bm:
+                exc = b['excess_return_pct']
+                ir  = b['information_ratio']
+                exc_sym = '▲' if exc >= 0 else '▼'
+                ir_eval = '优秀' if ir > 1 else ('良好' if ir > 0.5 else ('一般' if ir > 0 else '跑输'))
+                print(f'    vs {b["name"]:<6}  超额 {exc_sym}{abs(exc):.2f}%  IR={ir:.2f}  ({ir_eval})')
+            print()
+
         print(f'  注意事项:')
         print(f'    ① 以上为样本内回测，因子与参数均由随机生成，存在过拟合风险')
         print(f'    ② 实盘需注意流动性：候选池越小，冲击成本越高')
