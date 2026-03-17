@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 import utils
 # ============================================================
 # 常量
@@ -11,6 +12,109 @@ DB_PATH = os.path.join(utils.get_skill_work_dir(), "data.db")
 # ============================================================
 # 数据模型
 # ============================================================
+
+class RealtimeStockQuote:
+    """
+    实时股票报价信息，由新浪行情接口获取。
+
+    字段说明:
+        ts_code       股票代码（如 000001.SZ）
+        name          股票名称
+        open          今日开盘价
+        pre_close     昨日收盘价
+        price         当前最新价
+        high          今日最高价
+        low           今日最低价
+        bid           买一价
+        ask           卖一价
+        volume        成交量（股）
+        amount        成交额（元）
+        date          交易日期（YYYY-MM-DD）
+        time          最新报价时间（HH:MM:SS）
+        amplitude     振幅（%）
+        turnover_rate 换手率（%），可能为空
+        total_cap     总市值（元），可能为空
+        circ_cap      流通市值（元），可能为空
+        pb            市净率，可能为空
+        pe_ttm        市盈率（TTM），可能为空
+        total_shares  总股本（股），可能为空
+        circ_shares   流通股本（股），可能为空
+        status        请求状态（success / error）
+    """
+
+    __slots__ = ("ts_code", "name", "open", "pre_close", "price",
+                 "high", "low", "bid", "ask", "volume", "amount",
+                 "date", "time", "amplitude", "turnover_rate",
+                 "total_cap", "circ_cap", "pb", "pe_ttm",
+                 "total_shares", "circ_shares", "status")
+
+    def __init__(self, ts_code: str, name: str, open: float, pre_close: float,
+                 price: float, high: float, low: float, bid: float, ask: float,
+                 volume: int, amount: float, date: str, time: str,
+                 amplitude: float, turnover_rate: Optional[float],
+                 total_cap: Optional[float], circ_cap: Optional[float],
+                 pb: Optional[float], pe_ttm: Optional[float],
+                 total_shares: Optional[float], circ_shares: Optional[float],
+                 status: str):
+        self.ts_code = ts_code
+        self.name = name
+        self.open = open
+        self.pre_close = pre_close
+        self.price = price
+        self.high = high
+        self.low = low
+        self.bid = bid
+        self.ask = ask
+        self.volume = volume
+        self.amount = amount
+        self.date = date
+        self.time = time
+        self.amplitude = amplitude
+        self.turnover_rate = turnover_rate
+        self.total_cap = total_cap
+        self.circ_cap = circ_cap
+        self.pb = pb
+        self.pe_ttm = pe_ttm
+        self.total_shares = total_shares
+        self.circ_shares = circ_shares
+        self.status = status
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "RealtimeStockQuote":
+        def _f(v):
+            try:
+                return float(v) if v is not None and v != "" else None
+            except (TypeError, ValueError):
+                return None
+
+        return cls(
+            ts_code=d.get("ts_code") or "",
+            name=d.get("name") or "",
+            open=float(d.get("open") or 0.0),
+            pre_close=float(d.get("pre_close") or 0.0),
+            price=float(d.get("price") or 0.0),
+            high=float(d.get("high") or 0.0),
+            low=float(d.get("low") or 0.0),
+            bid=float(d.get("bid") or 0.0),
+            ask=float(d.get("ask") or 0.0),
+            volume=int(d.get("volume") or 0),
+            amount=float(d.get("amount") or 0.0),
+            date=d.get("date") or "",
+            time=d.get("time") or "",
+            amplitude=float(d.get("amplitude") or 0.0),
+            turnover_rate=_f(d.get("turnover_rate")),
+            total_cap=_f(d.get("total_cap")),
+            circ_cap=_f(d.get("circ_cap")),
+            pb=_f(d.get("pb")),
+            pe_ttm=_f(d.get("pe_ttm")),
+            total_shares=_f(d.get("total_shares")),
+            circ_shares=_f(d.get("circ_shares")),
+            status=d.get("status") or "",
+        )
+
+    def __repr__(self) -> str:
+        return (f"RealtimeStockQuote(ts_code={self.ts_code!r}, name={self.name!r}, "
+                f"price={self.price}, date={self.date!r})")
 
 class StockBasic:
     """

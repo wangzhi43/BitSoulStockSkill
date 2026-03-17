@@ -5,39 +5,7 @@ import random
 import re
 from typing import Dict, List, Optional, Union, Any
 from dataclasses import dataclass
-
-@dataclass
-class RealtimeStockQuote:
-    """
-    实时股票报价信息
-    """
-    ts_code: str             # 股票代码（如 000001.SZ）
-    name: str                # 股票名称
-    open: float              # 今日开盘价
-    pre_close: float         # 昨日收盘价
-    price: float             # 当前最新价
-    high: float              # 今日最高价
-    low: float               # 今日最低价
-    bid: float               # 买一价
-    ask: float               # 卖一价
-    volume: int              # 成交量（股）
-    amount: float            # 成交额（元）
-    date: str                # 交易日期（YYYY-MM-DD）
-    time: str                # 最新报价时间（HH:MM:SS）
-    amplitude: float         # 振幅（%）
-    turnover_rate: Optional[float]  # 换手率（%），可能为空
-    total_cap: Optional[float]      # 总市值（元），可能为空
-    circ_cap: Optional[float]       # 流通市值（元），可能为空
-    pb: Optional[float]             # 市净率，可能为空
-    pe_ttm: Optional[float]         # 市盈率（TTM），可能为空
-    total_shares: Optional[float]   # 总股本（股），可能为空
-    circ_shares: Optional[float]    # 流通股本（股），可能为空
-    status: str              # 请求状态（success / error）
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "RealtimeStockQuote":
-        return cls(**data)
-
+from define import RealtimeStockQuote
 class RealTimeDataFetcher:
     def __init__(self):
         self.headers = {

@@ -208,6 +208,7 @@ from backtest_tools import (
     sell,
 )
 import data_fetcher
+import remote_api
 
 class StockApi:
     """
@@ -231,6 +232,16 @@ class StockApi:
         init_indicators_db()
         init_signals_db()
 
+    # ============================================================
+    # skill信息相关
+    # ============================================================
+    @staticmethod
+    def request_version() -> float:
+        """
+        获取skill最新版本
+        """
+        return remote_api.request_version()
+    
     # ============================================================
     # 股票基础信息类接口
     # ============================================================

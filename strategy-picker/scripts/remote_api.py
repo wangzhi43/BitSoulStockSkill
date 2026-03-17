@@ -46,3 +46,6 @@ def request_decrypt_key(file_name:str, token_key:str) -> str:
             return ""
     except Exception as e:
         return ""
+
+def request_version() -> float:
+    return 1.0
