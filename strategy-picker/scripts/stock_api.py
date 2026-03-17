@@ -307,8 +307,8 @@ class StockApi:
         参数:
             ts_codes        按股票代码列表过滤
             report_type     按报告类型精确过滤（如 "1" 表示合并报表）
-            end_date        按报告期结束日期精确过滤，格式 "YYYYMMDD"
-            start_end_date  按报告期结束日期范围过滤下限（含），格式 "YYYYMMDD"
+            end_date        按报告期结束日期精确过滤，格式 YYYY-MM-DD
+            start_end_date  按报告期结束日期范围过滤下限（含），格式 YYYY-MM-DD
             limit           返回最大记录数；为 None 表示不限
             offset          分页偏移量，默认 0
             order_by        排序表达式，默认 "end_date ASC"

@@ -132,9 +132,9 @@ class StockBasic:
         market      市场类型（主板/创业板/科创板等）
         exchange    交易所代码
         curr_type   交易货币
-        list_date   上市日期
+        list_date   上市日期，格式 YYYY-MM-DD
         list_status 上市状态 (L=上市, D=退市, G=过会未交易, P=暂停上市)
-        delist_date 退市日期（未退市则为空）
+        delist_date 退市日期（未退市则为空），格式 YYYY-MM-DD
         is_hs       是否沪深港通标的（N=否, H=沪股通, S=深股通）
     """
 
@@ -265,7 +265,7 @@ class HourKline:
     小时级别 K 线行情数据，对应本地 hour_kline 表。
 
     字段说明:
-        date    交易日期
+        date    交易日期,格式 "YYYY-MM-DD"
         time    交易时间
         open    开盘价
         high    最高价
@@ -322,7 +322,7 @@ class WeeklyKline:
     周线行情数据，对应本地 weekly_kline 表。
 
     字段说明:
-        date    交易日期（周五日期）
+        date    交易日期（周五日期），格式 YYYY-MM-DD
         code    股票代码
         open    开盘价
         high    最高价
@@ -379,7 +379,7 @@ class MonthlyKline:
     月线行情数据，对应本地 monthly_kline 表。
 
     字段说明:
-        date    交易日期（月末日期）
+        date    交易日期（月末日期），格式 YYYY-MM-DD
         code    股票代码
         open    开盘价
         high    最高价
@@ -436,7 +436,7 @@ class DailyBasic:
     每日基本面指标数据，对应本地 daily_basic 表。
 
     字段说明:
-        trade_date      交易日期（PK）
+        trade_date      交易日期（PK），格式 YYYY-MM-DD
         ts_code         股票代码（PK）
         close           当日收盘价
         turnover_rate   换手率（%）
@@ -530,9 +530,9 @@ class Income:
 
     字段说明:
         ts_code           股票代码（PK）
-        end_date          报告期结束日期（PK）
+        end_date          报告期结束日期（PK），格式 YYYY-MM-DD
         report_type       报告类型（PK，1=合并报表）
-        ann_date          公告日期
+        ann_date          公告日期，格式 YYYY-MM-DD
         comp_type         公司类型
         basic_eps         基本每股收益
         diluted_eps       稀释每股收益
@@ -674,7 +674,7 @@ class StockLimit:
     每日涨跌停价格数据，对应本地 stock_limit 表。
 
     字段说明:
-        trade_date  交易日期（PK）
+        trade_date  交易日期（PK），格式 YYYY-MM-DD
         ts_code     股票代码（PK）
         pre_close   昨日收盘价
         up_limit    涨停价
@@ -717,7 +717,7 @@ class DailyLimitList:
     每日涨跌停榜单数据，对应本地 daily_limit_list 表。
 
     字段说明:
-        trade_date   交易日期（PK）
+        trade_date   交易日期（PK），格式 YYYY-MM-DD
         ts_code      股票代码（PK）
         name         股票名称
         limit_type   榜单类型（U=涨停, D=跌停）
@@ -817,7 +817,7 @@ class TopList:
 
     字段说明:
         id            自增ID（PK）
-        trade_date    交易日期
+        trade_date    交易日期，格式 YYYY-MM-DD
         ts_code       股票代码
         name          股票名称
         close         收盘价
@@ -903,7 +903,7 @@ class TopInst:
 
     字段说明:
         id          自增ID（PK）
-        trade_date  交易日期
+        trade_date  交易日期，格式 YYYY-MM-DD
         ts_code     股票代码
         exalter     营业部名称/机构名称
         side        买卖类型（0:买入最大的前5名, 1:卖出最大的前5名）
@@ -971,7 +971,7 @@ class SectorFlowDaily:
     板块资金流向数据，对应本地 sector_flow_daily 表。
 
     字段说明:
-        trade_date              交易日期（PK）
+        trade_date              交易日期（PK），格式 YYYY-MM-DD
         ts_code                 板块代码（PK）
         name                    板块名称
         content_type            板块类型（行业/概念/地域）
@@ -1079,12 +1079,12 @@ class IndexBasic:
         publisher   发布方
         index_type  指数类型
         category    分类
-        base_date   基准日期
+        base_date   基准日期，格式 YYYY-MM-DD
         base_point  基点
-        list_date   发布日期
+        list_date   发布日期，格式 YYYY-MM-DD
         weight_rule 加权方式
         desc        描述
-        exp_date    终止日期
+        exp_date    终止日期，格式 YYYY-MM-DD
     """
 
     __slots__ = ("ts_code", "name", "fullname", "market", "publisher",
@@ -1143,7 +1143,7 @@ class IndexDaily:
     指数日线行情数据，对应本地 index_daily 表。
 
     字段说明:
-        trade_date  交易日期（PK）
+        trade_date  交易日期（PK），格式 YYYY-MM-DD
         ts_code     指数代码（PK）
         open        开盘指数
         high        最高指数
@@ -1206,7 +1206,7 @@ class IndexWeekly:
     指数周线行情数据，对应本地 index_weekly 表。
 
     字段说明:
-        trade_date  交易日期（周五）（PK）
+        trade_date  交易日期（PK），格式 YYYY-MM-DD
         ts_code     指数代码（PK）
         open        开盘指数
         high        最高指数
@@ -1269,7 +1269,7 @@ class IndexMonthly:
     指数月线行情数据，对应本地 index_monthly 表。
 
     字段说明:
-        trade_date  交易日期（月末）（PK）
+        trade_date  交易日期（PK），格式 YYYY-MM-DD
         ts_code     指数代码（PK）
         open        开盘指数
         high        最高指数
@@ -1332,7 +1332,7 @@ class DailyBombList:
     每日炸板榜单数据，对应本地 daily_bomb_list 表。
 
     字段说明:
-        trade_date  交易日期（PK）
+        trade_date  交易日期（PK），格式 YYYY-MM-DD
         ts_code     股票代码（PK）
         name        股票名称
         bomb_type   炸板类型（U=曾涨停, D=曾跌停/撬板）
@@ -1390,7 +1390,7 @@ class AppVersion:
 
     字段说明:
         version       版本号（如 1.0、1.1）
-        release_date  发布日期（YYYY-MM-DD）
+        release_date  发布日期，格式 YYYY-MM-DD
         file_name     安装包文件名
         download_url  安装包下载地址
     """
