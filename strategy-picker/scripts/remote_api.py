@@ -2,7 +2,8 @@ from typing import List
 
 import define
 import requests
-
+from define import AppVersion,TokenCheckResult
+import config
 class PatchItem:
     def __init__(self):
         self.patch_date:str = ""
@@ -47,5 +48,32 @@ def request_decrypt_key(file_name:str, token_key:str) -> str:
     except Exception as e:
         return ""
 
-def request_version() -> float:
-    return 1.0
+def request_version() -> AppVersion:
+    url = f"{define.BASE_URL}/api/get_latest_version"
+    try:
+        params = {
+            "token": config.get_token()
+        }
+        response = requests.post(url, json=params)
+        if response.status_code == 200:
+            data = response.json()
+            ver = AppVersion.from_dict(data)
+            return ver
+        else:
+            return None
+    except Exception as e:
+        print(e)
+        return None
+
+def request_check_token(token:str) -> TokenCheckResult:
+    url = f"{define.BASE_URL}/api/check_token"
+    params = {
+            "token": token
+        }
+    response = requests.post(url, json=params)
+    data = response.json()
+    return TokenCheckResult.from_dict(data)
+
+if __name__ == "__main__":
+    ver = request_check_token("8ACw626fHId31d3OWwVE62yzGkA7p9vCyg1kIV9AKSiU")
+    print(ver)

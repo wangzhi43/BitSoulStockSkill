@@ -1382,3 +1382,65 @@ class DailyBombList:
     def __repr__(self) -> str:
         return (f"DailyBombList(trade_date={self.trade_date!r}, ts_code={self.ts_code!r}, "
                 f"name={self.name!r}, bomb_type={self.bomb_type!r})")
+
+
+class AppVersion:
+    """
+    应用版本信息。
+
+    字段说明:
+        version       版本号（如 1.0、1.1）
+        release_date  发布日期（YYYY-MM-DD）
+        file_name     安装包文件名
+        download_url  安装包下载地址
+    """
+
+    __slots__ = ("version", "release_date", "file_name", "download_url")
+
+    def __init__(self, version: str, release_date: str, file_name: str, download_url: str):
+        self.version = version
+        self.release_date = release_date
+        self.file_name = file_name
+        self.download_url = download_url
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "AppVersion":
+        return cls(
+            version=d["version"],
+            release_date=d["release_date"],
+            file_name=d["file_name"],
+            download_url=d["download_url"],
+        )
+
+    def __repr__(self) -> str:
+        return (f"AppVersion(version={self.version!r}, release_date={self.release_date!r}, "
+                f"file_name={self.file_name!r}, download_url={self.download_url!r})")
+
+
+class TokenCheckResult:
+    """
+    Token 校验结果。
+
+    字段说明:
+        status   校验状态（success=通过, failure=失败）
+        message  状态描述信息
+    """
+
+    __slots__ = ("status", "message")
+
+    def __init__(self, status: str, message: str):
+        self.status = status
+        self.message = message
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "TokenCheckResult":
+        return cls(
+            status=d.get("status") or "",
+            message=d.get("message") or "",
+        )
+
+    def is_success(self) -> bool:
+        return self.status == "success"
+
+    def __repr__(self) -> str:
+        return f"TokenCheckResult(status={self.status!r}, message={self.message!r})"

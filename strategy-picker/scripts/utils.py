@@ -63,6 +63,36 @@ def unzip_file(zip_file_path, target_dir):
     except Exception as e:
         return False
     
+def compare_version(v1: str, v2: str) -> int:
+    """
+    比较两个版本号的大小。
+
+    支持任意段数的版本号，如 1.0、1.0.1、1.19.0 等。
+    每段均按整数比较，不做字符串排序。
+
+    Args:
+        v1 (str): 版本号A
+        v2 (str): 版本号B
+
+    Returns:
+        int:  1 表示 v1 > v2
+              0 表示 v1 == v2
+             -1 表示 v1 < v2
+    """
+    parts1 = [int(x) for x in v1.split(".")]
+    parts2 = [int(x) for x in v2.split(".")]
+    # 补齐短版本号，末尾补 0
+    length = max(len(parts1), len(parts2))
+    parts1 += [0] * (length - len(parts1))
+    parts2 += [0] * (length - len(parts2))
+    for a, b in zip(parts1, parts2):
+        if a > b:
+            return 1
+        if a < b:
+            return -1
+    return 0
+
+
 def download_file(url: str, dest_path: str) -> bool:
     """
     从指定URL下载文件到目标路径

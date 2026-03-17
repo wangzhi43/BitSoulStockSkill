@@ -31,8 +31,11 @@ class RealTimeDataFetcher:
 
     def request_stock_info(self, ts_code: str) -> Optional[RealtimeStockQuote]:
             """
-            Fetch real-time data from Sina Finance.
-            URL: http://hq.sinajs.cn/list={symbol}
+            查询实时股价信息
+            参数
+                ts_code 股票代码
+            返回
+                RealtimeStockQuote 实时股票报价信息数据结构
             """
             self._wait_for_rate_limit('sina')
             symbol = self._convert_to_sina_symbol(ts_code)

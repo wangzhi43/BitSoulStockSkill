@@ -28,7 +28,7 @@ from define import BASE_URL, HTTP_TIMEOUT, DB_PATH, StockBasic, DailyKline, Hour
 import utils
 from logger import log
 from db_engine import getEngine
-import user
+import config
 import remote_api
 from remote_api import PatchItem
 g_table_name_to_pk = {
@@ -1543,7 +1543,7 @@ def syn_table_datas() -> List[str]:
         name = "data_1.0.bin"
         base_patch_zip = os.path.join(assets_dir, name)
         base_patch_decrypt_zip = os.path.join(utils.get_skill_work_dir(), "data_1.0_decrypt.zip")
-        decrypt_key = remote_api.request_decrypt_key(name, user.get_token())
+        decrypt_key = remote_api.request_decrypt_key(name, config.get_token())
         if len(decrypt_key) == 0:
             log("错误:没有数据读取权限，请先注册")
             return
@@ -1572,7 +1572,7 @@ def request_and_import_remote_patch_by_name(patch_name:str, patch_ver: int):
     url = f"{BASE_URL}/api/download_file"
     params = {
         "file_name": patch_name,
-        "token_key": user.get_token()
+        "token_key": config.get_token()
     }
     response = requests.get(url, params=params)
     if response.status_code == 200:
@@ -1584,7 +1584,7 @@ def request_and_import_remote_patch_by_name(patch_name:str, patch_ver: int):
         # 下载
         utils.download_file(download_url, tmp_patch_zip)
         # 解密
-        decrypt_key = remote_api.request_decrypt_key(patch_name, user.get_token())
+        decrypt_key = remote_api.request_decrypt_key(patch_name, config.get_token())
         if len(decrypt_key) == 0:
                 log("错误:没有数据读取权限，请先注册")
                 return

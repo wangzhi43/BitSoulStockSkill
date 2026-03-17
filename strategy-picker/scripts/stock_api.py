@@ -71,6 +71,8 @@ from define import (
     IndexDaily,
     IndexWeekly,
     IndexMonthly,
+    AppVersion,
+    TokenCheckResult
 )
 
 
@@ -207,8 +209,7 @@ from backtest_tools import (
     buy,
     sell,
 )
-import data_fetcher
-import remote_api
+import remote_api,data_fetcher,utils, config
 
 class StockApi:
     """
@@ -223,6 +224,25 @@ class StockApi:
     """
 
     # ============================================================
+    # 工具类
+    # ============================================================
+
+    def get_user_token() -> str:
+        """
+        获取用户当前token
+        返回值: 用户token
+        """
+        return config.get_token()
+    
+    def set_user_token(self, token: str):
+        """
+        设置用户当前token
+        参数:
+            token 设置的token
+        """
+        return config.set_token(token=token)
+
+    # ============================================================
     # 初始化
     # ============================================================
 
@@ -232,16 +252,6 @@ class StockApi:
         init_indicators_db()
         init_signals_db()
 
-    # ============================================================
-    # skill信息相关
-    # ============================================================
-    @staticmethod
-    def request_version() -> float:
-        """
-        获取skill最新版本
-        """
-        return remote_api.request_version()
-    
     # ============================================================
     # 股票基础信息类接口
     # ============================================================
