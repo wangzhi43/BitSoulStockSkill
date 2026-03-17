@@ -94,6 +94,37 @@ if benchmarks and result.get('backtest') and not any('error' in b and len(b) == 
     print(f'  {"─"*54}')
 print(sep)
 
+# ── 因子IC汇总表 ──────────────────────────────────────────────────────────
+ic_stats = result.get('ic_stats', {})
+if ic_stats:
+    _scr_set = set(result.get('screen_factors', []))
+    _sig_set = set(result.get('signal_factors', []))
+    print(f'\n{"="*60}')
+    print('【因子IC评估（Rank IC，预测能力分析）】')
+    print(f'  说明：IC为当日因子截面排名与次日收益率排名的斯皮尔曼相关系数')
+    print(f'  {"─"*58}')
+    print(f'  {"因子":<10} {"类型":>5}  {"IC均值":>8}  {"ICIR":>7}  {"胜率":>7}  {"|IC|均值":>9}  {"评级":<10}')
+    print(f'  {"─"*58}')
+    _all_ic_names = list(dict.fromkeys(
+        result.get('screen_factors', []) + result.get('signal_factors', [])))
+    for _fn in _all_ic_names:
+        _ic = ic_stats.get(_fn, {})
+        _tag = '[选+信]' if (_fn in _scr_set and _fn in _sig_set) else \
+               ('[选股]' if _fn in _scr_set else '[信号]')
+        if 'error' in _ic:
+            print(f'  {_fn:<10} {_tag:>5}  {"—":>8}  {"—":>7}  {"—":>7}  {"—":>9}  {"数据不足":<10}')
+            continue
+        _icm  = _ic['ic_mean']
+        _icir = _ic['ic_ir']
+        _win  = _ic['ic_win_rate'] * 100
+        _abs  = _ic['ic_abs_mean']
+        _grade = '★★★ 优秀' if _icir > 1 else ('★★ 良好' if _icir > 0.5 else
+                 ('★ 一般' if _icir > 0 else '✗ 反向'))
+        _icm_s = f'+{_icm:.4f}' if _icm >= 0 else f'{_icm:.4f}'
+        print(f'  {_fn:<10} {_tag:>5}  {_icm_s:>8}  {_icir:>7.2f}  {_win:>6.1f}%  {_abs:>9.4f}  {_grade:<10}')
+    print(f'  {"─"*58}')
+    print(f'  评级标准：ICIR>1优秀 / >0.5良好 / >0一般 / ≤0反向（负IC因子通常反向使用）')
+
 # ── 选股因子 ─────────────────────────────────────────────────────────────────
 print(f'\n【选股因子】  k = {result["screen_k"]}（截面日静态过滤）')
 for name in result['screen_factors']:
@@ -393,6 +424,24 @@ def _print_strategy_summary(r: dict) -> None:
                 exc_sym = '▲' if exc >= 0 else '▼'
                 ir_eval = '优秀' if ir > 1 else ('良好' if ir > 0.5 else ('一般' if ir > 0 else '跑输'))
                 print(f'    vs {b["name"]:<6}  超额 {exc_sym}{abs(exc):.2f}%  IR={ir:.2f}  ({ir_eval})')
+            print()
+
+        # 因子IC有效性
+        _ic = r.get('ic_stats', {})
+        _scr = set(r.get('screen_factors', []))
+        _sig = set(r.get('signal_factors', []))
+        _ic_names = list(dict.fromkeys(r.get('screen_factors', []) + r.get('signal_factors', [])))
+        _valid_ic = [fn for fn in _ic_names if fn in _ic and 'error' not in _ic[fn]]
+        if _valid_ic:
+            print(f'  因子有效性（IC检验，Rank IC）:')
+            for fn in _valid_ic:
+                s = _ic[fn]
+                _tag = '[选+信]' if (fn in _scr and fn in _sig) else ('[选股]' if fn in _scr else '[信号]')
+                _grade = '优秀' if s['ic_ir'] > 1 else ('良好' if s['ic_ir'] > 0.5 else
+                         ('一般' if s['ic_ir'] > 0 else '反向'))
+                _icm_s = f'+{s["ic_mean"]:.4f}' if s['ic_mean'] >= 0 else f'{s["ic_mean"]:.4f}'
+                print(f'    {fn} {_tag}  IC均值={_icm_s}  ICIR={s["ic_ir"]:.2f}  '
+                      f'胜率={s["ic_win_rate"]*100:.1f}%  ({_grade})')
             print()
 
         print(f'  注意事项:')

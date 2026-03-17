@@ -4058,6 +4058,62 @@ class StockApi:
         except Exception as _e:
             benchmarks_result = [{'error': str(_e)}]
 
+        # ── 8.6. 因子 IC 计算（Rank IC，斯皮尔曼相关系数，纯 numpy 实现）──────
+        def _spearman_corr(x: np.ndarray, y: np.ndarray) -> float:
+            """计算两个等长数组的斯皮尔曼相关系数。"""
+            rx = np.argsort(np.argsort(x)).astype(float)
+            ry = np.argsort(np.argsort(y)).astype(float)
+            mx, my = rx.mean(), ry.mean()
+            num = ((rx - mx) * (ry - my)).sum()
+            den = np.sqrt(((rx - mx) ** 2).sum() * ((ry - my) ** 2).sum())
+            return float(num / den) if den > 1e-10 else 0.0
+
+        ic_stats: Dict[str, Dict] = {}
+        _ic_factors = list(dict.fromkeys(screen_names + signal_names))
+        for _fname in _ic_factors:
+            if _fname not in factor_panels:
+                continue
+            _fp = factor_panels[_fname]
+            _daily_ic: List[float] = []
+            for _i in range(len(trading_dates) - 1):
+                _d_cur  = trading_dates[_i]
+                _d_next = trading_dates[_i + 1]
+                if _d_cur not in _fp.index or _d_next not in bt_close.index:
+                    continue
+                _factor_day = _fp.loc[_d_cur, avail_codes].dropna()
+                _codes_c    = [c for c in _factor_day.index if c in bt_close.columns]
+                if len(_codes_c) < 5:
+                    continue
+                _ret_next  = (bt_close.loc[_d_next, _codes_c] /
+                              bt_close.loc[_d_cur,  _codes_c] - 1).dropna()
+                _codes_v   = [c for c in _codes_c if c in _ret_next.index]
+                if len(_codes_v) < 5:
+                    continue
+                _rho = _spearman_corr(
+                    _factor_day[_codes_v].values,
+                    _ret_next[_codes_v].values,
+                )
+                if not np.isnan(_rho):
+                    _daily_ic.append(_rho)
+
+            if len(_daily_ic) < 2:
+                ic_stats[_fname] = {'error': '数据不足'}
+                continue
+
+            _ic_arr  = np.array(_daily_ic)
+            _ic_mean = float(np.mean(_ic_arr))
+            _ic_std  = float(np.std(_ic_arr, ddof=1))
+            _ic_ir   = round(_ic_mean / _ic_std * (252 ** 0.5), 4) if _ic_std > 1e-10 else 0.0
+            ic_stats[_fname] = {
+                'ic_mean':     round(_ic_mean, 4),
+                'ic_std':      round(_ic_std, 4),
+                'ic_ir':       round(_ic_ir, 4),
+                'ic_win_rate': round(float(np.mean(_ic_arr > 0)), 4),
+                'ic_abs_mean': round(float(np.mean(np.abs(_ic_arr))), 4),
+                'ic_series':   [round(v, 4) for v in _daily_ic],
+                'n_days':      len(_daily_ic),
+            }
+
         # ── 9. 统计各股表现，取 Top N ──────────────────────────────────────────
         stock_pnl: Dict[str, float] = {}
         for tr in trade_log:
@@ -4093,6 +4149,7 @@ class StockApi:
             'trade_log':          trade_log,
             'backtest':           bt_result,
             'benchmarks':         benchmarks_result,
+            'ic_stats':           ic_stats,
             'top_stocks':         top_stocks_detail,
         }
 
