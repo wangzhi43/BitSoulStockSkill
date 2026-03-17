@@ -29,7 +29,7 @@ signal.py - 裸K形态信号模块
 
 from typing import Dict, List, Optional
 from sqlalchemy import text
-from db_engine import getEngine
+from data_fetcher import getEngine
 from data_fetcher import query_daily_kline, query_daily_basic
 from define import DailyKline
 

@@ -27,7 +27,6 @@ from typing import Optional, List, Dict, Union
 
 sys.path.insert(0, __file__.rsplit('/', 1)[0])
 from sqlalchemy import text
-from db_engine import getEngine
 from realtime_data_featcher import (
     RealtimeStockQuote,
     RealTimeDataFetcher

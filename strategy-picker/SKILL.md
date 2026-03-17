@@ -11,7 +11,7 @@ description: 给用户提供自定义交易策略的回测、自定义策略选�
 
 # 注意事项
 * api接口文档是scripts/stock_api.py和scripts/define.py，不要从其他文件中读取任何接口，可以使用python标准库提供的接口，不允许使用任何额外的三方库。
-* 将模板代码文件scripts/template.py复制一份到系统临时目录下，后续修改都是基于你拷贝的模板代码副本，副本文件名称固定为bitsoul_skill_tmp_strategy.py，并且要bitsoul_skill_tmp_strategy.py中的 {search_path} 占位符为当前skill的scripts目录的绝对路径
+* 将模板代码文件scripts/template.py复制一份到系统临时目录下，后续修改都是基于你拷贝的模板代码副本，副本文件名称固定为bitsoul_skill_tmp_strategy.py，将bitsoul_skill_tmp_strategy.py中的 {search_path} 占位符为当前skill的scripts目录的绝对路径
 * 任何你生成的逻辑都要放在 bitsoul_skill_tmp_strategy.py中的 llm_impl 函数中
 * 如果用户意图是自定义交易策略回测功能:
     * bitsoul_skill_tmp_strategy.py中的 {mode} 占位符替换为 User_exec

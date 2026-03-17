@@ -1,4 +1,5 @@
 import sys
+import pathlib
 sys.path.insert(0, '{search_path}')
 from stock_api import StockApi
 import config, utils, remote_api
@@ -43,6 +44,8 @@ def llm_impl(api: StockApi):
 
 if __name__ == "__main__":
     mode = {mode}
+    current_file_path = pathlib.Path(__file__).absolute()
+    config.set_tmp_logic_path(current_file_path)
     api = StockApi()
     if mode == Mode.User_exec:
         # 检查token

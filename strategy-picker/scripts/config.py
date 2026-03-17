@@ -5,6 +5,8 @@ import os
 import requests
 import define
 import remote_api
+
+g_tmp_logic_path:str=""
 def get_token() -> str:
     user_json_file = os.path.join(utils.get_skill_work_dir(), "user.json")
     if not os.path.exists(user_json_file):
@@ -28,3 +30,11 @@ def get_local_version() -> str:
     with open(os.path.join(utils.get_skill_assets_dir(), "config.json"), "r", encoding="utf-8") as f:
         data = json.load(f)
         return data["version"]
+    
+def set_tmp_logic_path(fpath:str):
+    global g_tmp_logic_path
+    g_tmp_logic_path = fpath
+
+def get_tmp_logic_path()->str:
+    global g_tmp_logic_path
+    return g_tmp_logic_path
