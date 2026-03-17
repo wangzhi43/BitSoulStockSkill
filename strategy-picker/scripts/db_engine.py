@@ -11,7 +11,7 @@ def getEngine() -> Engine:
     if not _g_engine:
         def _creator():
             conn = sqlcipher3.connect(DB_PATH)
-            conn.execute(f"PRAGMA key='{os.environ.get("DB_KEY", "stock2026")}'")
+            conn.execute(f"PRAGMA key='{"stock2026"}'")
             return conn
 
         _g_engine = create_engine("sqlite+pysqlite://", creator=_creator)
