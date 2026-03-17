@@ -22,15 +22,17 @@ import pandas as pd
 import requests
 import os
 import decrypt_patch
+import sqlcipher3
 from sqlalchemy import create_engine, text, Engine
 from typing import List, Optional
 from define import BASE_URL, HTTP_TIMEOUT, DB_PATH, StockBasic, DailyKline, HourKline, WeeklyKline, MonthlyKline, DailyBasic, Income, StockLimit, DailyLimitList, DailyBombList, SectorStockMap, TopList, TopInst, SectorFlowDaily, IndexBasic, IndexDaily, IndexWeekly, IndexMonthly
 import utils
 from logger import log
-from db_engine import getEngine
 import config
 import remote_api
 from remote_api import PatchItem
+
+_g_engine: Engine = None
 g_table_name_to_pk = {
     "stock_basic" : ["ts_code"],
     "hour_kline" : ["code","date", "time"],
@@ -51,7 +53,19 @@ g_table_name_to_pk = {
     "index_weekly": ["trade_date", "ts_code"],
     "index_monthly": ["trade_date", "ts_code"],
 }
- 
+
+
+def getEngine() -> Engine:
+    global _g_engine
+    if not _g_engine:
+        def _creator():
+            conn = sqlcipher3.connect(DB_PATH)
+            conn.execute(f"PRAGMA key='{"stock2026"}'")
+            return conn
+
+        _g_engine = create_engine("sqlite+pysqlite://", creator=_creator)
+    return _g_engine
+
 class TablePatch:
     """
     各个表目前应用的是哪个补丁的数据

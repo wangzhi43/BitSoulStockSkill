@@ -15,7 +15,7 @@ indicators.py - 技术指标计算模块
 
 from typing import Optional, Dict, List, Tuple
 from sqlalchemy import text
-from db_engine import getEngine
+from data_fetcher import getEngine
 from data_fetcher import (
     query_daily_kline,
     query_daily_basic,
