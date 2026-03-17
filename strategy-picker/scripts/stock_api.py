@@ -3631,60 +3631,40 @@ class StockApi:
     def random_alpha_backtest(
         self,
         codes: Optional[List[str]] = None,
-        max_factors: int = 5,
-        n_factors: Optional[int] = None,
+        max_screen_factors: int = 5,
+        max_signal_factors: int = 7,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
-        top_pct: float = 0.25,
         initial_cash: float = 1_000_000.0,
-        warmup_days: int = 365,
+        warmup_days: int = 90,
         random_seed: Optional[int] = None,
+        top_n_stocks: int = 5,
     ) -> Dict:
         """
-        随机抽取 Alpha101 因子，多轮过滤选股，并对最终股票池进行等权重回测。
+        因子挖矿接口（两阶段：选股 + 交易信号）。
 
         流程：
-          1. 随机抽取 k 个不重复因子（k ∈ [0, max_factors]）
-          2. 以 start_date 为截面日，按每个因子值依次保留前 top_pct 的股票
-          3. 对最终股票池从 start_date 到 end_date 做等权重持仓回测
+          1. 随机抽取 k_screen 个选股因子 + k_signal 个信号因子
+          2. 选股阶段：以 start_date 为截面日，每个选股因子随机保留 15%~35% 的股票
+          3. 信号阶段：逐日计算信号因子横截面分位排名，综合排名 >= buy_thresh 时买入，
+             <= sell_thresh 时卖出（阈值在合理范围内随机生成）
+          4. 输出 Top N 个股的每笔交易时的具体因子值与排名
 
         Args:
-            codes:        股票池代码列表；None 时调用 get_all_symbols()
-            max_factors:  随机因子数量上限（默认 5），实际个数 k 在 [0, max_factors] 随机
-            start_date:   回测起始日，None 取 end_date 前 90 天
-            end_date:     回测截止日，None 取今日
-            top_pct:      每轮保留比例（默认 0.25，即 25%）
-            initial_cash: 初始资金（默认 100 万）
-            warmup_days:  因子预热所需历史天数（默认 365）
-            random_seed:  随机种子，None 表示不固定
-
-        Returns:
-            Dict，包含：
-              random_k          — 实际抽取因子数
-              selected_factors  — 因子名列表，如 ['alpha003', 'alpha027']
-              initial_pool      — 初始股票数
-              filter_log        — 每轮过滤记录（factor / before / after / status）
-              final_pool        — 最终入选股票代码列表
-              final_pool_count  — 最终入选股票数
-              backtest          — 回测结果（含 total_return_pct / annualized_return_pct /
-                                  max_drawdown_pct / sharpe_ratio / equity_curve 等）
-              error             — 仅在出错时出现
-
-        Example:
-            result = api.random_alpha_backtest(
-                codes=['000001.SZ', '600519.SH', '000858.SZ', '300750.SZ'],
-                max_factors=3,
-                start_date='2025-06-01',
-                end_date='2025-12-31',
-            )
-            bt = result['backtest']
-            print(f"因子: {result['selected_factors']}")
-            print(f"入选股票: {result['final_pool']}")
-            print(f"总收益: {bt['total_return_pct']:.2f}%  夏普: {bt['sharpe_ratio']:.2f}")
+            codes:               股票池；None 时取全市场
+            max_screen_factors:  选股因子最大数量（默认 3）
+            max_signal_factors:  信号因子最大数量（默认 2）
+            start_date:          回测起始日，None 取 end_date 前 90 天
+            end_date:            回测截止日，None 取今日
+            initial_cash:        初始资金（默认 100 万）
+            warmup_days:         因子预热天数（默认 90）
+            random_seed:         随机种子，None 不固定
+            top_n_stocks:        输出详细交易记录的个股数量（默认 5）
         """
         import random
         from datetime import datetime, timedelta
         import pandas as pd
+        import numpy as np
 
         # ── 1. 日期默认值 ──────────────────────────────────────────────────────
         if end_date is None:
@@ -3700,13 +3680,26 @@ class StockApi:
         if not codes:
             return {'error': '股票池为空'}
 
-        # ── 3. 随机抽取因子 ────────────────────────────────────────────────────
+        # ── 3. 随机抽取因子（选股 / 信号各自独立不重复，两组间允许重叠）────────
         rng = random.Random(random_seed)
-        k = n_factors if n_factors is not None else rng.randint(1, max_factors)
-        k = max(1, min(k, 101))          # 至少1个，最多101个
-        selected_nums = rng.sample(range(1, 102), k)
-        selected_names = [f'alpha{n:03d}' for n in selected_nums]
-        selected_descs = {name: ALPHA_DESCRIPTIONS.get(name, '') for name in selected_names}
+        k_screen = rng.randint(1, max(1, max_screen_factors))
+        k_signal = rng.randint(1, max(1, max_signal_factors))
+        screen_nums = rng.sample(range(1, 102), k_screen)          # 选股组内不重复
+        signal_nums = rng.sample(range(1, 102), k_signal)          # 信号组内不重复
+
+        screen_names = [f'alpha{n:03d}' for n in screen_nums]
+        signal_names = [f'alpha{n:03d}' for n in signal_nums]
+        # 计算因子时去重（两组可能共享同一因子，只算一次）
+        all_nums  = list(dict.fromkeys(screen_nums + signal_nums))  # 保序去重
+        all_names = list(dict.fromkeys(screen_names + signal_names))
+        all_descs = {name: ALPHA_DESCRIPTIONS.get(name, '') for name in all_names}
+
+        # 选股因子：每个因子随机保留比例 [0.15, 0.35]
+        screen_top_pcts = {name: round(rng.uniform(0.15, 0.35), 2) for name in screen_names}
+
+        # 信号因子：综合横截面分位排名阈值
+        signal_buy_thresh  = round(rng.uniform(0.55, 0.82), 2)
+        signal_sell_thresh = round(rng.uniform(0.10, 0.38), 2)
 
         # ── 4. 加载面板数据（含预热段）────────────────────────────────────────
         warmup_start = (
@@ -3714,141 +3707,263 @@ class StockApi:
         ).strftime('%Y-%m-%d')
         panel = self.load_alpha_data(codes, warmup_start, end_date)
         if not panel:
-            return {
-                'error': '无法加载面板数据',
-                'random_k': k,
-                'selected_factors': selected_names,
-            }
+            return {'error': '无法加载面板数据',
+                    'screen_factors': screen_names, 'signal_factors': signal_names}
 
         close_panel = panel['close']
-
-        # 找 start_date 对应的最近可用交易日（作为因子截面日）
         start_ts = pd.Timestamp(start_date)
+        end_ts   = pd.Timestamp(end_date)
         valid_idx = close_panel.index[close_panel.index <= start_ts]
-        ref_date = valid_idx[-1] if len(valid_idx) > 0 else close_panel.index[0]
+        ref_date  = valid_idx[-1] if len(valid_idx) > 0 else close_panel.index[0]
 
-        # ── 5. 计算所选因子 ────────────────────────────────────────────────────
+        # ── 5. 计算所有因子 ────────────────────────────────────────────────────
         alpha_obj = Alpha101(panel)
         factor_panels: Dict[str, object] = {}
-        for num in selected_nums:
-            name = f'alpha{num:03d}'
+        for num in all_nums:
+            name   = f'alpha{num:03d}'
             method = getattr(alpha_obj, name, None)
             if method is None:
                 continue
             try:
                 factor_panels[name] = method()
             except Exception:
-                pass  # 计算失败的因子会在 filter_log 中记 skipped
+                pass
 
-        # ── 6. 逐因子顺序过滤 ─────────────────────────────────────────────────
+        # ── 6. 选股阶段：逐因子顺序过滤 ───────────────────────────────────────
         current_pool = set(close_panel.columns.tolist())
-        filter_log = []
+        filter_log: List[Dict] = []
 
-        for name in selected_names:
-            before = len(current_pool)
-            if current_pool == set() or name not in factor_panels:
-                filter_log.append({
-                    'factor': name, 'status': 'skipped',
-                    'before': before, 'after': before,
-                })
+        for name in screen_names:
+            before   = len(current_pool)
+            top_pct  = screen_top_pcts[name]
+            if not current_pool or name not in factor_panels:
+                filter_log.append({'factor': name, 'status': 'skipped',
+                                   'before': before, 'after': before, 'top_pct': top_pct})
                 continue
-
             fp = factor_panels[name]
             if ref_date not in fp.index:
-                filter_log.append({
-                    'factor': name, 'status': 'no_ref_date',
-                    'before': before, 'after': before,
-                })
+                filter_log.append({'factor': name, 'status': 'no_ref_date',
+                                   'before': before, 'after': before, 'top_pct': top_pct})
                 continue
-
-            # 当前候选池在截面日的因子值（去 NaN）
             pool_cols = [c for c in current_pool if c in fp.columns]
-            snapshot = fp.loc[ref_date, pool_cols].dropna()
+            snapshot  = fp.loc[ref_date, pool_cols].dropna()
             if snapshot.empty:
-                filter_log.append({
-                    'factor': name, 'status': 'all_nan',
-                    'before': before, 'after': before,
-                })
+                filter_log.append({'factor': name, 'status': 'all_nan',
+                                   'before': before, 'after': before, 'top_pct': top_pct})
                 continue
-
-            n_keep = max(1, int(len(snapshot) * top_pct))
+            n_keep    = max(1, int(len(snapshot) * top_pct))
             top_codes = set(snapshot.nlargest(n_keep).index)
             current_pool &= top_codes
-            filter_log.append({
-                'factor': name, 'status': 'ok',
-                'before': before, 'after': len(current_pool),
-                'ref_date': str(ref_date.date()),
-                'snapshot_size': len(snapshot),
-                'kept': n_keep,
-            })
+            filter_log.append({'factor': name, 'status': 'ok',
+                               'before': before, 'after': len(current_pool),
+                               'ref_date': str(ref_date.date()),
+                               'snapshot_size': len(snapshot),
+                               'kept': n_keep, 'top_pct': top_pct})
 
         final_codes = sorted(current_pool)
-
-        # ── 7. 回测（等权重持仓）──────────────────────────────────────────────
         if not final_codes:
-            return {
-                'random_k': k,
-                'selected_factors': selected_names,
-                'initial_pool': len(codes),
-                'filter_log': filter_log,
-                'final_pool': [],
-                'final_pool_count': 0,
-                'error': '过滤后股票池为空，无法回测',
-            }
+            return {'screen_k': k_screen, 'signal_k': k_signal,
+                    'screen_factors': screen_names, 'signal_factors': signal_names,
+                    'factor_descriptions': all_descs,
+                    'initial_pool': len(codes), 'filter_log': filter_log,
+                    'final_pool': [], 'final_pool_count': 0,
+                    'error': '过滤后股票池为空，无法回测'}
 
-        end_ts = pd.Timestamp(end_date)
-        bt_mask = (close_panel.index >= start_ts) & (close_panel.index <= end_ts)
+        # ── 7. 信号阶段：逐日模拟买卖 ─────────────────────────────────────────
+        bt_mask    = (close_panel.index >= start_ts) & (close_panel.index <= end_ts)
         avail_codes = [c for c in final_codes if c in close_panel.columns]
-        bt_close = close_panel.loc[bt_mask, avail_codes]
+        bt_close   = close_panel.loc[bt_mask, avail_codes]
 
         if bt_close.empty or len(bt_close) < 2:
-            return {
-                'random_k': k,
-                'selected_factors': selected_names,
-                'initial_pool': len(codes),
-                'filter_log': filter_log,
-                'final_pool': final_codes,
-                'final_pool_count': len(final_codes),
-                'error': '回测期内收盘数据不足（< 2 个交易日）',
-            }
+            return {'screen_k': k_screen, 'signal_k': k_signal,
+                    'screen_factors': screen_names, 'signal_factors': signal_names,
+                    'factor_descriptions': all_descs,
+                    'initial_pool': len(codes), 'filter_log': filter_log,
+                    'final_pool': final_codes, 'final_pool_count': len(final_codes),
+                    'error': '回测期内收盘数据不足（< 2 个交易日）'}
 
-        # 日收益率 → 等权组合收益率 → 权益曲线
-        daily_ret = bt_close.pct_change().iloc[1:]
-        daily_ret = daily_ret.dropna(axis=1, how='all')
-        port_ret = daily_ret.mean(axis=1, skipna=True)
+        trading_dates = bt_close.index.tolist()
 
-        equity: List[float] = [initial_cash]
-        for r in port_ret:
-            equity.append(equity[-1] * (1.0 + float(r)))
+        # 预提取信号因子回测期面板（在筛选后的股票池内计算横截面排名）
+        sig_panels: Dict[str, object] = {}
+        for name in signal_names:
+            if name in factor_panels:
+                fp = factor_panels[name]
+                sig_cols = [c for c in avail_codes if c in fp.columns]
+                if sig_cols:
+                    sig_panels[name] = fp.loc[bt_mask, sig_cols]
 
-        total_ret_dec = (equity[-1] / initial_cash) - 1.0  # 小数形式
+        fee_rate         = 0.001
+        per_stock_budget = initial_cash / len(avail_codes)
+        cash             = initial_cash
+        positions: Dict[str, Dict] = {}   # code -> {shares, entry_price, entry_date, entry_value}
+        equity_curve: List[float]  = [initial_cash]
+        trade_log: List[Dict]      = []
 
+        for date in trading_dates:
+            date_str = str(date.date())
+
+            # 计算各信号因子当日横截面分位排名
+            factor_day_ranks: Dict[str, Dict[str, Dict]] = {}   # name -> code -> {value, rank}
+            composite_ranks:  Dict[str, float] = {}
+
+            valid_sig = [n for n in signal_names if n in sig_panels]
+            for code in avail_codes:
+                per_factor = {}
+                rank_vals  = []
+                for sname in valid_sig:
+                    sp = sig_panels[sname]
+                    if code not in sp.columns or date not in sp.index:
+                        continue
+                    day_series = sp.loc[date].dropna()
+                    if day_series.empty or code not in day_series.index:
+                        continue
+                    raw  = float(day_series[code])
+                    rank = float(day_series.rank(pct=True)[code])
+                    per_factor[sname] = {'value': round(raw, 6), 'rank': round(rank, 4)}
+                    rank_vals.append(rank)
+                factor_day_ranks[code] = per_factor
+                composite_ranks[code]  = round(float(np.mean(rank_vals)), 4) if rank_vals else 0.5
+
+            # 执行买卖信号
+            for code in avail_codes:
+                comp = composite_ranks.get(code, 0.5)
+                if code not in bt_close.columns:
+                    continue
+                price_raw = bt_close.loc[date, code]
+                if pd.isna(price_raw) or float(price_raw) <= 0:
+                    continue
+                price = float(price_raw)
+
+                if code not in positions and comp >= signal_buy_thresh:
+                    budget = min(per_stock_budget, cash * 0.99)
+                    if budget < price * 100:
+                        continue
+                    shares = int(budget / price / 100) * 100
+                    if shares <= 0:
+                        continue
+                    cost = shares * price * (1 + fee_rate)
+                    if cost > cash:
+                        continue
+                    cash -= cost
+                    positions[code] = {'shares': shares, 'entry_price': price,
+                                       'entry_date': date_str, 'entry_value': cost}
+                    trade_log.append({
+                        'date': date_str, 'code': code, 'action': 'BUY',
+                        'price': round(price, 3), 'shares': shares, 'amount': round(cost, 2),
+                        'composite_rank': comp,
+                        'factor_values': factor_day_ranks.get(code, {}),
+                        'signal_buy_thresh': signal_buy_thresh,
+                        'signal_sell_thresh': signal_sell_thresh,
+                    })
+
+                elif code in positions and comp <= signal_sell_thresh:
+                    pos      = positions[code]
+                    proceeds = pos['shares'] * price * (1 - fee_rate)
+                    pnl      = proceeds - pos['entry_value']
+                    pnl_pct  = (proceeds / pos['entry_value'] - 1) * 100
+                    hold_days = (date - pd.Timestamp(pos['entry_date'])).days
+                    cash += proceeds
+                    trade_log.append({
+                        'date': date_str, 'code': code, 'action': 'SELL',
+                        'price': round(price, 3), 'shares': pos['shares'],
+                        'amount': round(proceeds, 2),
+                        'composite_rank': comp,
+                        'factor_values': factor_day_ranks.get(code, {}),
+                        'signal_buy_thresh': signal_buy_thresh,
+                        'signal_sell_thresh': signal_sell_thresh,
+                        'hold_days': hold_days,
+                        'pnl': round(pnl, 2),
+                        'pnl_pct': round(pnl_pct, 4),
+                    })
+                    del positions[code]
+
+            # 当日组合净值
+            pos_val = sum(
+                positions[c]['shares'] * float(bt_close.loc[date, c])
+                for c in positions
+                if c in bt_close.columns and not pd.isna(bt_close.loc[date, c])
+            )
+            equity_curve.append(cash + pos_val)
+
+        # 末日强制清仓
+        last_date     = trading_dates[-1]
+        last_date_str = str(last_date.date())
+        for code in list(positions.keys()):
+            pos = positions[code]
+            if code in bt_close.columns and not pd.isna(bt_close.loc[last_date, code]):
+                price    = float(bt_close.loc[last_date, code])
+                proceeds = pos['shares'] * price * (1 - fee_rate)
+                pnl      = proceeds - pos['entry_value']
+                pnl_pct  = (proceeds / pos['entry_value'] - 1) * 100
+                hold_days = (last_date - pd.Timestamp(pos['entry_date'])).days
+                cash += proceeds
+                trade_log.append({
+                    'date': last_date_str, 'code': code, 'action': 'SELL(强平)',
+                    'price': round(price, 3), 'shares': pos['shares'],
+                    'amount': round(proceeds, 2),
+                    'composite_rank': None, 'factor_values': {},
+                    'signal_buy_thresh': signal_buy_thresh,
+                    'signal_sell_thresh': signal_sell_thresh,
+                    'hold_days': hold_days,
+                    'pnl': round(pnl, 2),
+                    'pnl_pct': round(pnl_pct, 4),
+                })
+        equity_curve[-1] = cash
+
+        # ── 8. 计算业绩指标 ────────────────────────────────────────────────────
+        total_ret_dec = (equity_curve[-1] / initial_cash) - 1.0
+        trading_days  = len(trading_dates)
         bt_result = {
-            'start_date':              start_date,
-            'end_date':                end_date,
-            'trading_days':            len(port_ret),
-            'initial_cash':            initial_cash,
-            'final_value':             round(equity[-1], 2),
-            'total_return_pct':        round(total_ret_dec * 100, 4),
-            'annualized_return_pct':   round(
-                self.get_annualized_return(total_ret_dec, len(port_ret)) * 100, 4
-            ),
-            'max_drawdown_pct':        round(
-                self.get_max_drawdown_pct(equity) * 100, 4
-            ),
-            'sharpe_ratio':            round(self.get_sharpe_ratio(equity), 4),
-            'equity_curve':            [round(v, 2) for v in equity],
+            'start_date':            start_date,
+            'end_date':              end_date,
+            'trading_days':          trading_days,
+            'initial_cash':          initial_cash,
+            'final_value':           round(equity_curve[-1], 2),
+            'total_return_pct':      round(total_ret_dec * 100, 4),
+            'annualized_return_pct': round(
+                self.get_annualized_return(total_ret_dec, trading_days) * 100, 4),
+            'max_drawdown_pct':      round(
+                self.get_max_drawdown_pct(equity_curve) * 100, 4),
+            'sharpe_ratio':          round(self.get_sharpe_ratio(equity_curve), 4),
+            'equity_curve':          [round(v, 2) for v in equity_curve],
         }
 
+        # ── 9. 统计各股表现，取 Top N ──────────────────────────────────────────
+        stock_pnl: Dict[str, float] = {}
+        for tr in trade_log:
+            if tr['action'] in ('SELL', 'SELL(强平)'):
+                code = tr['code']
+                stock_pnl[code] = stock_pnl.get(code, 0.0) + tr.get('pnl', 0.0)
+
+        top_codes = sorted(stock_pnl, key=lambda c: stock_pnl[c], reverse=True)[:top_n_stocks]
+        top_stocks_detail = []
+        for code in top_codes:
+            code_trades = [tr for tr in trade_log if tr['code'] == code]
+            top_stocks_detail.append({
+                'code': code,
+                'total_pnl': round(stock_pnl[code], 2),
+                'trades': code_trades,
+            })
+
         return {
-            'random_k':           k,
-            'selected_factors':   selected_names,
-            'factor_descriptions': selected_descs,
+            'screen_k':           k_screen,
+            'signal_k':           k_signal,
+            'screen_factors':     screen_names,
+            'signal_factors':     signal_names,
+            'factor_descriptions': all_descs,
+            'signal_config': {
+                'buy_thresh':  signal_buy_thresh,
+                'sell_thresh': signal_sell_thresh,
+            },
+            'screen_top_pcts':    screen_top_pcts,
             'initial_pool':       len(codes),
             'filter_log':         filter_log,
             'final_pool':         final_codes,
             'final_pool_count':   len(final_codes),
+            'trade_log':          trade_log,
             'backtest':           bt_result,
+            'top_stocks':         top_stocks_detail,
         }
 
 
