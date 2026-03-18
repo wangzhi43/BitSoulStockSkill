@@ -972,9 +972,9 @@ class SectorFlowDaily:
 
     字段说明:
         trade_date              交易日期（PK），格式 YYYY-MM-DD
+        content_type            板块类型（行业/概念/地域）
         ts_code                 板块代码（PK）
         name                    板块名称
-        content_type            板块类型（行业/概念/地域）
         pct_change              涨跌幅（%）
         close                   收盘价
         net_amount              净流入金额（元）
@@ -1145,10 +1145,10 @@ class IndexDaily:
     字段说明:
         trade_date  交易日期（PK），格式 YYYY-MM-DD
         ts_code     指数代码（PK）
+        close       收盘指数
         open        开盘指数
         high        最高指数
         low         最低指数
-        close       收盘指数
         pre_close   前收盘指数
         change      涨跌点数
         pct_chg     涨跌幅（%）
@@ -1208,10 +1208,10 @@ class IndexWeekly:
     字段说明:
         trade_date  交易日期（PK），格式 YYYY-MM-DD
         ts_code     指数代码（PK）
+        close       收盘指数
         open        开盘指数
         high        最高指数
         low         最低指数
-        close       收盘指数
         pre_close   前收盘指数
         change      涨跌点数
         pct_chg     涨跌幅（%）
@@ -1271,10 +1271,10 @@ class IndexMonthly:
     字段说明:
         trade_date  交易日期（PK），格式 YYYY-MM-DD
         ts_code     指数代码（PK）
+        close       收盘指数
         open        开盘指数
         high        最高指数
         low         最低指数
-        close       收盘指数
         pre_close   前收盘指数
         change      涨跌点数
         pct_chg     涨跌幅（%）

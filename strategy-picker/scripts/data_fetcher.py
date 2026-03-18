@@ -323,9 +323,9 @@ def init_db() -> None:
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS sector_flow_daily (
                 trade_date              TEXT NOT NULL,
+                content_type            TEXT,
                 ts_code                 TEXT NOT NULL,
                 name                    TEXT,
-                content_type            TEXT,
                 pct_change              REAL,
                 close                   REAL,
                 net_amount              REAL,
@@ -365,10 +365,10 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS index_daily (
                 trade_date  TEXT NOT NULL,
                 ts_code     TEXT NOT NULL,
+                close       REAL,
                 open        REAL,
                 high        REAL,
                 low         REAL,
-                close       REAL,
                 pre_close   REAL,
                 change      REAL,
                 pct_chg     REAL,
@@ -381,10 +381,10 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS index_weekly (
                 trade_date  TEXT NOT NULL,
                 ts_code     TEXT NOT NULL,
+                close       REAL,
                 open        REAL,
                 high        REAL,
                 low         REAL,
-                close       REAL,
                 pre_close   REAL,
                 change      REAL,
                 pct_chg     REAL,
@@ -397,10 +397,10 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS index_monthly (
                 trade_date  TEXT NOT NULL,
                 ts_code     TEXT NOT NULL,
+                close       REAL,
                 open        REAL,
                 high        REAL,
                 low         REAL,
-                close       REAL,
                 pre_close   REAL,
                 change      REAL,
                 pct_chg     REAL,
