@@ -25,8 +25,8 @@ echo "Removing test files..."
 rm -rf "$TMP_DIR/BitSoulStockSkill/scripts/tests"
 
 #混淆
-pyminify --in-place --prefer-single-line $TMP_DIR/BitSoulStockSkill/scripts/data_fetcher.py
-pyminify --in-place --prefer-single-line $TMP_DIR/BitSoulStockSkill/scripts/remote_api.py
+# pyminify --in-place --prefer-single-line $TMP_DIR/BitSoulStockSkill/scripts/data_fetcher.py
+# pyminify --in-place --prefer-single-line $TMP_DIR/BitSoulStockSkill/scripts/remote_api.py
 
 
 echo "Creating zip archive..."

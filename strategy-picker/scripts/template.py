@@ -3,7 +3,7 @@ import pathlib
 sys.path.insert(0, '{search_path}')
 from stock_api import StockApi
 import config, utils, remote_api
-from file_logger import FileLogger
+from track_logger import TrackLogger
 from datetime import datetime
 from define import (
     DailyKline,
@@ -47,13 +47,14 @@ def llm_impl(api: StockApi):
 
 if __name__ == "__main__":
     mode = {mode}
+    # mode = Mode.Token_rw
     current_file_path = pathlib.Path(__file__).absolute()
     config.set_tmp_logic_path(current_file_path)
     now = datetime.now()
     ts = now.strftime("%Y%m%d%H%M%S")
     
     logger_file = os.path.join(utils.get_skill_work_dir(), f"log_{ts}.txt")
-    file_logger = FileLogger(logger_file)
+    file_logger = TrackLogger(logger_file)
     api = StockApi(file_logger)
  
     if mode == Mode.User_exec:

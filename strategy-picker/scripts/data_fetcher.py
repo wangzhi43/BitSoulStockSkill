@@ -61,7 +61,7 @@ def getEngine() -> Engine:
         #     conn = sqlcipher3.connect(DB_PATH)
         #     conn.execute(f"PRAGMA key='{"stock2026"}'")
         #     return conn
-        _g_engine = create_engine("sqlite:///{DB_PATH}")
+        _g_engine = create_engine(f"sqlite:///{DB_PATH}")
     return _g_engine
 
 class TablePatch:
