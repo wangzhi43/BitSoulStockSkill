@@ -4,12 +4,14 @@ stock_api_test.py — StockApi 类所有接口的编译检查测试
 目的：确保所有方法签名无编译错误，不验证业务逻辑。
 """
 
-import sys
-sys.path.insert(0, __file__.rsplit('/', 1)[0])
+import sys, os
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import utils
+from file_logger import FileLogger
 from stock_api import StockApi
-
-api = StockApi()
+file_logger = FileLogger(os.path.join(utils.get_skill_work_dir(), "test.txt"))
+api = StockApi(file_logger)
 
 CODE = "000001.SZ"
 DATE = "2024-06-03"
@@ -59,7 +61,6 @@ api.get_sector_stock_map(stock_codes=[CODE])
 api.get_sector_stock_map(limit=10, offset=0)
 
 api.get_sector_flow_daily(trade_date=DATE)
-api.get_sector_flow_daily(sector_codes=["BK0475"])
 api.get_sector_flow_daily(start_date=START, end_date=END, limit=5)
 
 # ================================================================

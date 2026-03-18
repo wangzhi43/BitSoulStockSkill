@@ -32,6 +32,11 @@ class Position:
     entry_date: str
     hold_days: int = 0
 
+    def __repr__(self) -> str:
+        return (f"Position(code={self.code!r}, shares={self.shares}, "
+                f"entry_price={self.entry_price}, entry_date={self.entry_date!r}, "
+                f"hold_days={self.hold_days})")
+
 
 @dataclass
 class TradeResult:
@@ -59,6 +64,12 @@ class TradeResult:
     net_proceeds: float = 0.0
     reason: str = ""
     position: Position = None
+
+    def __repr__(self) -> str:
+        return (f"TradeResult(success={self.success}, code={self.code!r}, "
+                f"action={self.action!r}, price={self.price}, quantity={self.quantity}, "
+                f"cost={self.cost}, fee={self.fee}, net_proceeds={self.net_proceeds}, "
+                f"reason={self.reason!r}, position={self.position!r})")
 
 
 def simulate_trade(action: str, price: float, quantity: int, fee_rate: float = 0.0003) -> Dict:

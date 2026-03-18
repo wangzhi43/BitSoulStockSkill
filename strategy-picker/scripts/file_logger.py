@@ -5,4 +5,4 @@ class FileLogger:
         self.f = open(file_path, mode="a", encoding="utf-8")
     
     def write(self, message:str):
-        self.f.write(message)
+        self.f.write(f"{message}\n")
