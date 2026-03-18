@@ -1,0 +1,91 @@
+{
+  "_comment": "MoE权重配置文件。通过 train_weights 命令跑回测优化后自动更新。",
+  "_version": 1,
+  "_trained_at": null,
+  "_train_period": null,
+
+  "expert_weights": {
+    "technical": 0.35,
+    "alpha": 0.35,
+    "fundamental": 0.15,
+    "behavior": 0.15
+  },
+
+  "signal_thresholds": {
+    "buy": 0.65,
+    "sell": 0.35
+  },
+
+  "technical": {
+    "sma5": 1.0, "sma10": 1.0, "sma20": 1.0, "sma60": 1.0,
+    "ema5": 1.0, "ema12": 1.0, "ema20": 1.0, "ema26": 1.0,
+    "ema_cross": 1.0, "wma20": 1.0, "tema20": 1.0, "dema20": 1.0,
+    "kama": 1.0, "bbi": 1.0, "trix": 1.0, "dmi": 1.0,
+    "sar": 1.0, "linearreg_slope": 1.0, "linearreg": 1.0,
+    "linearreg_angle": 1.0, "linearreg_intercept": 1.0,
+    "aroon": 1.0, "tsf": 1.0, "ht_trendmode": 1.0,
+    "ht_dcphase": 1.0, "ht_sine": 1.0,
+    "rsi14": 1.0, "rsi6": 1.0, "cci": 1.0,
+    "mom10": 1.0, "mom20": 1.0, "roc10": 1.0,
+    "rocp10": 1.0, "rocr10": 1.0, "roc_r": 1.0,
+    "willr": 1.0, "cmo": 1.0, "bias": 1.0,
+    "psycho": 1.0, "dpo": 1.0, "mass": 1.0,
+    "kdj_j": 1.0, "kdj_kd": 1.0, "stoch_k": 1.0,
+    "stochf_k": 1.0, "stochrsi": 1.0, "ultosc": 1.0,
+    "macd_hist": 1.0, "macd_cross": 1.0, "ppo_hist": 1.0,
+    "adosc": 1.0, "obv": 1.0, "ad": 1.0,
+    "mfi": 1.0, "vwap": 1.0, "volume_ratio": 1.0,
+    "vr": 1.0, "pvi": 1.0, "nvi": 1.0,
+    "ar": 1.0, "br": 1.0, "brar": 1.0, "asi": 1.0,
+    "bb_pos": 1.0, "bb_signal": 1.0, "bbands_pct": 1.0,
+    "bbands_width": 1.0, "ma_channel": 1.0,
+    "donchian": 1.0, "keltner": 1.0, "xue_channel": 1.0,
+    "midpoint": 1.0, "midprice": 1.0,
+    "atr": 1.0, "natr": 1.0, "tr": 1.0, "trange": 1.0,
+    "stddev": 1.0, "var": 1.0, "correl": 1.0, "beta": 1.0,
+    "ht_dcperiod": 1.0,
+    "typical": 1.0, "median": 1.0, "wclose": 1.0, "avgp": 1.0,
+    "ht_phasor": 1.0,
+    "consec_rise": 1.0, "consec_fall": 1.0,
+    "bomb_board": 1.0, "bomb_board_count": 1.0, "consec_limit_up": 1.0
+  },
+
+  "alpha": {
+    "alpha001": 1.0, "alpha002": 1.0, "alpha003": 1.0, "alpha004": 1.0,
+    "alpha005": 1.0, "alpha006": 1.0, "alpha007": 1.0, "alpha008": 1.0,
+    "alpha009": 1.0, "alpha010": 1.0, "alpha011": 1.0, "alpha012": 1.0,
+    "alpha013": 1.0, "alpha014": 1.0, "alpha015": 1.0, "alpha016": 1.0,
+    "alpha017": 1.0, "alpha018": 1.0, "alpha019": 1.0, "alpha020": 1.0,
+    "alpha021": 1.0, "alpha022": 1.0, "alpha023": 1.0, "alpha024": 1.0,
+    "alpha025": 1.0, "alpha026": 1.0, "alpha027": 1.0, "alpha028": 1.0,
+    "alpha029": 1.0, "alpha030": 1.0, "alpha031": 1.0, "alpha032": 1.0,
+    "alpha033": 1.0, "alpha034": 1.0, "alpha035": 1.0, "alpha036": 1.0,
+    "alpha037": 1.0, "alpha038": 1.0, "alpha039": 1.0, "alpha040": 1.0,
+    "alpha041": 1.0, "alpha042": 1.0, "alpha043": 1.0, "alpha044": 1.0,
+    "alpha045": 1.0, "alpha046": 1.0, "alpha047": 1.0, "alpha048": 1.0,
+    "alpha049": 1.0, "alpha050": 1.0, "alpha051": 1.0, "alpha052": 1.0,
+    "alpha053": 1.0, "alpha054": 1.0, "alpha055": 1.0, "alpha056": 1.0,
+    "alpha057": 1.0, "alpha058": 1.0, "alpha059": 1.0, "alpha060": 1.0,
+    "alpha061": 1.0, "alpha062": 1.0, "alpha063": 1.0, "alpha064": 1.0,
+    "alpha065": 1.0, "alpha066": 1.0, "alpha067": 1.0, "alpha068": 1.0,
+    "alpha069": 1.0, "alpha070": 1.0, "alpha071": 1.0, "alpha072": 1.0,
+    "alpha073": 1.0, "alpha074": 1.0, "alpha075": 1.0, "alpha076": 1.0,
+    "alpha077": 1.0, "alpha078": 1.0, "alpha079": 1.0, "alpha080": 1.0,
+    "alpha081": 1.0, "alpha082": 1.0, "alpha083": 1.0, "alpha084": 1.0,
+    "alpha085": 1.0, "alpha086": 1.0, "alpha087": 1.0, "alpha088": 1.0,
+    "alpha089": 1.0, "alpha090": 1.0, "alpha091": 1.0, "alpha092": 1.0,
+    "alpha093": 1.0, "alpha094": 1.0, "alpha095": 1.0, "alpha096": 1.0,
+    "alpha097": 1.0, "alpha098": 1.0, "alpha099": 1.0, "alpha100": 1.0,
+    "alpha101": 1.0
+  },
+
+  "fundamental": {
+    "pe_ttm": 1.0, "pb": 1.0, "turnover_rate": 1.0,
+    "volume_ratio": 1.0, "ps_ttm": 1.0
+  },
+
+  "behavior": {
+    "limit_score": 1.0, "consecutive_limit_up": 1.0,
+    "bomb_board": 1.0, "top_list": 1.0, "pct_chg_5d": 1.0
+  }
+}
