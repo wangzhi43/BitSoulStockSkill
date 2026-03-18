@@ -8,9 +8,9 @@ import sys, os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import utils
-from file_logger import FileLogger
+from track_logger import TrackLogger
 from stock_api import StockApi
-file_logger = FileLogger(os.path.join(utils.get_skill_work_dir(), "test.txt"))
+file_logger = TrackLogger(os.path.join(utils.get_skill_work_dir(), "test.txt"))
 api = StockApi(file_logger)
 
 CODE = "000001.SZ"

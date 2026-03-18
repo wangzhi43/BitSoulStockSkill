@@ -209,7 +209,7 @@ from backtest_tools import (
     sell,
 )
 import remote_api,data_fetcher,utils, config
-from file_logger import FileLogger
+from track_logger import TrackLogger
 class StockApi:
     """
     股票数据与回测API接口
@@ -221,8 +221,8 @@ class StockApi:
     - 性能指标计算
     - 回测工具函数
     """
-    def __init__(self, logger:FileLogger):
-        self.file_logger = logger
+    def __init__(self, logger:TrackLogger):
+        self.track_logger = logger
     # ============================================================
     # 工具类
     # ============================================================
@@ -248,7 +248,7 @@ class StockApi:
     # ============================================================
 
     def initialSetup(self):
-        self.file_logger.write("initialSetup()")
+        self.track_logger.write("initialSetup()")
         data_fetcher.init_db()
         data_fetcher.syn_table_datas()
         init_indicators_db()
@@ -263,7 +263,7 @@ class StockApi:
         获取所有股票代码列表。
         :return: 股票代码列表，格式如 ['000001.SZ', '600519.SH', ...]
         """
-        self.file_logger.write("get_all_symbols()")
+        self.track_logger.write("get_all_symbols()")
         stocks = query_stock_basic()
         return [s.ts_code for s in stocks]
     
@@ -273,7 +273,7 @@ class StockApi:
         :param ts_code: 股票代码，如 000001.SZ
         :return: 股票基础信息数据结构，没查询到则返回None
         """
-        self.file_logger.write(f"get_symbol_basic_infomation(ts_code={ts_code!r})")
+        self.track_logger.write(f"get_symbol_basic_infomation(ts_code={ts_code!r})")
         stocks = query_stock_basic(ts_code=ts_code)
         if len(stocks) > 0:
             return stocks[0]
@@ -293,7 +293,7 @@ class StockApi:
         返回:
             RealtimeStockQuote 实时股票报价信息
         """
-        self.file_logger.write(f"get_realtime_stock_info(code={code!r})")
+        self.track_logger.write(f"get_realtime_stock_info(code={code!r})")
         return RealTimeDataFetcher().request_stock_info(code)
 
     def query_income(
@@ -331,7 +331,7 @@ class StockApi:
             # 查询最新一期
             records = query_income(ts_codes=["000001.SZ"], order_by="end_date DESC", limit=1)
         """
-        self.file_logger.write(f"query_income(ts_codes={ts_codes!r}, report_type={report_type!r}, end_date={end_date!r}, start_end_date={start_end_date!r}, limit={limit!r}, offset={offset!r}, order_by={order_by!r})")
+        self.track_logger.write(f"query_income(ts_codes={ts_codes!r}, report_type={report_type!r}, end_date={end_date!r}, start_end_date={start_end_date!r}, limit={limit!r}, offset={offset!r}, order_by={order_by!r})")
         return query_income(
             ts_codes=ts_codes,
             report_type=report_type,
@@ -374,7 +374,7 @@ class StockApi:
             # 查询某天全市场基本面数据
             basics = query_daily_basic(trade_date="2024-06-03")
         """
-        self.file_logger.write(f"get_daily_basic(ts_codes={ts_codes!r}, trade_date={trade_date!r}, start_date={start_date!r}, end_date={end_date!r}, limit={limit!r}, offset={offset!r}, order_by={order_by!r})")
+        self.track_logger.write(f"get_daily_basic(ts_codes={ts_codes!r}, trade_date={trade_date!r}, start_date={start_date!r}, end_date={end_date!r}, limit={limit!r}, offset={offset!r}, order_by={order_by!r})")
         return query_daily_basic(
             ts_codes=ts_codes,
             trade_date=trade_date,
@@ -417,7 +417,7 @@ class StockApi:
             # 查询某天全市场涨跌停价格
             limits = api.get_stock_limit(trade_date="2024-06-03")
         """
-        self.file_logger.write(f"get_stock_limit(ts_codes={ts_codes!r}, trade_date={trade_date!r}, start_date={start_date!r}, end_date={end_date!r}, limit={limit!r}, offset={offset!r}, order_by={order_by!r})")
+        self.track_logger.write(f"get_stock_limit(ts_codes={ts_codes!r}, trade_date={trade_date!r}, start_date={start_date!r}, end_date={end_date!r}, limit={limit!r}, offset={offset!r}, order_by={order_by!r})")
         return query_stock_limit(
             ts_codes=ts_codes,
             trade_date=trade_date,
@@ -462,7 +462,7 @@ class StockApi:
             # 查询某只股票历史上榜记录
             records = api.get_daily_limit_list(ts_codes=["000001.SZ"])
         """
-        self.file_logger.write(f"get_daily_limit_list(ts_codes={ts_codes!r}, trade_date={trade_date!r}, start_date={start_date!r}, end_date={end_date!r}, limit_type={limit_type!r}, limit={limit!r}, offset={offset!r}, order_by={order_by!r})")
+        self.track_logger.write(f"get_daily_limit_list(ts_codes={ts_codes!r}, trade_date={trade_date!r}, start_date={start_date!r}, end_date={end_date!r}, limit_type={limit_type!r}, limit={limit!r}, offset={offset!r}, order_by={order_by!r})")
         return query_daily_limit_list(
             ts_codes=ts_codes,
             trade_date=trade_date,
@@ -508,7 +508,7 @@ class StockApi:
             # 查询某只股票历史炸板记录
             records = api.get_daily_bomb_list(ts_codes=["000001.SZ"])
         """
-        self.file_logger.write(f"get_daily_bomb_list(ts_codes={ts_codes!r}, trade_date={trade_date!r}, start_date={start_date!r}, end_date={end_date!r}, bomb_type={bomb_type!r}, limit={limit!r}, offset={offset!r}, order_by={order_by!r})")
+        self.track_logger.write(f"get_daily_bomb_list(ts_codes={ts_codes!r}, trade_date={trade_date!r}, start_date={start_date!r}, end_date={end_date!r}, bomb_type={bomb_type!r}, limit={limit!r}, offset={offset!r}, order_by={order_by!r})")
         return query_daily_bomb_list(
             ts_codes=ts_codes,
             trade_date=trade_date,
@@ -545,7 +545,7 @@ class StockApi:
             # 查询某只股票归属的所有板块
             records = api.get_sector_stock_map(stock_codes=["000001.SZ"])
         """
-        self.file_logger.write(f"get_sector_stock_map(sector_codes={sector_codes!r}, stock_codes={stock_codes!r}, source={source!r}, limit={limit!r}, offset={offset!r})")
+        self.track_logger.write(f"get_sector_stock_map(sector_codes={sector_codes!r}, stock_codes={stock_codes!r}, source={source!r}, limit={limit!r}, offset={offset!r})")
         return query_sector_stock_map(
             sector_codes=sector_codes,
             stock_codes=stock_codes,
@@ -583,7 +583,7 @@ class StockApi:
             # 查询某只股票历史上榜记录
             records = api.get_top_list(ts_codes=["000001.SZ"])
         """
-        self.file_logger.write(f"get_top_list(ts_codes={ts_codes!r}, trade_date={trade_date!r}, start_date={start_date!r}, end_date={end_date!r}, limit={limit!r}, offset={offset!r}, order_by={order_by!r})")
+        self.track_logger.write(f"get_top_list(ts_codes={ts_codes!r}, trade_date={trade_date!r}, start_date={start_date!r}, end_date={end_date!r}, limit={limit!r}, offset={offset!r}, order_by={order_by!r})")
         return query_top_list(
             ts_codes=ts_codes,
             trade_date=trade_date,
@@ -625,7 +625,7 @@ class StockApi:
             # 查询某只股票历史机构上榜记录
             records = api.get_top_inst(ts_codes=["000001.SZ"])
         """
-        self.file_logger.write(f"get_top_inst(ts_codes={ts_codes!r}, trade_date={trade_date!r}, start_date={start_date!r}, end_date={end_date!r}, side={side!r}, limit={limit!r}, offset={offset!r}, order_by={order_by!r})")
+        self.track_logger.write(f"get_top_inst(ts_codes={ts_codes!r}, trade_date={trade_date!r}, start_date={start_date!r}, end_date={end_date!r}, side={side!r}, limit={limit!r}, offset={offset!r}, order_by={order_by!r})")
         return query_top_inst(
             ts_codes=ts_codes,
             trade_date=trade_date,
@@ -666,7 +666,7 @@ class StockApi:
             # 查询某个板块历史资金流向
             records = api.get_sector_flow_daily(ts_codes=["BK0475"])
         """
-        self.file_logger.write(f"get_sector_flow_daily(ts_codes={ts_codes!r}, trade_date={trade_date!r}, start_date={start_date!r}, end_date={end_date!r}, limit={limit!r}, offset={offset!r}, order_by={order_by!r})")
+        self.track_logger.write(f"get_sector_flow_daily(ts_codes={ts_codes!r}, trade_date={trade_date!r}, start_date={start_date!r}, end_date={end_date!r}, limit={limit!r}, offset={offset!r}, order_by={order_by!r})")
         return query_sector_flow_daily(
             ts_codes=ts_codes,
             trade_date=trade_date,
@@ -702,7 +702,7 @@ class StockApi:
             # 查询上证指数信息
             records = api.get_index_basic(ts_code="000001.SH")
         """
-        self.file_logger.write(f"get_index_basic(ts_code={ts_code!r}, market={market!r}, publisher={publisher!r}, limit={limit!r}, offset={offset!r})")
+        self.track_logger.write(f"get_index_basic(ts_code={ts_code!r}, market={market!r}, publisher={publisher!r}, limit={limit!r}, offset={offset!r})")
         return query_index_basic(
             ts_code=ts_code,
             market=market,
@@ -740,7 +740,7 @@ class StockApi:
             # 查询某天所有指数行情
             records = api.get_index_daily(trade_date="2024-06-03")
         """
-        self.file_logger.write(f"get_index_daily(ts_codes={ts_codes!r}, trade_date={trade_date!r}, start_date={start_date!r}, end_date={end_date!r}, limit={limit!r}, offset={offset!r}, order_by={order_by!r})")
+        self.track_logger.write(f"get_index_daily(ts_codes={ts_codes!r}, trade_date={trade_date!r}, start_date={start_date!r}, end_date={end_date!r}, limit={limit!r}, offset={offset!r}, order_by={order_by!r})")
         return query_index_daily(
             ts_codes=ts_codes,
             trade_date=trade_date,
@@ -777,7 +777,7 @@ class StockApi:
             # 查询上证指数周线
             records = api.get_index_weekly(ts_codes=["000001.SH"])
         """
-        self.file_logger.write(f"get_index_weekly(ts_codes={ts_codes!r}, trade_date={trade_date!r}, start_date={start_date!r}, end_date={end_date!r}, limit={limit!r}, offset={offset!r}, order_by={order_by!r})")
+        self.track_logger.write(f"get_index_weekly(ts_codes={ts_codes!r}, trade_date={trade_date!r}, start_date={start_date!r}, end_date={end_date!r}, limit={limit!r}, offset={offset!r}, order_by={order_by!r})")
         return query_index_weekly(
             ts_codes=ts_codes,
             trade_date=trade_date,
@@ -814,7 +814,7 @@ class StockApi:
             # 查询上证指数月线
             records = api.get_index_monthly(ts_codes=["000001.SH"])
         """
-        self.file_logger.write(f"get_index_monthly(ts_codes={ts_codes!r}, trade_date={trade_date!r}, start_date={start_date!r}, end_date={end_date!r}, limit={limit!r}, offset={offset!r}, order_by={order_by!r})")
+        self.track_logger.write(f"get_index_monthly(ts_codes={ts_codes!r}, trade_date={trade_date!r}, start_date={start_date!r}, end_date={end_date!r}, limit={limit!r}, offset={offset!r}, order_by={order_by!r})")
         return query_index_monthly(
             ts_codes=ts_codes,
             trade_date=trade_date,
@@ -833,7 +833,7 @@ class StockApi:
         :param end_date: 结束日期，格式 YYYY-MM-DD
         :return: 收盘价列表，无数据返回空列表
         """
-        self.file_logger.write(f"get_daily_kline(symbols={symbols!r}, start_date={start_date!r}, end_date={end_date!r})")
+        self.track_logger.write(f"get_daily_kline(symbols={symbols!r}, start_date={start_date!r}, end_date={end_date!r})")
         klines = query_daily_kline(
             codes=symbols,
             start_date=start_date, end_date=end_date,
@@ -849,7 +849,7 @@ class StockApi:
         :param end_date: 结束日期，格式 YYYY-MM-DD
         :return: HourKline 列表，无数据返回空列表
         """
-        self.file_logger.write(f"get_hour_kline(symbols={symbols!r}, start_date={start_date!r}, end_date={end_date!r})")
+        self.track_logger.write(f"get_hour_kline(symbols={symbols!r}, start_date={start_date!r}, end_date={end_date!r})")
         return query_hour_kline(
             codes=symbols,
             start_date=start_date, end_date=end_date,
@@ -864,7 +864,7 @@ class StockApi:
         :param end_date: 结束日期，格式 YYYY-MM-DD
         :return: WeeklyKline 列表，无数据返回空列表
         """
-        self.file_logger.write(f"get_weekly_kline(symbols={symbols!r}, start_date={start_date!r}, end_date={end_date!r})")
+        self.track_logger.write(f"get_weekly_kline(symbols={symbols!r}, start_date={start_date!r}, end_date={end_date!r})")
         return query_weekly_kline(
             codes=symbols,
             start_date=start_date, end_date=end_date,
@@ -879,7 +879,7 @@ class StockApi:
         :param end_date: 结束日期，格式 YYYY-MM-DD
         :return: MonthlyKline 列表，无数据返回空列表
         """
-        self.file_logger.write(f"get_monthly_kline(symbols={symbols!r}, start_date={start_date!r}, end_date={end_date!r})")
+        self.track_logger.write(f"get_monthly_kline(symbols={symbols!r}, start_date={start_date!r}, end_date={end_date!r})")
         return query_monthly_kline(
             codes=symbols,
             start_date=start_date, end_date=end_date,
@@ -901,7 +901,7 @@ class StockApi:
         Example:
             prices = api.get_daily_close_prices('600519.SH', '2026-01-01', '2026-03-01')
         """
-        self.file_logger.write(f"get_daily_close_prices(code={code!r}, start_date={start_date!r}, end_date={end_date!r})")
+        self.track_logger.write(f"get_daily_close_prices(code={code!r}, start_date={start_date!r}, end_date={end_date!r})")
         klines = self.get_daily_kline(code, start_date, end_date)
         return [k.close for k in klines]
 
@@ -916,7 +916,7 @@ class StockApi:
         Returns:
             日线开盘价列表
         """
-        self.file_logger.write(f"get_daily_open_prices(code={code!r}, start_date={start_date!r}, end_date={end_date!r})")
+        self.track_logger.write(f"get_daily_open_prices(code={code!r}, start_date={start_date!r}, end_date={end_date!r})")
         klines = self.get_daily_kline(code, start_date, end_date)
         return [k.open for k in klines]
 
@@ -932,7 +932,7 @@ class StockApi:
         Returns:
             日线最高价列表
         """
-        self.file_logger.write(f"get_daily_high_prices(code={code!r}, start_date={start_date!r}, end_date={end_date!r})")
+        self.track_logger.write(f"get_daily_high_prices(code={code!r}, start_date={start_date!r}, end_date={end_date!r})")
         klines = self.get_daily_kline(code, start_date, end_date)
         return [k.high for k in klines]
 
@@ -948,7 +948,7 @@ class StockApi:
         Returns:
             最低价列表
         """
-        self.file_logger.write(f"get_daily_low_prices(code={code!r}, start_date={start_date!r}, end_date={end_date!r})")
+        self.track_logger.write(f"get_daily_low_prices(code={code!r}, start_date={start_date!r}, end_date={end_date!r})")
         klines = self.get_daily_kline(code, start_date, end_date)
         return [k.low for k in klines]
 
@@ -964,7 +964,7 @@ class StockApi:
         Returns:
             日线成交量列表
         """
-        self.file_logger.write(f"get_daily_volumes(code={code!r}, start_date={start_date!r}, end_date={end_date!r})")
+        self.track_logger.write(f"get_daily_volumes(code={code!r}, start_date={start_date!r}, end_date={end_date!r})")
         klines = self.get_daily_kline(code, start_date, end_date)
         return [k.volume for k in klines]
 
@@ -980,7 +980,7 @@ class StockApi:
         Returns:
             日线涨跌幅列表(%)
         """
-        self.file_logger.write(f"get_daily_pct_chg(code={code!r}, start_date={start_date!r}, end_date={end_date!r})")
+        self.track_logger.write(f"get_daily_pct_chg(code={code!r}, start_date={start_date!r}, end_date={end_date!r})")
         klines = self.get_daily_kline(code, start_date, end_date)
         return [k.pctChg for k in klines]
 
@@ -1003,7 +1003,7 @@ class StockApi:
         Example:
             sma = api.get_sma('600519.SH', '2026-03-01', 20)
         """
-        self.file_logger.write(f"get_sma(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_sma(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_sma(code, date, period, use_adjusted)
 
     def get_ema(self, code: str, date: str, period: int = 12, use_adjusted: bool = True) -> Optional[float]:
@@ -1018,7 +1018,7 @@ class StockApi:
         Returns:
             EMA值，若数据不足返回None
         """
-        self.file_logger.write(f"get_ema(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_ema(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_ema(code, date, period, use_adjusted)
 
     def get_rsi(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
@@ -1038,7 +1038,7 @@ class StockApi:
             if rsi and rsi < 30:
                 print('超卖')
         """
-        self.file_logger.write(f"get_rsi(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_rsi(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_rsi(code, date, period, use_adjusted)
 
     def get_bollinger_bands(self, code: str, date: str, period: int = 20, std_dev: int = 2, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
@@ -1059,7 +1059,7 @@ class StockApi:
             if bb and close > bb['upper']:
                 print('突破上轨')
         """
-        self.file_logger.write(f"get_bollinger_bands(code={code!r}, date={date!r}, period={period!r}, std_dev={std_dev!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_bollinger_bands(code={code!r}, date={date!r}, period={period!r}, std_dev={std_dev!r}, use_adjusted={use_adjusted!r})")
         return get_bollinger_bands(code, date, period, std_dev, use_adjusted)
 
     def get_macd(self, code: str, date: str, fast: int = 12, slow: int = 26, signal: int = 9, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
@@ -1081,7 +1081,7 @@ class StockApi:
             if macd and macd['histogram'] > 0:
                 print('多头')
         """
-        self.file_logger.write(f"get_macd(code={code!r}, date={date!r}, fast={fast!r}, slow={slow!r}, signal={signal!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_macd(code={code!r}, date={date!r}, fast={fast!r}, slow={slow!r}, signal={signal!r}, use_adjusted={use_adjusted!r})")
         return get_macd(code, date, fast, slow, signal, use_adjusted)
 
     def get_atr(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
@@ -1096,7 +1096,7 @@ class StockApi:
         Returns:
             ATR值，若数据不足返回None
         """
-        self.file_logger.write(f"get_atr(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_atr(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_atr(code, date, period, use_adjusted)
 
     def get_wma(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
@@ -1111,7 +1111,7 @@ class StockApi:
         Returns:
             WMA值，若数据不足返回None
         """
-        self.file_logger.write(f"get_wma(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_wma(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_wma(code, date, period, use_adjusted)
 
     def get_tema(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
@@ -1126,7 +1126,7 @@ class StockApi:
         Returns:
             TEMA值，若数据不足返回None
         """
-        self.file_logger.write(f"get_tema(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_tema(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_tema(code, date, period, use_adjusted)
 
     def get_mom(self, code: str, date: str, period: int = 10, use_adjusted: bool = True) -> Optional[float]:
@@ -1141,7 +1141,7 @@ class StockApi:
         Returns:
             MOM值，若数据不足返回None
         """
-        self.file_logger.write(f"get_mom(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_mom(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_mom(code, date, period, use_adjusted)
 
     def get_roc(self, code: str, date: str, period: int = 10, use_adjusted: bool = True) -> Optional[float]:
@@ -1156,7 +1156,7 @@ class StockApi:
         Returns:
             ROC值(%)，若数据不足返回None
         """
-        self.file_logger.write(f"get_roc(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_roc(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_roc(code, date, period, use_adjusted)
 
     def get_cci(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
@@ -1171,7 +1171,7 @@ class StockApi:
         Returns:
             CCI值，若数据不足返回None
         """
-        self.file_logger.write(f"get_cci(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_cci(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_cci(code, date, period, use_adjusted)
 
     def get_obv(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
@@ -1186,7 +1186,7 @@ class StockApi:
         Returns:
             OBV值，若数据不足返回None
         """
-        self.file_logger.write(f"get_obv(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_obv(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_obv(code, date, period, use_adjusted)
 
     def get_volume(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
@@ -1201,7 +1201,7 @@ class StockApi:
         Returns:
             字典 {'current': 当前成交量, 'sma': 成交量均线}，若数据不足返回None
         """
-        self.file_logger.write(f"get_volume(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_volume(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_volume(code, date, period, use_adjusted)
 
     def get_kdj(self, code: str, date: str, n: int = 9, m1: int = 3, m2: int = 3, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
@@ -1218,7 +1218,7 @@ class StockApi:
         Returns:
             字典 {'k': K值, 'd': D值, 'j': J值}，若数据不足返回None
         """
-        self.file_logger.write(f"get_kdj(code={code!r}, date={date!r}, n={n!r}, m1={m1!r}, m2={m2!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_kdj(code={code!r}, date={date!r}, n={n!r}, m1={m1!r}, m2={m2!r}, use_adjusted={use_adjusted!r})")
         return get_kdj(code, date, n, m1, m2, use_adjusted)
 
     def get_dmi(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
@@ -1233,7 +1233,7 @@ class StockApi:
         Returns:
             字典 {'pdi': +DI, 'mdi': -DI, 'adx': ADX}，若数据不足返回None
         """
-        self.file_logger.write(f"get_dmi(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_dmi(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_dmi(code, date, period, use_adjusted)
 
     def get_trix(self, code: str, date: str, period: int = 12, use_adjusted: bool = True) -> Optional[float]:
@@ -1248,7 +1248,7 @@ class StockApi:
         Returns:
             TRIX值(%)，若数据不足返回None
         """
-        self.file_logger.write(f"get_trix(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_trix(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_trix(code, date, period, use_adjusted)
 
     def get_sar(self, code: str, date: str, af_start: float = 0.02, af_max: float = 0.2, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
@@ -1264,7 +1264,7 @@ class StockApi:
         Returns:
             字典 {'sar': SAR值, 'trend': 趋势}，若数据不足返回None
         """
-        self.file_logger.write(f"get_sar(code={code!r}, date={date!r}, af_start={af_start!r}, af_max={af_max!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_sar(code={code!r}, date={date!r}, af_start={af_start!r}, af_max={af_max!r}, use_adjusted={use_adjusted!r})")
         return get_sar(code, date, af_start, af_max, use_adjusted)
 
     def get_williams_r(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
@@ -1279,7 +1279,7 @@ class StockApi:
         Returns:
             WR值(0-100)，0表示超买，100表示超卖，若数据不足返回None
         """
-        self.file_logger.write(f"get_williams_r(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_williams_r(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_williams_r(code, date, period, use_adjusted)
 
     def get_psycho(self, code: str, date: str, period: int = 12, use_adjusted: bool = True) -> Optional[float]:
@@ -1294,7 +1294,7 @@ class StockApi:
         Returns:
             PSY值(0-100)，若数据不足返回None
         """
-        self.file_logger.write(f"get_psycho(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_psycho(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_psycho(code, date, period, use_adjusted)
 
     def get_bias(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
@@ -1309,7 +1309,7 @@ class StockApi:
         Returns:
             BIAS值(%)，若数据不足返回None
         """
-        self.file_logger.write(f"get_bias(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_bias(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_bias(code, date, period, use_adjusted)
 
     def get_tr(self, code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
@@ -1323,7 +1323,7 @@ class StockApi:
         Returns:
             TR值，若数据不足返回None
         """
-        self.file_logger.write(f"get_tr(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_tr(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
         return get_tr(code, date, use_adjusted)
 
     def get_natr(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
@@ -1338,7 +1338,7 @@ class StockApi:
         Returns:
             NATR值(%)，若数据不足返回None
         """
-        self.file_logger.write(f"get_natr(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_natr(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_natr(code, date, period, use_adjusted)
 
     def get_vwap(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
@@ -1353,7 +1353,7 @@ class StockApi:
         Returns:
             VWAP值，若数据不足返回None
         """
-        self.file_logger.write(f"get_vwap(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_vwap(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_vwap(code, date, period, use_adjusted)
 
     def get_ad(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
@@ -1368,7 +1368,7 @@ class StockApi:
         Returns:
             AD值，若数据不足返回None
         """
-        self.file_logger.write(f"get_ad(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_ad(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_ad(code, date, period, use_adjusted)
 
     def get_adosc(self, code: str, date: str, fast: int = 3, slow: int = 10, use_adjusted: bool = True) -> Optional[float]:
@@ -1384,7 +1384,7 @@ class StockApi:
         Returns:
             ADOSC值，若数据不足返回None
         """
-        self.file_logger.write(f"get_adosc(code={code!r}, date={date!r}, fast={fast!r}, slow={slow!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_adosc(code={code!r}, date={date!r}, fast={fast!r}, slow={slow!r}, use_adjusted={use_adjusted!r})")
         return get_adosc(code, date, fast, slow, use_adjusted)
 
     def get_mfi(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
@@ -1399,7 +1399,7 @@ class StockApi:
         Returns:
             MFI值(0-100)，若数据不足返回None
         """
-        self.file_logger.write(f"get_mfi(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_mfi(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_mfi(code, date, period, use_adjusted)
 
     def get_cmo(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
@@ -1414,7 +1414,7 @@ class StockApi:
         Returns:
             CMO值(-100 to 100)，若数据不足返回None
         """
-        self.file_logger.write(f"get_cmo(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_cmo(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_cmo(code, date, period, use_adjusted)
 
     def get_rocp(self, code: str, date: str, period: int = 10, use_adjusted: bool = True) -> Optional[float]:
@@ -1429,7 +1429,7 @@ class StockApi:
         Returns:
             ROCP值，若数据不足返回None
         """
-        self.file_logger.write(f"get_rocp(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_rocp(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_rocp(code, date, period, use_adjusted)
 
     def get_rocr(self, code: str, date: str, period: int = 10, use_adjusted: bool = True) -> Optional[float]:
@@ -1444,7 +1444,7 @@ class StockApi:
         Returns:
             ROCR值，若数据不足返回None
         """
-        self.file_logger.write(f"get_rocr(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_rocr(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_rocr(code, date, period, use_adjusted)
 
     def get_aroon(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
@@ -1459,7 +1459,7 @@ class StockApi:
         Returns:
             字典 {'up': AROON_UP, 'down': AROON_DOWN, 'osc': AROON_OSC}，若数据不足返回None
         """
-        self.file_logger.write(f"get_aroon(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_aroon(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_aroon(code, date, period, use_adjusted)
 
     def get_ultosc(self, code: str, date: str, period1: int = 7, period2: int = 14, period3: int = 28, use_adjusted: bool = True) -> Optional[float]:
@@ -1476,7 +1476,7 @@ class StockApi:
         Returns:
             ULTOSC值(0-100)，若数据不足返回None
         """
-        self.file_logger.write(f"get_ultosc(code={code!r}, date={date!r}, period1={period1!r}, period2={period2!r}, period3={period3!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_ultosc(code={code!r}, date={date!r}, period1={period1!r}, period2={period2!r}, period3={period3!r}, use_adjusted={use_adjusted!r})")
         return get_ultosc(code, date, period1, period2, period3, use_adjusted)
 
     def get_dema(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
@@ -1491,7 +1491,7 @@ class StockApi:
         Returns:
             DEMA值，若数据不足返回None
         """
-        self.file_logger.write(f"get_dema(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_dema(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_dema(code, date, period, use_adjusted)
 
     def get_kama(self, code: str, date: str, period: int = 10, use_adjusted: bool = True) -> Optional[float]:
@@ -1506,7 +1506,7 @@ class StockApi:
         Returns:
             KAMA值，若数据不足返回None
         """
-        self.file_logger.write(f"get_kama(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_kama(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_kama(code, date, period, use_adjusted)
 
     def get_midpoint(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
@@ -1521,7 +1521,7 @@ class StockApi:
         Returns:
             MIDPOINT值，若数据不足返回None
         """
-        self.file_logger.write(f"get_midpoint(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_midpoint(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_midpoint(code, date, period, use_adjusted)
 
     def get_midprice(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
@@ -1536,7 +1536,7 @@ class StockApi:
         Returns:
             MIDPRICE值，若数据不足返回None
         """
-        self.file_logger.write(f"get_midprice(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_midprice(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_midprice(code, date, period, use_adjusted)
 
     def get_pvi(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
@@ -1551,7 +1551,7 @@ class StockApi:
         Returns:
             PVI值，若数据不足返回None
         """
-        self.file_logger.write(f"get_pvi(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_pvi(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_pvi(code, date, period, use_adjusted)
 
     def get_nvi(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
@@ -1566,7 +1566,7 @@ class StockApi:
         Returns:
             NVI值，若数据不足返回None
         """
-        self.file_logger.write(f"get_nvi(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_nvi(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_nvi(code, date, period, use_adjusted)
 
     def get_ppo(self, code: str, date: str, fast: int = 12, slow: int = 26, signal: int = 9, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
@@ -1583,7 +1583,7 @@ class StockApi:
         Returns:
             字典 {'ppo': PPO线, 'signal': 信号线, 'histogram': 柱状图}，若数据不足返回None
         """
-        self.file_logger.write(f"get_ppo(code={code!r}, date={date!r}, fast={fast!r}, slow={slow!r}, signal={signal!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_ppo(code={code!r}, date={date!r}, fast={fast!r}, slow={slow!r}, signal={signal!r}, use_adjusted={use_adjusted!r})")
         return get_ppo(code, date, fast, slow, signal, use_adjusted)
 
     def get_roc_r(self, code: str, date: str, period: int = 10, use_adjusted: bool = True) -> Optional[float]:
@@ -1598,7 +1598,7 @@ class StockApi:
         Returns:
             ROC_R值，若数据不足返回None
         """
-        self.file_logger.write(f"get_roc_r(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_roc_r(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_roc_r(code, date, period, use_adjusted)
 
     def get_stoch(self, code: str, date: str, fastk_period: int = 14, slowk_period: int = 3, slowd_period: int = 3, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
@@ -1615,7 +1615,7 @@ class StockApi:
         Returns:
             字典 {'slowk': 慢速K, 'slowd': 慢速D}，若数据不足返回None
         """
-        self.file_logger.write(f"get_stoch(code={code!r}, date={date!r}, fastk_period={fastk_period!r}, slowk_period={slowk_period!r}, slowd_period={slowd_period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_stoch(code={code!r}, date={date!r}, fastk_period={fastk_period!r}, slowk_period={slowk_period!r}, slowd_period={slowd_period!r}, use_adjusted={use_adjusted!r})")
         return get_stoch(code, date, fastk_period, slowk_period, slowd_period, use_adjusted)
 
     def get_stochf(self, code: str, date: str, fastk_period: int = 14, fastd_period: int = 3, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
@@ -1631,7 +1631,7 @@ class StockApi:
         Returns:
             字典 {'fastk': 快速K, 'fastd': 快速D}，若数据不足返回None
         """
-        self.file_logger.write(f"get_stochf(code={code!r}, date={date!r}, fastk_period={fastk_period!r}, fastd_period={fastd_period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_stochf(code={code!r}, date={date!r}, fastk_period={fastk_period!r}, fastd_period={fastd_period!r}, use_adjusted={use_adjusted!r})")
         return get_stochf(code, date, fastk_period, fastd_period, use_adjusted)
 
     def get_stochrsi(self, code: str, date: str, rsi_period: int = 14, stoch_period: int = 14, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
@@ -1647,7 +1647,7 @@ class StockApi:
         Returns:
             字典 {'fastk': K, 'fastd': D}，若数据不足返回None
         """
-        self.file_logger.write(f"get_stochrsi(code={code!r}, date={date!r}, rsi_period={rsi_period!r}, stoch_period={stoch_period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_stochrsi(code={code!r}, date={date!r}, rsi_period={rsi_period!r}, stoch_period={stoch_period!r}, use_adjusted={use_adjusted!r})")
         return get_stochrsi(code, date, rsi_period, stoch_period, use_adjusted)
 
     def get_trange(self, code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
@@ -1661,7 +1661,7 @@ class StockApi:
         Returns:
             TRANGE值，若数据不足返回None
         """
-        self.file_logger.write(f"get_trange(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_trange(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
         return get_trange(code, date, use_adjusted)
 
     def get_ma_channel(self, code: str, date: str, period: int = 20, multiplier: float = 2.0, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
@@ -1677,7 +1677,7 @@ class StockApi:
         Returns:
             字典 {'upper': 上轨, 'middle': 中轨, 'lower': 下轨}，若数据不足返回None
         """
-        self.file_logger.write(f"get_ma_channel(code={code!r}, date={date!r}, period={period!r}, multiplier={multiplier!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_ma_channel(code={code!r}, date={date!r}, period={period!r}, multiplier={multiplier!r}, use_adjusted={use_adjusted!r})")
         return get_ma_channel(code, date, period, multiplier, use_adjusted)
 
     def get_donchian(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
@@ -1692,7 +1692,7 @@ class StockApi:
         Returns:
             字典 {'upper': 上轨, 'middle': 中轨, 'lower': 下轨}，若数据不足返回None
         """
-        self.file_logger.write(f"get_donchian(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_donchian(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_donchian(code, date, period, use_adjusted)
 
     def get_keltner(self, code: str, date: str, ma_period: int = 20, atr_period: int = 10, multiplier: float = 2.0, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
@@ -1709,7 +1709,7 @@ class StockApi:
         Returns:
             字典 {'upper': 上轨, 'middle': 中轨, 'lower': 下轨}，若数据不足返回None
         """
-        self.file_logger.write(f"get_keltner(code={code!r}, date={date!r}, ma_period={ma_period!r}, atr_period={atr_period!r}, multiplier={multiplier!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_keltner(code={code!r}, date={date!r}, ma_period={ma_period!r}, atr_period={atr_period!r}, multiplier={multiplier!r}, use_adjusted={use_adjusted!r})")
         return get_keltner(code, date, ma_period, atr_period, multiplier, use_adjusted)
 
     def get_bbands_width(self, code: str, date: str, period: int = 20, std_dev: int = 2, use_adjusted: bool = True) -> Optional[float]:
@@ -1725,7 +1725,7 @@ class StockApi:
         Returns:
             BBANDS_WIDTH值(%)，若数据不足返回None
         """
-        self.file_logger.write(f"get_bbands_width(code={code!r}, date={date!r}, period={period!r}, std_dev={std_dev!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_bbands_width(code={code!r}, date={date!r}, period={period!r}, std_dev={std_dev!r}, use_adjusted={use_adjusted!r})")
         return get_bbands_width(code, date, period, std_dev, use_adjusted)
 
     def get_bbands_pct(self, code: str, date: str, period: int = 20, std_dev: int = 2, use_adjusted: bool = True) -> Optional[float]:
@@ -1741,7 +1741,7 @@ class StockApi:
         Returns:
             BBANDS_PCT值(0-1)，若数据不足返回None
         """
-        self.file_logger.write(f"get_bbands_pct(code={code!r}, date={date!r}, period={period!r}, std_dev={std_dev!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_bbands_pct(code={code!r}, date={date!r}, period={period!r}, std_dev={std_dev!r}, use_adjusted={use_adjusted!r})")
         return get_bbands_pct(code, date, period, std_dev, use_adjusted)
 
     def get_linearreg(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
@@ -1756,7 +1756,7 @@ class StockApi:
         Returns:
             LINEARREG值，若数据不足返回None
         """
-        self.file_logger.write(f"get_linearreg(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_linearreg(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_linearreg(code, date, period, use_adjusted)
 
     def get_linearreg_angle(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
@@ -1771,7 +1771,7 @@ class StockApi:
         Returns:
             LINEARREG_ANGLE值，若数据不足返回None
         """
-        self.file_logger.write(f"get_linearreg_angle(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_linearreg_angle(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_linearreg_angle(code, date, period, use_adjusted)
 
     def get_linearreg_intercept(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
@@ -1786,7 +1786,7 @@ class StockApi:
         Returns:
             LINEARREG_INTERCEPT值，若数据不足返回None
         """
-        self.file_logger.write(f"get_linearreg_intercept(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_linearreg_intercept(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_linearreg_intercept(code, date, period, use_adjusted)
 
     def get_linearreg_slope(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
@@ -1801,7 +1801,7 @@ class StockApi:
         Returns:
             LINEARREG_SLOPE值，若数据不足返回None
         """
-        self.file_logger.write(f"get_linearreg_slope(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_linearreg_slope(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_linearreg_slope(code, date, period, use_adjusted)
 
     def get_stddev(self, code: str, date: str, period: int = 20, nbdev: int = 1, use_adjusted: bool = True) -> Optional[float]:
@@ -1817,7 +1817,7 @@ class StockApi:
         Returns:
             STDDEV值，若数据不足返回None
         """
-        self.file_logger.write(f"get_stddev(code={code!r}, date={date!r}, period={period!r}, nbdev={nbdev!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_stddev(code={code!r}, date={date!r}, period={period!r}, nbdev={nbdev!r}, use_adjusted={use_adjusted!r})")
         return get_stddev(code, date, period, nbdev, use_adjusted)
 
     def get_tsf(self, code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[float]:
@@ -1832,7 +1832,7 @@ class StockApi:
         Returns:
             TSF值，若数据不足返回None
         """
-        self.file_logger.write(f"get_tsf(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_tsf(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_tsf(code, date, period, use_adjusted)
 
     def get_var(self, code: str, date: str, period: int = 20, nbdev: int = 1, use_adjusted: bool = True) -> Optional[float]:
@@ -1848,7 +1848,7 @@ class StockApi:
         Returns:
             VAR值，若数据不足返回None
         """
-        self.file_logger.write(f"get_var(code={code!r}, date={date!r}, period={period!r}, nbdev={nbdev!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_var(code={code!r}, date={date!r}, period={period!r}, nbdev={nbdev!r}, use_adjusted={use_adjusted!r})")
         return get_var(code, date, period, nbdev, use_adjusted)
 
     def get_correl(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
@@ -1863,7 +1863,7 @@ class StockApi:
         Returns:
             CORREL值(固定1.0)
         """
-        self.file_logger.write(f"get_correl(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_correl(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_correl(code, date, period, use_adjusted)
 
     def get_beta(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
@@ -1878,7 +1878,7 @@ class StockApi:
         Returns:
             BETA值(固定1.0)
         """
-        self.file_logger.write(f"get_beta(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_beta(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_beta(code, date, period, use_adjusted)
 
     def get_ht_dcperiod(self, code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
@@ -1892,7 +1892,7 @@ class StockApi:
         Returns:
             HT_DCPERIOD值，若数据不足返回None
         """
-        self.file_logger.write(f"get_ht_dcperiod(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_ht_dcperiod(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
         return get_ht_dcperiod(code, date, use_adjusted)
 
     def get_ht_dcphase(self, code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
@@ -1906,7 +1906,7 @@ class StockApi:
         Returns:
             HT_DCPHASE值，若数据不足返回None
         """
-        self.file_logger.write(f"get_ht_dcphase(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_ht_dcphase(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
         return get_ht_dcphase(code, date, use_adjusted)
 
     def get_ht_phasor(self, code: str, date: str, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
@@ -1920,7 +1920,7 @@ class StockApi:
         Returns:
             字典 {'inphase': 同相, 'quadrature': 正交}，若数据不足返回None
         """
-        self.file_logger.write(f"get_ht_phasor(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_ht_phasor(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
         return get_ht_phasor(code, date, use_adjusted)
 
     def get_ht_sine(self, code: str, date: str, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
@@ -1934,7 +1934,7 @@ class StockApi:
         Returns:
             字典 {'sine': 正弦, 'leadsine': 超前正弦}，若数据不足返回None
         """
-        self.file_logger.write(f"get_ht_sine(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_ht_sine(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
         return get_ht_sine(code, date, use_adjusted)
 
     def get_ht_trendmode(self, code: str, date: str, use_adjusted: bool = True) -> Optional[int]:
@@ -1948,7 +1948,7 @@ class StockApi:
         Returns:
             1=趋势, 0=周期，若数据不足返回None
         """
-        self.file_logger.write(f"get_ht_trendmode(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_ht_trendmode(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
         return get_ht_trendmode(code, date, use_adjusted)
 
     def get_typical_price(self, code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
@@ -1962,7 +1962,7 @@ class StockApi:
         Returns:
             典型价格，若数据不足返回None
         """
-        self.file_logger.write(f"get_typical_price(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_typical_price(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
         return get_typical_price(code, date, use_adjusted)
 
     def get_median_price(self, code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
@@ -1976,7 +1976,7 @@ class StockApi:
         Returns:
             中位数价格，若数据不足返回None
         """
-        self.file_logger.write(f"get_median_price(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_median_price(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
         return get_median_price(code, date, use_adjusted)
 
     def get_weighted_close(self, code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
@@ -1990,7 +1990,7 @@ class StockApi:
         Returns:
             加权收盘价，若数据不足返回None
         """
-        self.file_logger.write(f"get_weighted_close(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_weighted_close(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
         return get_weighted_close(code, date, use_adjusted)
 
     def get_avgp(self, code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
@@ -2004,7 +2004,7 @@ class StockApi:
         Returns:
             平均价格，若数据不足返回None
         """
-        self.file_logger.write(f"get_avgp(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_avgp(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
         return get_avgp(code, date, use_adjusted)
 
     def get_asi(self, code: str, date: str, period: int = 26, use_adjusted: bool = True) -> Optional[float]:
@@ -2026,7 +2026,7 @@ class StockApi:
         Example:
             asi = api.get_asi('600519.SH', '2026-03-01', 26)
         """
-        self.file_logger.write(f"get_asi(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_asi(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_asi(code, date, period, use_adjusted)
 
     def get_vr(self, code: str, date: str, period: int = 26, use_adjusted: bool = True) -> Optional[float]:
@@ -2048,7 +2048,7 @@ class StockApi:
         Example:
             vr = api.get_vr('600519.SH', '2026-03-01', 26)
         """
-        self.file_logger.write(f"get_vr(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_vr(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_vr(code, date, period, use_adjusted)
 
     def get_ar(self, code: str, date: str, period: int = 26, use_adjusted: bool = True) -> Optional[float]:
@@ -2070,7 +2070,7 @@ class StockApi:
         Example:
             ar = api.get_ar('600519.SH', '2026-03-01', 26)
         """
-        self.file_logger.write(f"get_ar(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_ar(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_ar(code, date, period, use_adjusted)
 
     def get_br(self, code: str, date: str, period: int = 26, use_adjusted: bool = True) -> Optional[float]:
@@ -2092,7 +2092,7 @@ class StockApi:
         Example:
             br = api.get_br('600519.SH', '2026-03-01', 26)
         """
-        self.file_logger.write(f"get_br(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_br(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_br(code, date, period, use_adjusted)
 
     def get_brar(self, code: str, date: str, period: int = 26, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
@@ -2116,7 +2116,7 @@ class StockApi:
             brar = api.get_brar('600519.SH', '2026-03-01', 26)
             ar, br = brar['ar'], brar['br']
         """
-        self.file_logger.write(f"get_brar(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_brar(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_brar(code, date, period, use_adjusted)
 
     def get_dpo(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
@@ -2138,7 +2138,7 @@ class StockApi:
         Example:
             dpo = api.get_dpo('600519.SH', '2026-03-01', 20)
         """
-        self.file_logger.write(f"get_dpo(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_dpo(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_dpo(code, date, period, use_adjusted)
 
     def get_bbi(self, code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
@@ -2159,7 +2159,7 @@ class StockApi:
         Example:
             bbi = api.get_bbi('600519.SH', '2026-03-01')
         """
-        self.file_logger.write(f"get_bbi(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_bbi(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
         return get_bbi(code, date, use_adjusted)
 
     def get_mass(self, code: str, date: str, period: int = 25, use_adjusted: bool = True) -> Optional[float]:
@@ -2183,7 +2183,7 @@ class StockApi:
         Example:
             mass = api.get_mass('600519.SH', '2026-03-01', 9, 25)
         """
-        self.file_logger.write(f"get_mass(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_mass(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_mass(code, date, period, use_adjusted)
 
     def get_xue_channel(self, code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
@@ -2206,7 +2206,7 @@ class StockApi:
             ch = api.get_xue_channel('600519.SH', '2026-03-01', 20)
             upper, middle, lower = ch['upper'], ch['middle'], ch['lower']
         """
-        self.file_logger.write(f"get_xue_channel(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_xue_channel(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_xue_channel(code, date, period, use_adjusted)
 
     def get_consecutive_rise(self, code: str, date: str, use_adjusted: bool = True) -> Optional[int]:
@@ -2227,7 +2227,7 @@ class StockApi:
         Example:
             n = api.get_consecutive_rise('600519.SH', '2026-03-01')
         """
-        self.file_logger.write(f"get_consecutive_rise(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_consecutive_rise(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
         return get_consecutive_rise(code, date, use_adjusted)
 
     def get_consecutive_fall(self, code: str, date: str, use_adjusted: bool = True) -> Optional[int]:
@@ -2248,7 +2248,7 @@ class StockApi:
         Example:
             n = api.get_consecutive_fall('600519.SH', '2026-03-01')
         """
-        self.file_logger.write(f"get_consecutive_fall(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_consecutive_fall(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
         return get_consecutive_fall(code, date, use_adjusted)
 
     def get_bomb_board(self, code: str, date: str) -> Optional[int]:
@@ -2270,7 +2270,7 @@ class StockApi:
         Example:
             is_bomb = api.get_bomb_board('000001.SZ', '2026-03-01')
         """
-        self.file_logger.write(f"get_bomb_board(code={code!r}, date={date!r})")
+        self.track_logger.write(f"get_bomb_board(code={code!r}, date={date!r})")
         return get_bomb_board(code, date)
 
     def get_bomb_board_count(self, code: str, date: str, period: int = 20) -> Optional[int]:
@@ -2293,7 +2293,7 @@ class StockApi:
         Example:
             cnt = api.get_bomb_board_count('000001.SZ', '2026-03-01', 20)
         """
-        self.file_logger.write(f"get_bomb_board_count(code={code!r}, date={date!r}, period={period!r})")
+        self.track_logger.write(f"get_bomb_board_count(code={code!r}, date={date!r}, period={period!r})")
         return get_bomb_board_count(code, date, period)
 
     def get_consecutive_limit_up(self, code: str, date: str) -> Optional[int]:
@@ -2315,7 +2315,7 @@ class StockApi:
         Example:
             streak = api.get_consecutive_limit_up('000001.SZ', '2026-03-01')
         """
-        self.file_logger.write(f"get_consecutive_limit_up(code={code!r}, date={date!r})")
+        self.track_logger.write(f"get_consecutive_limit_up(code={code!r}, date={date!r})")
         return get_consecutive_limit_up(code, date)
 
     # ============================================================
@@ -2342,7 +2342,7 @@ class StockApi:
         Example:
             signal = api.get_morning_star('600519.SH', '2026-03-01')
         """
-        self.file_logger.write(f"get_morning_star(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_morning_star(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
         return get_morning_star(code, date, use_adjusted)
 
     def get_qiming_star(self, code: str, date: str, use_adjusted: bool = True) -> Optional[int]:
@@ -2363,7 +2363,7 @@ class StockApi:
         Example:
             signal = api.get_qiming_star('600519.SH', '2026-03-01')
         """
-        self.file_logger.write(f"get_qiming_star(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_qiming_star(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
         return get_qiming_star(code, date, use_adjusted)
 
     def get_evening_star(self, code: str, date: str, use_adjusted: bool = True) -> Optional[int]:
@@ -2386,7 +2386,7 @@ class StockApi:
         Example:
             signal = api.get_evening_star('600519.SH', '2026-03-01')
         """
-        self.file_logger.write(f"get_evening_star(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_evening_star(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
         return get_evening_star(code, date, use_adjusted)
 
     def get_huanghun_star(self, code: str, date: str, use_adjusted: bool = True) -> Optional[int]:
@@ -2407,7 +2407,7 @@ class StockApi:
         Example:
             signal = api.get_huanghun_star('600519.SH', '2026-03-01')
         """
-        self.file_logger.write(f"get_huanghun_star(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_huanghun_star(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
         return get_huanghun_star(code, date, use_adjusted)
 
     def get_three_white_soldiers(self, code: str, date: str, use_adjusted: bool = True) -> Optional[int]:
@@ -2430,7 +2430,7 @@ class StockApi:
         Example:
             signal = api.get_three_white_soldiers('600519.SH', '2026-03-01')
         """
-        self.file_logger.write(f"get_three_white_soldiers(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_three_white_soldiers(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
         return get_three_white_soldiers(code, date, use_adjusted)
 
     def get_three_black_crows(self, code: str, date: str, use_adjusted: bool = True) -> Optional[int]:
@@ -2453,7 +2453,7 @@ class StockApi:
         Example:
             signal = api.get_three_black_crows('600519.SH', '2026-03-01')
         """
-        self.file_logger.write(f"get_three_black_crows(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_three_black_crows(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
         return get_three_black_crows(code, date, use_adjusted)
 
     def get_dark_cloud_cover(self, code: str, date: str, use_adjusted: bool = True) -> Optional[int]:
@@ -2476,7 +2476,7 @@ class StockApi:
         Example:
             signal = api.get_dark_cloud_cover('600519.SH', '2026-03-01')
         """
-        self.file_logger.write(f"get_dark_cloud_cover(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_dark_cloud_cover(code={code!r}, date={date!r}, use_adjusted={use_adjusted!r})")
         return get_dark_cloud_cover(code, date, use_adjusted)
 
     def get_rounding_bottom(self, code: str, date: str, period: int = 60, use_adjusted: bool = True) -> Optional[int]:
@@ -2500,7 +2500,7 @@ class StockApi:
         Example:
             signal = api.get_rounding_bottom('600519.SH', '2026-03-01', 60)
         """
-        self.file_logger.write(f"get_rounding_bottom(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_rounding_bottom(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_rounding_bottom(code, date, period, use_adjusted)
 
     def get_ascending_triangle(self, code: str, date: str, period: int = 30, use_adjusted: bool = True) -> Optional[int]:
@@ -2524,7 +2524,7 @@ class StockApi:
         Example:
             signal = api.get_ascending_triangle('600519.SH', '2026-03-01', 30)
         """
-        self.file_logger.write(f"get_ascending_triangle(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_ascending_triangle(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_ascending_triangle(code, date, period, use_adjusted)
 
     def get_top_pattern(self, code: str, date: str, period: int = 60, use_adjusted: bool = True) -> Optional[int]:
@@ -2548,7 +2548,7 @@ class StockApi:
         Example:
             signal = api.get_top_pattern('600519.SH', '2026-03-01', 60)
         """
-        self.file_logger.write(f"get_top_pattern(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_top_pattern(code={code!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r})")
         return get_top_pattern(code, date, period, use_adjusted)
 
     # ============================================================
@@ -2579,7 +2579,7 @@ class StockApi:
             chip = api.get_stocks_by_industry_keyword('半导体')
             kechuang = api.get_stocks_by_industry_keyword('半导体', market='科创板')
         """
-        self.file_logger.write(f"get_stocks_by_industry_keyword(keyword={keyword!r}, market={market!r}, limit={limit!r})")
+        self.track_logger.write(f"get_stocks_by_industry_keyword(keyword={keyword!r}, market={market!r}, limit={limit!r})")
         return query_stock_basic(industry_keyword=keyword, market=market, limit=limit)
 
     def get_latest_income(self, code: str) -> Optional[Income]:
@@ -2599,7 +2599,7 @@ class StockApi:
             inc = api.get_latest_income('600519.SH')
             print(f"ROE={inc.roe:.2f}%  毛利率={inc.gross_margin:.2f}%")
         """
-        self.file_logger.write(f"get_latest_income(code={code!r})")
+        self.track_logger.write(f"get_latest_income(code={code!r})")
         records = query_income(ts_codes=[code], report_type="1",
                                order_by="end_date DESC", limit=1)
         return records[0] if records else None
@@ -2640,7 +2640,7 @@ class StockApi:
             for r in results:
                 print(r['ts_code'], r['pe_ttm'], r['total_mv_yi'], r.get('roe'))
         """
-        self.file_logger.write(f"filter_stocks_by_fundamentals(date={date!r}, pe_ttm_max={pe_ttm_max!r}, roe_min={roe_min!r}, mv_min_yi={mv_min_yi!r}, top_n={top_n!r}, order_by={order_by!r})")
+        self.track_logger.write(f"filter_stocks_by_fundamentals(date={date!r}, pe_ttm_max={pe_ttm_max!r}, roe_min={roe_min!r}, mv_min_yi={mv_min_yi!r}, top_n={top_n!r}, order_by={order_by!r})")
         # ── Step 1: 全市场当日基本面快照 ───────────────────────────────────
         basics = query_daily_basic(trade_date=date)
         if not basics:
@@ -2733,7 +2733,7 @@ class StockApi:
 
             hits = api.scan_all_signals('ROUNDING_BOTTOM', '2026-03-14', period=60)
         """
-        self.file_logger.write(f"scan_all_signals(signal_type={signal_type!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r}, codes={codes!r})")
+        self.track_logger.write(f"scan_all_signals(signal_type={signal_type!r}, date={date!r}, period={period!r}, use_adjusted={use_adjusted!r}, codes={codes!r})")
         _DISPATCH: Dict[str, any] = {
             'MORNING_STAR':        lambda c: get_morning_star(c, date, use_adjusted),
             'QIMING_STAR':         lambda c: get_qiming_star(c, date, use_adjusted),
@@ -2780,7 +2780,7 @@ class StockApi:
             ret = api.get_period_return('600519.SH', '2026-01-01', '2026-03-14')
             print(f"贵州茅台近3个月收益率: {ret:.2f}%")
         """
-        self.file_logger.write(f"get_period_return(code={code!r}, start_date={start_date!r}, end_date={end_date!r}, use_adjusted={use_adjusted!r})")
+        self.track_logger.write(f"get_period_return(code={code!r}, start_date={start_date!r}, end_date={end_date!r}, use_adjusted={use_adjusted!r})")
         klines = query_daily_kline(
             codes=[code], start_date=start_date, end_date=end_date,
             order_by="date ASC",
@@ -2825,7 +2825,7 @@ class StockApi:
             dd, peak_idx, drawdown_idx = api.get_max_drawdown([1000000, 1100000, 950000])
             print(f'最大回撤: {dd:.2%}')
         """
-        self.file_logger.write(f"get_max_drawdown(equity_curve={equity_curve!r})")
+        self.track_logger.write(f"get_max_drawdown(equity_curve={equity_curve!r})")
         return get_max_drawdown(equity_curve)
 
     def get_max_drawdown_pct(self, equity_curve: List[float]) -> float:
@@ -2838,7 +2838,7 @@ class StockApi:
         Returns:
             最大回撤比例，如 0.15 表示 15%
         """
-        self.file_logger.write(f"get_max_drawdown_pct(equity_curve={equity_curve!r})")
+        self.track_logger.write(f"get_max_drawdown_pct(equity_curve={equity_curve!r})")
         return get_max_drawdown_pct(equity_curve)
 
     def get_annualized_return(self, total_return: float, days: int) -> float:
@@ -2855,7 +2855,7 @@ class StockApi:
         Example:
             annualized = api.get_annualized_return(0.15, 60)
         """
-        self.file_logger.write(f"get_annualized_return(total_return={total_return!r}, days={days!r})")
+        self.track_logger.write(f"get_annualized_return(total_return={total_return!r}, days={days!r})")
         return get_annualized_return(total_return, days)
 
     def get_total_return(self, initial_value: float, final_value: float) -> float:
@@ -2869,7 +2869,7 @@ class StockApi:
         Returns:
             总收益率
         """
-        self.file_logger.write(f"get_total_return(initial_value={initial_value!r}, final_value={final_value!r})")
+        self.track_logger.write(f"get_total_return(initial_value={initial_value!r}, final_value={final_value!r})")
         return get_total_return(initial_value, final_value)
 
     def get_sharpe_ratio(self, equity_curve: List[float], risk_free_rate: float = 0.03) -> float:
@@ -2886,7 +2886,7 @@ class StockApi:
         Example:
             sharpe = api.get_sharpe_ratio([1000000, 1050000, 1020000])
         """
-        self.file_logger.write(f"get_sharpe_ratio(equity_curve={equity_curve!r}, risk_free_rate={risk_free_rate!r})")
+        self.track_logger.write(f"get_sharpe_ratio(equity_curve={equity_curve!r}, risk_free_rate={risk_free_rate!r})")
         return get_sharpe_ratio(equity_curve, risk_free_rate)
 
     def get_win_rate(self, trades: List[Dict]) -> float:
@@ -2903,7 +2903,7 @@ class StockApi:
             trades = [{'profit': 1000}, {'profit': -500}, {'profit': 800}]
             win_rate = api.get_win_rate(trades)
         """
-        self.file_logger.write(f"get_win_rate(trades={trades!r})")
+        self.track_logger.write(f"get_win_rate(trades={trades!r})")
         return get_win_rate(trades)
 
     def get_profit_loss_ratio(self, trades: List[Dict]) -> float:
@@ -2916,7 +2916,7 @@ class StockApi:
         Returns:
             盈亏比（平均盈利/平均亏损）
         """
-        self.file_logger.write(f"get_profit_loss_ratio(trades={trades!r})")
+        self.track_logger.write(f"get_profit_loss_ratio(trades={trades!r})")
         return get_profit_loss_ratio(trades)
 
     def get_calmar_ratio(self, equity_curve: List[float], days: int) -> float:
@@ -2930,7 +2930,7 @@ class StockApi:
         Returns:
             卡尔玛比率
         """
-        self.file_logger.write(f"get_calmar_ratio(equity_curve={equity_curve!r}, days={days!r})")
+        self.track_logger.write(f"get_calmar_ratio(equity_curve={equity_curve!r}, days={days!r})")
         return get_calmar_ratio(equity_curve, days)
 
     def get_volatility(self, equity_curve: List[float]) -> float:
@@ -2943,7 +2943,7 @@ class StockApi:
         Returns:
             年化波动率
         """
-        self.file_logger.write(f"get_volatility(equity_curve={equity_curve!r})")
+        self.track_logger.write(f"get_volatility(equity_curve={equity_curve!r})")
         return get_volatility(equity_curve)
 
     def get_trade_stats(self, trades: List[Dict]) -> Dict:
@@ -2965,7 +2965,7 @@ class StockApi:
             - avg_profit: 平均盈利
             - avg_loss: 平均亏损
         """
-        self.file_logger.write(f"get_trade_stats(trades={trades!r})")
+        self.track_logger.write(f"get_trade_stats(trades={trades!r})")
         return get_trade_stats(trades)
 
     def calculate_metrics(self, equity_curve: List[float], trades: List[Dict], initial_cash: float, days: int) -> Dict:
@@ -3001,7 +3001,7 @@ class StockApi:
             print(f"收益率: {report['total_return_pct']:.2f}%")
             print(f"夏普比率: {report['sharpe_ratio']:.2f}")
         """
-        self.file_logger.write(f"calculate_metrics(equity_curve={equity_curve!r}, trades={trades!r}, initial_cash={initial_cash!r}, days={days!r})")
+        self.track_logger.write(f"calculate_metrics(equity_curve={equity_curve!r}, trades={trades!r}, initial_cash={initial_cash!r}, days={days!r})")
         return generate_report(equity_curve, trades, initial_cash, days)
 
     # ============================================================
@@ -3025,7 +3025,7 @@ class StockApi:
             result = api.simulate_trade('BUY', 100.0, 100)
             print(f"成本: {result['cost']}, 手续费: {result['fee']}")
         """
-        self.file_logger.write(f"simulate_trade(action={action!r}, price={price!r}, quantity={quantity!r}, fee_rate={fee_rate!r})")
+        self.track_logger.write(f"simulate_trade(action={action!r}, price={price!r}, quantity={quantity!r}, fee_rate={fee_rate!r})")
         return simulate_trade(action, price, quantity, fee_rate)
 
     def calculate_trade_cost(self, action: str, price: float, quantity: int, fee_rate: float = 0.0003, slippage: float = 0.0) -> float:
@@ -3042,7 +3042,7 @@ class StockApi:
         Returns:
             交易成本
         """
-        self.file_logger.write(f"calculate_trade_cost(action={action!r}, price={price!r}, quantity={quantity!r}, fee_rate={fee_rate!r}, slippage={slippage!r})")
+        self.track_logger.write(f"calculate_trade_cost(action={action!r}, price={price!r}, quantity={quantity!r}, fee_rate={fee_rate!r}, slippage={slippage!r})")
         return calculate_trade_cost(action, price, quantity, fee_rate, slippage)
 
     def create_position(self, code: str, shares: int, price: float, date: str) -> Position:
@@ -3061,7 +3061,7 @@ class StockApi:
         Example:
             pos = api.create_position('600519.SH', 100, 1800.0, '2026-01-01')
         """
-        self.file_logger.write(f"create_position(code={code!r}, shares={shares!r}, price={price!r}, date={date!r})")
+        self.track_logger.write(f"create_position(code={code!r}, shares={shares!r}, price={price!r}, date={date!r})")
         return create_position(code, shares, price, date)
 
     def get_position_value(self, position: Position, current_price: float) -> float:
@@ -3075,7 +3075,7 @@ class StockApi:
         Returns:
             市值
         """
-        self.file_logger.write(f"get_position_value(position={position!r}, current_price={current_price!r})")
+        self.track_logger.write(f"get_position_value(position={position!r}, current_price={current_price!r})")
         return get_position_value(position, current_price)
 
     def get_position_profit(self, position: Position, current_price: float) -> tuple:
@@ -3093,7 +3093,7 @@ class StockApi:
             profit, pct = api.get_position_profit(position, 2000.0)
             print(f"盈利: {profit}, 比例: {pct:.2%}")
         """
-        self.file_logger.write(f"get_position_profit(position={position!r}, current_price={current_price!r})")
+        self.track_logger.write(f"get_position_profit(position={position!r}, current_price={current_price!r})")
         return get_position_profit(position, current_price)
 
     def calculate_portfolio_value(self, cash: float, positions: Dict[str, Position], prices: Dict[str, float]) -> float:
@@ -3111,7 +3111,7 @@ class StockApi:
         Example:
             value = api.calculate_portfolio_value(500000, positions, current_prices)
         """
-        self.file_logger.write(f"calculate_portfolio_value(cash={cash!r}, positions={positions!r}, Position={Position!r}, prices={prices!r}, float={float!r})")
+        self.track_logger.write(f"calculate_portfolio_value(cash={cash!r}, positions={positions!r}, Position={Position!r}, prices={prices!r}, float={float!r})")
         return calculate_portfolio_value(cash, positions, prices)
 
     def get_portfolio_positions(self, positions: Dict[str, Position]) -> List[Dict]:
@@ -3124,7 +3124,7 @@ class StockApi:
         Returns:
             持仓详情列表
         """
-        self.file_logger.write(f"get_portfolio_positions(positions={positions!r}, Position]={Position!r})")
+        self.track_logger.write(f"get_portfolio_positions(positions={positions!r}, Position]={Position!r})")
         return get_portfolio_positions(positions)
 
     def build_equity_curve(self, daily_values: List[tuple]) -> List[float]:
@@ -3141,7 +3141,7 @@ class StockApi:
             values = [('2026-01-01', 1000000), ('2026-01-02', 1005000)]
             curve = api.build_equity_curve(values)
         """
-        self.file_logger.write(f"build_equity_curve(daily_values={daily_values!r})")
+        self.track_logger.write(f"build_equity_curve(daily_values={daily_values!r})")
         return build_equity_curve(daily_values)
 
     def calculate_daily_returns(self, equity_curve: List[float]) -> List[float]:
@@ -3154,7 +3154,7 @@ class StockApi:
         Returns:
             日收益率列表
         """
-        self.file_logger.write(f"calculate_daily_returns(equity_curve={equity_curve!r})")
+        self.track_logger.write(f"calculate_daily_returns(equity_curve={equity_curve!r})")
         return calculate_daily_returns(equity_curve)
 
     def should_buy(self, current_price: float, ma_short: float, ma_long: float, rsi: float = 50, rsi_oversold: float = 30) -> bool:
@@ -3175,7 +3175,7 @@ class StockApi:
             if api.should_buy(close, ma5, ma20, rsi, 30):
                 print('买入信号')
         """
-        self.file_logger.write(f"should_buy(current_price={current_price!r}, ma_short={ma_short!r}, ma_long={ma_long!r}, rsi={rsi!r}, rsi_oversold={rsi_oversold!r})")
+        self.track_logger.write(f"should_buy(current_price={current_price!r}, ma_short={ma_short!r}, ma_long={ma_long!r}, rsi={rsi!r}, rsi_oversold={rsi_oversold!r})")
         return should_buy(current_price, ma_short, ma_long, rsi, rsi_oversold)
 
     def should_sell(self, current_price: float, ma_short: float, ma_long: float, rsi: float = 50, rsi_overbought: float = 70) -> bool:
@@ -3196,7 +3196,7 @@ class StockApi:
             if api.should_sell(close, ma5, ma20, rsi, 70):
                 print('卖出信号')
         """
-        self.file_logger.write(f"should_sell(current_price={current_price!r}, ma_short={ma_short!r}, ma_long={ma_long!r}, rsi={rsi!r}, rsi_overbought={rsi_overbought!r})")
+        self.track_logger.write(f"should_sell(current_price={current_price!r}, ma_short={ma_short!r}, ma_long={ma_long!r}, rsi={rsi!r}, rsi_overbought={rsi_overbought!r})")
         return should_sell(current_price, ma_short, ma_long, rsi, rsi_overbought)
 
     def calculate_drawdown(self, equity_curve: List[float]) -> List[float]:
@@ -3212,7 +3212,7 @@ class StockApi:
         Example:
             drawdowns = api.calculate_drawdown([1000000, 1100000, 950000])
         """
-        self.file_logger.write(f"calculate_drawdown(equity_curve={equity_curve!r})")
+        self.track_logger.write(f"calculate_drawdown(equity_curve={equity_curve!r})")
         return calculate_drawdown(equity_curve)
 
     # ============================================================
@@ -3241,7 +3241,7 @@ class StockApi:
         Example:
             tick = api.get_tick_data('600519.SH', '2026-03-01')
         """
-        self.file_logger.write(f"get_tick_data(code={code!r}, date={date!r})")
+        self.track_logger.write(f"get_tick_data(code={code!r}, date={date!r})")
         klines = query_daily_kline(codes=[code], start_date=date, end_date=date, order_by="date ASC")
         if not klines:
             return None
@@ -3270,7 +3270,7 @@ class StockApi:
         Example:
             bar = api.get_realtime_bar('600519.SH', '2026-03-01')
         """
-        self.file_logger.write(f"get_realtime_bar(code={code!r}, date={date!r})")
+        self.track_logger.write(f"get_realtime_bar(code={code!r}, date={date!r})")
         return self.get_tick_data(code, date)
 
     # ============================================================
@@ -3300,7 +3300,7 @@ class StockApi:
         Example:
             order = api.create_order('600519.SH', 'BUY', 1800.0, 100)
         """
-        self.file_logger.write(f"create_order(code={code!r}, action={action!r}, price={price!r}, quantity={quantity!r})")
+        self.track_logger.write(f"create_order(code={code!r}, action={action!r}, price={price!r}, quantity={quantity!r})")
         import time
         return {
             'order_id': f"ORDER_{int(time.time()*1000)}",
@@ -3325,7 +3325,7 @@ class StockApi:
         Example:
             api.cancel_order(order)
         """
-        self.file_logger.write(f"cancel_order(order={order!r})")
+        self.track_logger.write(f"cancel_order(order={order!r})")
         if order.get('status') == 'PENDING':
             order['status'] = 'CANCELLED'
             return True
@@ -3344,7 +3344,7 @@ class StockApi:
         Example:
             status = api.get_order_status(order)
         """
-        self.file_logger.write(f"get_order_status(order={order!r})")
+        self.track_logger.write(f"get_order_status(order={order!r})")
         return order.get('status', 'UNKNOWN')
 
 
@@ -3368,7 +3368,7 @@ class StockApi:
             result = api.close_position(position, 1900.0, '2026-01-15')
             print(f"盈利: {result['profit']}")
         """
-        self.file_logger.write(f"close_position(position={position!r}, price={price!r}, date={date!r})")
+        self.track_logger.write(f"close_position(position={position!r}, price={price!r}, date={date!r})")
         profit, profit_pct = get_position_profit(position, price)
         hold_days = (date_to_num(date) - date_to_num(position.entry_date))
         return {
@@ -3385,7 +3385,7 @@ class StockApi:
             position: Position对象
             current_price: 当前价格
         """
-        self.file_logger.write(f"update_position_price(position={position!r}, current_price={current_price!r})")
+        self.track_logger.write(f"update_position_price(position={position!r}, current_price={current_price!r})")
         update_position(position, current_price)
 
     # ============================================================
@@ -3406,7 +3406,7 @@ class StockApi:
         Example:
             env = api.init_backtest(1000000, 0.0003)
         """
-        self.file_logger.write(f"init_backtest(initial_cash={initial_cash!r}, fee_rate={fee_rate!r})")
+        self.track_logger.write(f"init_backtest(initial_cash={initial_cash!r}, fee_rate={fee_rate!r})")
         return {
             'initial_cash': initial_cash,
             'fee_rate': fee_rate,
@@ -3431,7 +3431,7 @@ class StockApi:
         Returns:
             执行结果字典
         """
-        self.file_logger.write(f"execute_buy(env={env!r}, code={code!r}, price={price!r}, quantity={quantity!r}, date={date!r})")
+        self.track_logger.write(f"execute_buy(env={env!r}, code={code!r}, price={price!r}, quantity={quantity!r}, date={date!r})")
         fee_rate = env.get('fee_rate', 0.0003)
         new_cash, new_positions, result = buy(
             env['cash'], env['positions'], code, price, quantity, date, fee_rate
@@ -3474,7 +3474,7 @@ class StockApi:
         Returns:
             执行结果字典
         """
-        self.file_logger.write(f"execute_sell(env={env!r}, code={code!r}, price={price!r}, quantity={quantity!r})")
+        self.track_logger.write(f"execute_sell(env={env!r}, code={code!r}, price={price!r}, quantity={quantity!r})")
         fee_rate = env.get('fee_rate', 0.0003)
         new_cash, new_positions, result = sell(
             env['cash'], env['positions'], code, price, quantity, fee_rate
@@ -3517,7 +3517,7 @@ class StockApi:
         Returns:
             总权益
         """
-        self.file_logger.write(f"get_equity(env={env!r}, current_prices={current_prices!r}, float]={float!r})")
+        self.track_logger.write(f"get_equity(env={env!r}, current_prices={current_prices!r}, float]={float!r})")
         return calculate_portfolio_value(env['cash'], env['positions'], current_prices)
 
     def record_equity(self, env: Dict, date: str, current_prices: Dict[str, float]) -> None:
@@ -3529,7 +3529,7 @@ class StockApi:
             date: 日期
             current_prices: 当前价格字典
         """
-        self.file_logger.write(f"record_equity(env={env!r}, date={date!r}, current_prices={current_prices!r}, float]={float!r})")
+        self.track_logger.write(f"record_equity(env={env!r}, date={date!r}, current_prices={current_prices!r}, float]={float!r})")
         equity = self.get_equity(env, current_prices)
         env['equity_curve'].append((date, equity))
 
@@ -3552,7 +3552,7 @@ class StockApi:
         Example:
             avg_change = api.get_price_change_rate('600519.SH', '2026-03-01', 3)
         """
-        self.file_logger.write(f"get_price_change_rate(code={code!r}, date={date!r}, days={days!r})")
+        self.track_logger.write(f"get_price_change_rate(code={code!r}, date={date!r}, days={days!r})")
         import datetime
         start_dt = datetime.datetime.strptime(date, '%Y-%m-%d')
         end_dt = start_dt - datetime.timedelta(days=days * 2)
@@ -3582,7 +3582,7 @@ class StockApi:
         Example:
             top_stocks = api.get_top_performers(codes, '2026-03-01', 3, 3)
         """
-        self.file_logger.write(f"get_top_performers(codes={codes!r}, date={date!r}, days={days!r}, top_n={top_n!r})")
+        self.track_logger.write(f"get_top_performers(codes={codes!r}, date={date!r}, days={days!r}, top_n={top_n!r})")
         results = []
         for code in codes:
             avg_change = self.get_price_change_rate(code, date, days)
@@ -3606,7 +3606,7 @@ class StockApi:
         Example:
             price = api.get_price_at_date('600519.SH', '2026-03-01')
         """
-        self.file_logger.write(f"get_price_at_date(code={code!r}, date={date!r})")
+        self.track_logger.write(f"get_price_at_date(code={code!r}, date={date!r})")
         klines = query_daily_kline(codes=[code], start_date=date, end_date=date, order_by="date ASC")
         return klines[0].close if klines else None
 
@@ -3624,7 +3624,7 @@ class StockApi:
         Example:
             prices = api.get_prices_at_dates('600519.SH', ['2026-01-01', '2026-01-02'])
         """
-        self.file_logger.write(f"get_prices_at_dates(code={code!r}, dates={dates!r})")
+        self.track_logger.write(f"get_prices_at_dates(code={code!r}, dates={dates!r})")
         if not dates:
             return []
         
@@ -3646,7 +3646,7 @@ class StockApi:
         Example:
             api.init_databases()
         """
-        self.file_logger.write("init_databases()")
+        self.track_logger.write("init_databases()")
         init_indicators_db()
 
     def clear_indicator_cache(self, code: str = None) -> None:
@@ -3660,7 +3660,7 @@ class StockApi:
             api.clear_indicator_cache('600519.SH')  # 清除指定股票
             api.clear_indicator_cache()  # 清除所有
         """
-        self.file_logger.write(f"clear_indicator_cache(code={code!r})")
+        self.track_logger.write(f"clear_indicator_cache(code={code!r})")
         with getEngine().connect() as conn:
             if code:
                 conn.execute(text("DELETE FROM cached_indicators WHERE code=:code"), {"code": code})
@@ -3693,7 +3693,7 @@ class StockApi:
         Example:
             data = api.load_alpha_data(['000001.SZ', '600519.SH'], '2025-01-01', '2026-03-01')
         """
-        self.file_logger.write(f"load_alpha_data(codes={codes!r}, start_date={start_date!r}, end_date={end_date!r}, fill_method={fill_method!r})")
+        self.track_logger.write(f"load_alpha_data(codes={codes!r}, start_date={start_date!r}, end_date={end_date!r}, fill_method={fill_method!r})")
         loader = AlphaDataLoader()
         return loader.load(codes=codes, start_date=start_date, end_date=end_date, fill_method=fill_method)
 
@@ -3722,7 +3722,7 @@ class StockApi:
             df = api.compute_alpha(['000001.SZ', '600519.SH'], '2025-01-01', '2026-03-01', 1)
             latest = df.iloc[-1].dropna().sort_values(ascending=False)
         """
-        self.file_logger.write(f"compute_alpha(codes={codes!r}, start_date={start_date!r}, end_date={end_date!r}, alpha_num={alpha_num!r}, fill_method={fill_method!r})")
+        self.track_logger.write(f"compute_alpha(codes={codes!r}, start_date={start_date!r}, end_date={end_date!r}, alpha_num={alpha_num!r}, fill_method={fill_method!r})")
         data = self.load_alpha_data(codes, start_date, end_date, fill_method)
         if not data:
             return None
@@ -3764,7 +3764,7 @@ class StockApi:
             for name, df in results.items():
                 print(name, df.iloc[-1].describe())
         """
-        self.file_logger.write(f"compute_alphas(codes={codes!r}, start_date={start_date!r}, end_date={end_date!r}, alphas={alphas!r}, fill_method={fill_method!r})")
+        self.track_logger.write(f"compute_alphas(codes={codes!r}, start_date={start_date!r}, end_date={end_date!r}, alphas={alphas!r}, fill_method={fill_method!r})")
         data = self.load_alpha_data(codes, start_date, end_date, fill_method)
         if not data:
             return {}
@@ -3800,7 +3800,7 @@ class StockApi:
             )
             print(latest.head(10))   # 因子值最高的 10 只股票
         """
-        self.file_logger.write(f"get_alpha_latest(codes={codes!r}, start_date={start_date!r}, end_date={end_date!r}, alpha_num={alpha_num!r}, fill_method={fill_method!r})")
+        self.track_logger.write(f"get_alpha_latest(codes={codes!r}, start_date={start_date!r}, end_date={end_date!r}, alpha_num={alpha_num!r}, fill_method={fill_method!r})")
         df = self.compute_alpha(codes, start_date, end_date, alpha_num, fill_method)
         if df is None:
             return None
@@ -3839,7 +3839,7 @@ class StockApi:
             random_seed:         随机种子，None 不固定
             top_n_stocks:        输出详细交易记录的个股数量（默认 5）
         """
-        self.file_logger.write(f"random_alpha_backtest(codes={codes!r}, max_screen_factors={max_screen_factors!r}, max_signal_factors={max_signal_factors!r}, start_date={start_date!r}, end_date={end_date!r}, initial_cash={initial_cash!r}, warmup_days={warmup_days!r}, random_seed={random_seed!r}, top_n_stocks={top_n_stocks!r})")
+        self.track_logger.write(f"random_alpha_backtest(codes={codes!r}, max_screen_factors={max_screen_factors!r}, max_signal_factors={max_signal_factors!r}, start_date={start_date!r}, end_date={end_date!r}, initial_cash={initial_cash!r}, warmup_days={warmup_days!r}, random_seed={random_seed!r}, top_n_stocks={top_n_stocks!r})")
         import random
         from datetime import datetime, timedelta
         import pandas as pd
@@ -4119,7 +4119,7 @@ class StockApi:
 
         def _fetch_bench_close(ts_code: str, s_date: str, e_date: str) -> Dict[str, float]:
             """优先查本地 index_daily 表；若表不存在则 fallback 到东方财富爬虫。返回 {YYYY-MM-DD: close}"""
-            self.file_logger.write(f"_fetch_bench_close(ts_code={ts_code!r}, s_date={s_date!r}, e_date={e_date!r})")
+            self.track_logger.write(f"_fetch_bench_close(ts_code={ts_code!r}, s_date={s_date!r}, e_date={e_date!r})")
             # ① 尝试本地 DB
             try:
                 rows = self.get_index_daily(
@@ -4231,7 +4231,7 @@ class StockApi:
         # ── 8.6. 因子 IC 计算（Rank IC，斯皮尔曼相关系数，纯 numpy 实现）──────
         def _spearman_corr(x: np.ndarray, y: np.ndarray) -> float:
             """计算两个等长数组的斯皮尔曼相关系数。"""
-            self.file_logger.write(f"_spearman_corr(x={x!r}, y={y!r})")
+            self.track_logger.write(f"_spearman_corr(x={x!r}, y={y!r})")
             rx = np.argsort(np.argsort(x)).astype(float)
             ry = np.argsort(np.argsort(y)).astype(float)
             mx, my = rx.mean(), ry.mean()

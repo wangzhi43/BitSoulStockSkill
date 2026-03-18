@@ -11,7 +11,7 @@ metrics.py - 性能指标计算模块
 """
 
 from typing import List, Dict, Tuple
-
+from track_logger import TrackLogger
 
 def get_max_drawdown(equity_curve: List[float]) -> Tuple[float, int, int]:
     """计算最大回撤
@@ -273,7 +273,7 @@ def get_trade_stats(trades: List[Dict]) -> Dict:
     }
 
 
-def generate_report(equity_curve: List[float], trades: List[Dict], initial_cash: float, days: int) -> Dict:
+def generate_report(equity_curve: List[float], trades: List[Dict], initial_cash: float, days: int, track_logger:TrackLogger) -> Dict:
     """生成完整的回测绩效报告
 
     汇总权益曲线和交易记录，一次性计算所有常用绩效指标。
