@@ -11,6 +11,8 @@ sys.stdout.reconfigure(encoding='utf-8')
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from stock_api import StockApi
+import config
+import remote_api
 
 api = StockApi()
 
@@ -23,12 +25,26 @@ print('\n' + '='*60)
 print('开始因子挖矿...')
 print('='*60)
 
+# ── 回测日期：默认最近3个月，可通过命令行参数覆盖 ─────────────────────────
+import argparse
+from datetime import datetime, timedelta
+
+_parser = argparse.ArgumentParser(add_help=False)
+_parser.add_argument('--start-date', default=None)
+_parser.add_argument('--end-date', default=None)
+_args, _ = _parser.parse_known_args()
+
+_default_end   = datetime.today().strftime('%Y-%m-%d')
+_default_start = (datetime.today() - timedelta(days=90)).strftime('%Y-%m-%d')
+_start_date = _args.start_date or _default_start
+_end_date   = _args.end_date   or _default_end
+
 result = api.random_alpha_backtest(
     codes=POOL,
     max_screen_factors=5,
     max_signal_factors=7,
-    start_date='2025-12-01',
-    end_date='2026-03-14',
+    start_date=_start_date,
+    end_date=_end_date,
     initial_cash=1_000_000,
     warmup_days=90,
     random_seed=None,
@@ -452,5 +468,67 @@ def _print_strategy_summary(r: dict) -> None:
 
 
 _print_strategy_summary(result)
+
+# ── 与服务器阈值对比，达标则提交 ────────────────────────────────────────────
+print('\n' + '='*60)
+print('【提交回测结果】')
+if result.get('backtest'):
+    bt = result['backtest']
+    token = config.get_token()
+    if not token:
+        print('  未找到 token，跳过提交')
+    else:
+        # 获取服务器阈值
+        benchmark = remote_api.request_get_benchmark(token)
+        if benchmark is None:
+            print('  获取服务器阈值失败，跳过提交')
+        else:
+            total_yield     = bt['total_return_pct'] / 100.0
+            annualized_yield = bt['annualized_return_pct'] / 100.0
+            max_drawdown    = bt['max_drawdown_pct'] / 100.0
+            sharpe_ratio    = bt['sharpe_ratio']
+
+            bm_total  = benchmark.get('total_yield', 0.15)
+            bm_ann    = benchmark.get('annualized_yield', 0.08)
+            bm_dd     = benchmark.get('max_drawdown', -0.05)
+            bm_sharpe = benchmark.get('sharpe_ratio', 1.2)
+
+            print(f'  服务器阈值: 总收益>={bm_total*100:.1f}%  年化>={bm_ann*100:.1f}%  '
+                  f'最大回撤<={abs(bm_dd)*100:.1f}%  夏普>={bm_sharpe}')
+            print(f'  本次回测:   总收益={total_yield*100:+.2f}%  年化={annualized_yield*100:+.2f}%  '
+                  f'最大回撤={max_drawdown*100:.2f}%  夏普={sharpe_ratio:.4f}')
+
+            passed = total_yield >= bm_total
+            if not passed:
+                print(f'  结果未达阈值（总收益 {total_yield*100:.2f}% < {bm_total*100:.1f}%），不提交')
+            else:
+                print('  结果达标，正在提交...')
+                # 构造 positions：因子配置信息作为 json 发送
+                sc = result.get('signal_config', {})
+                positions_payload = {
+                    'screen_factors': result.get('screen_factors', []),
+                    'signal_factors': result.get('signal_factors', []),
+                    'screen_top_pcts': result.get('screen_top_pcts', {}),
+                    'signal_buy_thresh': sc.get('buy_thresh'),
+                    'signal_sell_thresh': sc.get('sell_thresh'),
+                    'start_date': bt.get('start_date'),
+                    'end_date': bt.get('end_date'),
+                    'final_pool_count': result.get('final_pool_count'),
+                }
+                submit_result = remote_api.request_submit_yield(
+                    token=token,
+                    total_yield=total_yield,
+                    annualized_yield=annualized_yield,
+                    max_drawdown=max_drawdown,
+                    sharpe_ratio=sharpe_ratio,
+                    positions=[positions_payload],
+                )
+                if submit_result.success:
+                    print(f'  提交成功！{submit_result.message}')
+                else:
+                    print(f'  提交失败: {submit_result.message}')
+                    if submit_result.details:
+                        for d in submit_result.details:
+                            print(f'    - {d}')
 
 print('\n' + '='*60)

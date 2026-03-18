@@ -4325,6 +4325,150 @@ class StockApi:
         }
 
 
+    # ============================================================
+    # ★ MoE 混合专家买卖决策接口（Agent 调用优先级最高）
+    # ============================================================
+
+    def get_trade_signal(
+        self,
+        code: str,
+        date: str = None,
+    ) -> Dict:
+        """
+        ★★★ 优先使用此接口判断股票买卖时机 ★★★
+
+        基于 MoE（混合专家模型）综合评估一只股票的买卖信号，整合以下四类专家的分析：
+          - 技术指标专家：80+ 个技术指标（均线、动量、振荡、成交量、通道等全覆盖）
+          - Alpha因子专家：WorldQuant 101个Alpha量化因子，基于全市场截面排名
+          - 基本面专家：PE_TTM、PB、换手率、量比、市销率等估值指标
+          - 量价行为专家：涨跌停、连板、炸板、龙虎榜净买入、近期涨跌幅
+
+        各专家权重从 moe_weights.json 动态加载，可通过 train_moe_weights() 跑回测优化。
+        当某类专家数据不足时自动降权，其余专家权重等比重新归一化。
+
+        ⚠️ 调用场景：
+          - 用户询问某只股票"能不能买"、"该不该卖"、"现在适合持有吗"时，调用此接口
+          - 用户询问某只股票"当前信号"、"买卖时机"、"操作建议"时，调用此接口
+          - 多股票比较时，可多次调用后按 final_score 排序
+
+        Args:
+            code (str): 股票代码，格式如 '000001.SZ'、'600519.SH'
+            date (str, optional): 分析日期，格式 'YYYY-MM-DD'。
+                                  默认为今天。历史回溯时可指定过去日期。
+
+        Returns:
+            Dict，包含以下字段：
+            {
+                "code": "000001.SZ",          # 股票代码
+                "date": "2026-03-18",          # 分析日期
+                "signal": "BUY",              # 信号：BUY=买入 / SELL=卖出 / HOLD=持有
+                "final_score": 0.72,          # 综合评分 0~1，越高越看多
+                "confidence": "高",           # 置信度：高/中/低（专家间分歧程度）
+                "reason": "技术面看多(0.71)，Alpha因子看多(0.73)，量价行为看多(0.68)",
+                "experts": {
+                    "technical":   {"score": 0.71, "weight": 0.41, "valid_count": 90},
+                    "alpha":       {"score": 0.73, "weight": 0.41, "valid_count": 98},
+                    "fundamental": {"score": null, "weight": 0.0,  "note": "数据不足"},
+                    "behavior":    {"score": 0.68, "weight": 0.18}
+                }
+            }
+
+            signal 取值说明：
+              - "BUY"  → final_score >= buy_thresh（默认0.65），建议买入
+              - "SELL" → final_score <= sell_thresh（默认0.35），建议卖出
+              - "HOLD" → 介于两者之间，建议持有观望
+
+        使用示例：
+            api = StockApi()
+            result = api.get_trade_signal('000001.SZ')
+            if result['signal'] == 'BUY':
+                print(f"建议买入，综合评分 {result['final_score']}")
+
+            # 历史日期分析
+            result = api.get_trade_signal('600519.SH', date='2026-01-15')
+        """
+        from datetime import datetime as _dt
+        _date = date or _dt.today().strftime('%Y-%m-%d')
+
+        # 延迟导入，避免循环依赖
+        import importlib, os as _os
+        _moe_path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), 'moe_signal.py')
+        import importlib.util
+        _spec = importlib.util.spec_from_file_location('moe_signal', _moe_path)
+        _moe = importlib.util.module_from_spec(_spec)
+        _spec.loader.exec_module(_moe)
+
+        init_indicators_db()
+        return _moe.analyze(code, _date)
+
+    def train_moe_weights(
+        self,
+        start_date: str = None,
+        end_date: str = None,
+        population_size: int = 20,
+        generations: int = 30,
+        train_stock_count: int = 30,
+    ) -> Dict:
+        """
+        通过遗传算法在指定历史区间跑回测，训练 MoE 各指标权重，目标：最大化平均持仓收益。
+
+        训练完成后自动将最优权重写入 moe_weights.json，下次调用 get_trade_signal() 时自动生效。
+        建议每半年重新训练一次，以适应最新行情风格。
+
+        ⚠️ 调用场景：
+          - 用户说"优化权重"、"重新训练"、"适配最新行情"时调用
+          - 默认训练区间为最近半年（约180天）
+
+        Args:
+            start_date (str, optional): 训练开始日期 'YYYY-MM-DD'，默认今天前180天
+            end_date   (str, optional): 训练结束日期 'YYYY-MM-DD'，默认今天
+            population_size (int): 遗传算法种群大小，默认20（越大越精准但越慢）
+            generations     (int): 迭代代数，默认30
+            train_stock_count (int): 参与训练的随机采样股票数量，默认30
+
+        Returns:
+            Dict: 优化后的完整权重配置（同时已写入 moe_weights.json）
+            {
+                "expert_weights": {"technical": 0.38, "alpha": 0.32, ...},
+                "signal_thresholds": {"buy": 0.67, "sell": 0.33},
+                "technical": {"sma5": 1.2, "rsi14": 0.9, ...},
+                ...
+                "_trained_at": "2026-03-18 12:00:00",
+                "_train_period": "2025-09-18~2026-03-18"
+            }
+
+        使用示例：
+            api = StockApi()
+            # 用最近半年数据训练（默认）
+            weights = api.train_moe_weights()
+
+            # 指定区间，快速训练（小种群+少代数）
+            weights = api.train_moe_weights(
+                start_date='2025-06-01', end_date='2025-12-31',
+                population_size=10, generations=15, train_stock_count=20
+            )
+        """
+        from datetime import datetime as _dt, timedelta as _td
+        import importlib.util, os as _os
+
+        _end   = end_date   or _dt.today().strftime('%Y-%m-%d')
+        _start = start_date or (_dt.today() - _td(days=180)).strftime('%Y-%m-%d')
+
+        _moe_path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), 'moe_signal.py')
+        _spec = importlib.util.spec_from_file_location('moe_signal', _moe_path)
+        _moe = importlib.util.module_from_spec(_spec)
+        _spec.loader.exec_module(_moe)
+
+        init_indicators_db()
+        return _moe.train_weights(
+            start_date=_start,
+            end_date=_end,
+            population_size=population_size,
+            generations=generations,
+            train_stock_count=train_stock_count,
+        )
+
+
 def date_to_num(date_str: str) -> int:
     """日期字符串转数字（用于计算天数差）"""
     import datetime
