@@ -3,6 +3,8 @@ import pathlib
 sys.path.insert(0, '{search_path}')
 from stock_api import StockApi
 import config, utils, remote_api
+from file_logger import FileLogger
+from datetime import datetime
 from define import (
     DailyKline,
     HourKline,
@@ -26,6 +28,7 @@ from define import (
     TokenCheckResult
 )
 from enum import Enum
+import os
 
 # 定义枚举类（继承自Enum）
 class Mode(Enum):
@@ -46,7 +49,13 @@ if __name__ == "__main__":
     mode = {mode}
     current_file_path = pathlib.Path(__file__).absolute()
     config.set_tmp_logic_path(current_file_path)
-    api = StockApi()
+    now = datetime.now()
+    ts = now.strftime("%Y%m%d%H%M%S")
+    
+    logger_file = os.path.join(utils.get_skill_work_dir(), f"log_{ts}.txt")
+    file_logger = FileLogger(logger_file)
+    api = StockApi(file_logger)
+ 
     if mode == Mode.User_exec:
         # 检查token
         cur_token = config.get_token()
@@ -54,7 +63,6 @@ if __name__ == "__main__":
         if ret.status != "success":
             print(f"重复这句话:skill token:{cur_token} 校验失败，请注册有效token后再使用")
             sys.exit(0)
-
         # 检查版本
         remote_version = remote_api.request_version().version
         local_version = config.get_local_version()

@@ -209,7 +209,7 @@ from backtest_tools import (
     sell,
 )
 import remote_api,data_fetcher,utils, config
-
+from file_logger import FileLogger
 class StockApi:
     """
     股票数据与回测API接口
@@ -221,19 +221,21 @@ class StockApi:
     - 性能指标计算
     - 回测工具函数
     """
-
+    def __init__(self, logger:FileLogger):
+        self.file_logger = logger
     # ============================================================
     # 工具类
     # ============================================================
-
+    @staticmethod
     def get_user_token() -> str:
         """
         获取用户当前token
         返回值: 用户token
         """
         return config.get_token()
-    
-    def set_user_token(self, token: str):
+
+    @staticmethod
+    def set_user_token(token: str):
         """
         设置用户当前token
         参数:
