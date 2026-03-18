@@ -1,0 +1,4 @@
+pandas==3.0.1
+requests==2.32.5
+SQLAlchemy==2.0.48
+sqlcipher3==0.6.2
