@@ -203,8 +203,8 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS income (
                 ts_code           TEXT NOT NULL,
                 end_date          TEXT NOT NULL,
-                report_type       TEXT NOT NULL,
                 ann_date          TEXT,
+                report_type       TEXT NOT NULL,
                 comp_type         TEXT,
                 basic_eps         REAL,
                 diluted_eps       REAL,

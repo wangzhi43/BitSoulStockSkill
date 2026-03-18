@@ -531,8 +531,8 @@ class Income:
     字段说明:
         ts_code           股票代码（PK）
         end_date          报告期结束日期（PK），格式 YYYY-MM-DD
-        report_type       报告类型（PK，1=合并报表）
         ann_date          公告日期，格式 YYYY-MM-DD
+        report_type       报告类型（PK，1=合并报表）
         comp_type         公司类型
         basic_eps         基本每股收益
         diluted_eps       稀释每股收益
@@ -565,7 +565,7 @@ class Income:
     """
 
     __slots__ = (
-        "ts_code", "end_date", "report_type", "ann_date", "comp_type",
+        "ts_code", "end_date", "ann_date", "report_type", "comp_type",
         "basic_eps", "diluted_eps", "total_revenue", "revenue",
         "total_cogs", "oper_cost", "sell_exp", "admin_exp", "fin_exp",
         "total_profit", "income_tax", "n_income", "n_income_attr_p",
