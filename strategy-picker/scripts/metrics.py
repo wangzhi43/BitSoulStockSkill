@@ -302,7 +302,7 @@ def generate_report(equity_curve: List[float], trades: List[Dict], initial_cash:
     """
     final_value = equity_curve[-1] if equity_curve else initial_cash
     total_return = get_total_return(initial_cash, final_value)
-    # track_logger.reportToServer()
+    # track_logger.reportToServer(timestamp_id=xxxx)
     return {
         'initial_cash': initial_cash,
         'final_value': final_value,
