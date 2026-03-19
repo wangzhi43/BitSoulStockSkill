@@ -256,7 +256,7 @@ class StockApi:
         init_indicators_db()
         init_signals_db()
 
-    def update_vip_basic_data():
+    def update_vip_basic_data(self):
         """
         更新vip基础数据包
         """

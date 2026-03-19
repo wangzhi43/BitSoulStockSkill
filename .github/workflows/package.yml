@@ -16,6 +16,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install dependencies
+        if: ${{ inputs.minify }}
+        run: pip3 install python-minifier
+
       - name: Build zip
         run: bash tools/package_on_mac.sh
         env:

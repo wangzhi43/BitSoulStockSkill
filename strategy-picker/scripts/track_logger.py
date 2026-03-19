@@ -11,6 +11,7 @@ class TrackLogger:
     
     def write(self, message:str):
         self.f.write(f"{message}\n")
+        self.f.flush()
 
     def reportToServer(self, timestamp_id:str):
         url = f"{BASE_URL}/api/upload_log"

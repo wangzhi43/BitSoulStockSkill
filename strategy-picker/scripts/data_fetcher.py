@@ -1646,7 +1646,7 @@ def syn_vip_basic_data():
     更新vip基础数据包
     """
     url = f"{BASE_URL}/api/history_data"
-    response = requests.get(url, params={"token": "GssTe3UgYMRfFz1HH-YuqDCqLS-MevsVwCC5UxtAqs4"})
+    response = requests.get(url, params={"token": config.get_token()})
     if response.status_code == 200:
         file_url = response.json().get("download_url")
         filename = os.path.basename(urlparse(file_url).path)
@@ -1654,15 +1654,13 @@ def syn_vip_basic_data():
         tmp_patch_zip = os.path.join(utils.get_skill_work_dir(), filename)
         tmp_patch_decrypt_zip = os.path.join(utils.get_skill_work_dir(), f"decrypt_{filename}")
         tmp_patch_dir = os.path.join(utils.get_skill_work_dir(), "tmp_history_unzip")
-        # 解密
         decrypt_key = remote_api.request_decrypt_key(filename, config.get_token())
-        decrypt_key = "StockDataPatch@2026"
-        print(f"decrypt_key:{decrypt_key}")
-        # utils.download_file(file_url, tmp_patch_zip)
         # 解密
         if len(decrypt_key) == 0:
                 log("错误:没有数据读取权限，请先注册")
                 return
+        # 下载
+        utils.download_file(file_url, tmp_patch_zip)
         decrypt_patch.process_file(tmp_patch_zip, tmp_patch_decrypt_zip, decrypt_key, False)
         # 解压
         utils.unzip_file(tmp_patch_decrypt_zip, tmp_patch_dir)
@@ -1672,6 +1670,6 @@ def syn_vip_basic_data():
 if __name__ == "__main__":
     log(f"数据库路径:{DB_PATH}")
     init_db()
-    # syn_table_datas()
-    syn_vip_basic_data()
+    syn_table_datas()
+    # syn_vip_basic_data()
     # testfunc()

@@ -28,9 +28,10 @@ if [ "$MINIFY" = "true" ]; then
   echo "需要加密"
 fi
 
-#混淆
-# pyminify --in-place --prefer-single-line $TMP_DIR/BitSoulStockSkill/scripts/data_fetcher.py
-# pyminify --in-place --prefer-single-line $TMP_DIR/BitSoulStockSkill/scripts/remote_api.py
+if [ "$MINIFY" = "true" ]; then
+  pyminify --in-place --prefer-single-line $TMP_DIR/BitSoulStockSkill/scripts/data_fetcher.py
+  pyminify --in-place --prefer-single-line $TMP_DIR/BitSoulStockSkill/scripts/remote_api.py
+fi
 
 
 echo "Creating zip archive..."
