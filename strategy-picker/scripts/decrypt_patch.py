@@ -4,8 +4,6 @@ import random
 import struct
 import argparse
 
-# Shared Key - Must match the one in init_version.py
-ENCRYPTION_KEY = "StockDataPatch@2026"
 
 def derive_seed(key, iv):
     """Derive a seed for the random number generator from Key and IV."""
