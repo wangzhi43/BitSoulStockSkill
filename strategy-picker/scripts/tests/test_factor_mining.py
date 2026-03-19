@@ -24,3 +24,5 @@ result = api.random_alpha_backtest(
 
 print('\n=== 返回字段 ===')
 print(list(result.keys()))
+
+print(result['summary_text'])

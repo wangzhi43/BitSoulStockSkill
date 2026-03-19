@@ -557,7 +557,16 @@ def run_random_alpha_backtest(
         'ic_stats':           ic_stats,
         'top_stocks':         top_stocks_detail,
     }
-    _print_mining_result(result)
+    import io
+    _buf = io.StringIO()
+    import sys as _sys
+    _old_stdout = _sys.stdout
+    _sys.stdout = _buf
+    try:
+        _print_mining_result(result)
+    finally:
+        _sys.stdout = _old_stdout
+    result['summary_text'] = _buf.getvalue()
     return result
 
 
@@ -713,6 +722,8 @@ def _print_mining_result(result: dict) -> None:
         print(f'\n  ▶ 第{_i}层  {_name}  [{_dtag}]  保留前{int(_pct*100)}%  （{_before} → {_after} 只）')
         print(f'    预测能力: {_ic_line(_ic)}')
         print(f'    因子定义: {_defn}')
+        if _hi:
+            print(f'    高值含义: {_hi}')
 
     print(f'\n▌ 信号因子（{len(_sig_names)} 个，逐日横截面排名驱动买卖）')
     print(f'  买入阈值: {_buy_thr}  → 综合排名前 {int((1-_buy_thr)*100)}% 触发买入')
@@ -723,6 +734,8 @@ def _print_mining_result(result: dict) -> None:
         print(f'\n  ▶ {_name}  [{_dtag}]')
         print(f'    预测能力: {_ic_line(_ic)}')
         print(f'    因子定义: {_defn}')
+        if _hi:
+            print(f'    高值含义: {_hi}')
 
     # ── 选股过滤过程 ───────────────────────────────────────────────────────
     print()

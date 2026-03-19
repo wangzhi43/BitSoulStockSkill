@@ -752,6 +752,7 @@ prices = api.get_prices_at_dates('600519.SH', ['2026-01-01', '2026-01-02'])
 
 ```python
 result = api.random_alpha_backtest()
+print(result['summary_text'])  # 必须调用此行输出报告，禁止自行整理摘要
 
 # 指定股票池和回测区间
 result = api.random_alpha_backtest(
@@ -763,6 +764,7 @@ result = api.random_alpha_backtest(
     max_holdings=5,           # 最大同时持仓数
     random_seed=None,         # 随机种子，None 不固定
 )
+print(result['summary_text'])  # 必须调用此行输出报告，禁止自行整理摘要
 # random_alpha_backtest(codes, max_screen_factors, max_signal_factors,
 #                       start_date, end_date, initial_cash, warmup_days,
 #                       random_seed, top_n_stocks, max_pool_size, max_holdings) -> Dict
@@ -783,6 +785,7 @@ result = api.random_alpha_backtest(
 | `benchmarks` | 四条基准线对比（上证/沪深300/中证500/创业板指） |
 | `ic_stats` | 每个因子的 Rank IC 统计 `{ic_mean, ic_ir, ic_win_rate, ...}` |
 | `top_stocks` | Top N 盈利个股详情（含每笔交易的因子值） |
+| `summary_text` | 完整格式化报告文本，**直接 `print(result['summary_text'])` 输出给用户，禁止自行整理摘要** |
 
 ---
 
