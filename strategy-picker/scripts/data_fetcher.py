@@ -4,7 +4,6 @@ data_fetcher.py
 封装 HTTP 数据获取接口，将远程数据拉取并持久化到本地 SQLite 数据库，
 同时提供本地数据库的查询接口。
 
-HTTP API 基准地址: http://139.224.210.110:80
 接口规范参考: API_REFERENCE.md § "通用数据查询接口"
 表结构参考:  DATABASE_DOCUMENTATION.md
 
@@ -57,10 +56,6 @@ g_table_name_to_pk = {
 def getEngine() -> Engine:
     global _g_engine
     if not _g_engine:
-        # def _creator():
-        #     conn = sqlcipher3.connect(DB_PATH)
-        #     conn.execute(f"PRAGMA key='{"stock2026"}'")
-        #     return conn
         _g_engine = create_engine(f"sqlite:///{DB_PATH}")
     return _g_engine
 

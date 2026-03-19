@@ -1,12 +1,33 @@
 import os
+import pickle
+import base64
 from typing import Optional
 import utils
+
+def _load_config():
+    config_path = os.path.join(os.path.dirname(__file__), "config.bin")
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "rb") as f:
+                data = pickle.load(f)
+                if "base_url" in data and data["base_url"]:
+                    try:
+                        data["base_url"] = base64.b64decode(data["base_url"]).decode()
+                    except Exception:
+                        data["base_url"] = ""
+                return data
+        except Exception:
+            pass
+    return {"base_url": "", "http_timeout": 30}
+
+_config = _load_config()
+
 # ============================================================
 # 常量
 # ============================================================
 
-BASE_URL = "http://139.224.210.110:80"  # 每次 HTTP 请求拉取的最大记录数（服务端允许范围内取较大值以减少请求次数）
-HTTP_TIMEOUT = 30     # HTTP 请求超时秒数
+BASE_URL = _config.get("base_url", "")
+HTTP_TIMEOUT = _config.get("http_timeout", 30)
 DB_PATH = os.path.join(utils.get_skill_work_dir(), "data.db")
 
 # ============================================================

@@ -41,8 +41,8 @@ def process_file(input_path, output_path, key, is_encrypt=True):
             if not chunk:
                 break
             
-            # Generate mask
-            mask = rng.randbytes(len(chunk))
+            # Generate mask (compatible with Python 3.7+)
+            mask = bytes(random.getrandbits(8) for _ in range(len(chunk)))
             
             # Fast XOR using integers
             chunk_int = int.from_bytes(chunk, 'little')
@@ -53,10 +53,3 @@ def process_file(input_path, output_path, key, is_encrypt=True):
             encrypted_chunk = encrypted_int.to_bytes(len(chunk), 'little')
             fout.write(encrypted_chunk)
 
-def main():
-    process_file("/Users/liujie/Desktop/claw/stockskill/strategy-picker/assets/data_1.0.bin",
-                  "/Users/liujie/Desktop/claw/stockskill/strategy-picker/assets/data_dec.zip",
-                    ENCRYPTION_KEY, is_encrypt=False)
-
-if __name__ == "__main__":
-    main()
