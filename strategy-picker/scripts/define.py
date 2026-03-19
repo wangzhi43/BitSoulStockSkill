@@ -5,7 +5,7 @@ from typing import Optional
 import utils
 
 def _load_config():
-    config_path = os.path.join(os.path.dirname(__file__), "config.bin")
+    config_path = os.path.join(os.path.dirname(__file__), "config.dat")
     if os.path.exists(config_path):
         try:
             with open(config_path, "rb") as f:
