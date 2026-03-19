@@ -1,5 +1,5 @@
 import os
-import pickle
+import json
 import base64
 from typing import Optional
 import utils
@@ -9,7 +9,9 @@ def _load_config():
     if os.path.exists(config_path):
         try:
             with open(config_path, "rb") as f:
-                data = pickle.load(f)
+                content = f.read()
+                json_str = content.decode('utf-8')
+                data = json.loads(json_str)
                 if "base_url" in data and data["base_url"]:
                     try:
                         data["base_url"] = base64.b64decode(data["base_url"]).decode()
