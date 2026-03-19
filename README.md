@@ -1,7 +1,5 @@
 # 🐉 BitSoulStockSkill
 
-<img src="http://installskill.aicodingyard.com/BitSoulLogo.jpg" width="120" alt="BitSoulLogo" align="right" />
-
 > 面向普通股民 / 金融爱好者 / 量化入门选手的 A股股票分析 Skill，赋能 AI Agent 成为你最好的财富助理和赚钱搭子
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
@@ -68,7 +66,7 @@ BitSoulStockSkill 是面向 A股市场的股票分析 all-in-one 综合性 Skill
 
 ## 📥 快速安装
 
-### 方式一：龙的一句话安装
+### 方式一：OpenClaw一句话安装
 
 根据 [安装描述](http://installskill.aicodingyard.com/stockskill_install.txt) 文件，帮你安装 Skill：
 
@@ -121,29 +119,6 @@ BitSoulStockSkill/
 
 详细接口说明请参阅 [API_FOR_LLM.md](API_FOR_LLM.md)。
 
-### 常用接口示例
-
-```python
-# 查询股票基本信息
-from data_fetcher import query_stock_basic
-
-# 查询A股上市公司
-stocks = query_stock_basic(industry="银行")
-print(stocks)
-
-# 查询历史行情
-from data_fetcher import query_daily_kline
-
-# 获取某只股票的历史 K 线
-klines = query_daily_kline(
-    codes=["sz.000001"],
-    start_date="2024-01-01",
-    end_date="2024-12-31"
-)
-print(klines)
-```
-
----
 
 ## 🛠️ 环境要求
 
