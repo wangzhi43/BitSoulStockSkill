@@ -18,7 +18,7 @@ jobs:
 
       - name: Install dependencies
         if: ${{ inputs.minify }}
-        run: pip3 install python-minifier
+        run: pip3 install python-minifier --break-system-packages
 
       - name: Build zip
         run: bash tools/package_on_mac.sh
