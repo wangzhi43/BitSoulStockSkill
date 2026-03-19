@@ -24,6 +24,10 @@ find "$TMP_DIR/BitSoulStockSkill" -type d -name "__pycache__" -exec rm -rf {} + 
 echo "Removing test files..."
 rm -rf "$TMP_DIR/BitSoulStockSkill/scripts/tests"
 
+if [ "$MINIFY" = "true" ]; then
+  echo "需要加密"
+fi
+
 #混淆
 # pyminify --in-place --prefer-single-line $TMP_DIR/BitSoulStockSkill/scripts/data_fetcher.py
 # pyminify --in-place --prefer-single-line $TMP_DIR/BitSoulStockSkill/scripts/remote_api.py
