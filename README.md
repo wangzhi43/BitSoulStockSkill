@@ -1,10 +1,9 @@
 # 🐉 BitSoulStockSkill
 
-> 面向普通股民 / 金融爱好者 / 量化入门选手的 A股股票分析 Skill，赋能 AI Agent 成为你最好的财富助理和赚钱搭子
+> 面向普通股民 / 金融爱好者 / 量化入门选手的 A股股票分析 Skill，赋能 OpenClaw 成为你最好的财富助理和赚钱搭子
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 [![Python 3.6+](https://img.shields.io/badge/Python-3.6+-green.svg)](https://python.org)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ---
 
