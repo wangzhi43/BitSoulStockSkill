@@ -742,6 +742,96 @@ prices = api.get_prices_at_dates('600519.SH', ['2026-01-01', '2026-01-02'])
 
 ---
 
+---
+
+## ★ 因子挖矿（优先使用）
+
+### 随机因子挖矿 + 回测
+
+**触发场景**：用户说"因子挖矿"、"挖矿"、"随机挖因子"、"碰碰运气"、"随机推荐"、"挖金矿"、"随机策略"时，**必须**调用此接口，禁止自己写回测逻辑。
+
+```python
+result = api.random_alpha_backtest()
+
+# 指定股票池和回测区间
+result = api.random_alpha_backtest(
+    codes=None,               # 股票池，None 表示全市场
+    start_date='2025-12-01', # 回测起始日，None 默认取 end_date 前 90 天
+    end_date='2026-03-19',   # 回测截止日，None 默认今天
+    initial_cash=1_000_000,  # 初始资金
+    max_pool_size=30,         # 候选池上限，超过时按综合得分截取
+    max_holdings=5,           # 最大同时持仓数
+    random_seed=None,         # 随机种子，None 不固定
+)
+# random_alpha_backtest(codes, max_screen_factors, max_signal_factors,
+#                       start_date, end_date, initial_cash, warmup_days,
+#                       random_seed, top_n_stocks, max_pool_size, max_holdings) -> Dict
+```
+
+| 返回字段 | 说明 |
+|----------|------|
+| `screen_factors` | 本次使用的选股因子列表，如 `['alpha043', 'alpha099']` |
+| `signal_factors` | 本次使用的信号因子列表，如 `['alpha008', 'alpha094']` |
+| `factor_descriptions` | 每个因子的文字描述 `{name: str}` |
+| `signal_config` | 买卖阈值 `{'buy_thresh': 0.71, 'sell_thresh': 0.55}` |
+| `screen_top_pcts` | 每个选股因子本次随机保留比例 `{name: float}` |
+| `filter_log` | 逐层过滤日志，含 before/after 数量 |
+| `final_pool` | 最终候选股票代码列表 |
+| `final_pool_count` | 候选池股票数量 |
+| `trade_log` | 每笔交易记录（含因子值、排名、阈值） |
+| `backtest` | 回测绩效 `{total_return_pct, annualized_return_pct, max_drawdown_pct, sharpe_ratio, equity_curve, ...}` |
+| `benchmarks` | 四条基准线对比（上证/沪深300/中证500/创业板指） |
+| `ic_stats` | 每个因子的 Rank IC 统计 `{ic_mean, ic_ir, ic_win_rate, ...}` |
+| `top_stocks` | Top N 盈利个股详情（含每笔交易的因子值） |
+
+---
+
+## ★ MoE 买卖时机分析（优先使用）
+
+### 分析单只股票当前买卖信号
+
+**触发场景**：用户询问某只股票"能不能买"、"该不该卖"、"现在适合持有吗"、"当前信号"、"操作建议"时，**必须**调用此接口。
+
+```python
+result = api.get_trade_signal('000001.SZ')
+result = api.get_trade_signal('600519.SH', date='2026-01-15')
+# get_trade_signal(code: str, date: str = None) -> Dict
+```
+
+| 返回字段 | 说明 |
+|----------|------|
+| `signal` | `"BUY"` 买入 / `"SELL"` 卖出 / `"HOLD"` 持有 |
+| `final_score` | 综合评分 0~1，越高越看多 |
+| `confidence` | 置信度：`"高"` / `"中"` / `"低"` |
+| `reason` | 各专家评分描述，如 `"技术面看多(0.71)，Alpha因子看多(0.73)"` |
+| `experts` | 四个专家详情：`technical` / `alpha` / `fundamental` / `behavior` |
+| `code` | 股票代码 |
+| `date` | 分析日期 |
+
+---
+
+### 训练 MoE 权重（遗传算法优化）
+
+**触发场景**：用户说"优化权重"、"重新训练"、"适配最新行情"时调用。
+
+```python
+weights = api.train_moe_weights()
+
+# 指定区间和参数
+weights = api.train_moe_weights(
+    start_date='2025-09-01',
+    end_date='2026-03-01',
+    population_size=20,       # 种群大小，越大越精准但越慢
+    generations=30,           # 迭代代数
+    train_stock_count=30,     # 参与训练的随机采样股票数量
+)
+# train_moe_weights(start_date, end_date, population_size, generations, train_stock_count) -> Dict
+```
+
+训练完成后自动将最优权重写入 `moe_weights.json`，下次调用 `get_trade_signal()` 时自动生效。
+
+---
+
 ## 数据库维护
 
 ### 初始化所有数据库（指标缓存库等）

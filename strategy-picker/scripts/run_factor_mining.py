@@ -44,8 +44,8 @@ _end_date   = _args.end_date   or _default_end
 
 result = api.random_alpha_backtest(
     codes=POOL,
-    max_screen_factors=5,
-    max_signal_factors=7,
+    max_screen_factors=4,
+    max_signal_factors=4,
     start_date=_start_date,
     end_date=_end_date,
     initial_cash=1_000_000,
