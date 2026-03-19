@@ -35,8 +35,8 @@ fi
 
 echo "Creating zip archive..."
 (cd "$TMP_DIR" && zip -r "$ZIP_NAME" BitSoulStockSkill)
-
-mv "$TMP_DIR/$ZIP_NAME" "$OUTPUT_PATH/$ZIP_NAME"
+mv "$TMP_DIR/$ZIP_NAME" "$GITHUB_WORKSPACE/$ZIP_NAME"
+echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
 
 rm -rf "$TMP_DIR"
 
