@@ -3824,29 +3824,35 @@ class StockApi:
         warmup_days: int = 90,
         random_seed: Optional[int] = None,
         top_n_stocks: int = 5,
+        max_pool_size: int = 30,
+        max_holdings: int = 5,
     ) -> Dict:
         """
         因子挖矿接口（两阶段：选股 + 交易信号）。
 
         流程：
           1. 随机抽取 k_screen 个选股因子 + k_signal 个信号因子
-          2. 选股阶段：以 start_date 为截面日，每个选股因子随机保留 15%~35% 的股票
-          3. 信号阶段：逐日计算信号因子横截面分位排名，综合排名 >= buy_thresh 时买入，
+          2. 选股阶段：以 start_date 为截面日，每个选股因子随机保留 5%~20% 的股票
+          3. 若过滤后股票数仍超过 max_pool_size，按各选股因子综合得分再截取前 max_pool_size 只
+          4. 信号阶段：逐日计算信号因子横截面分位排名，综合排名 >= buy_thresh 时买入，
              <= sell_thresh 时卖出（阈值在合理范围内随机生成）
-          4. 输出 Top N 个股的每笔交易时的具体因子值与排名
+          5. 每日最多同时持仓 max_holdings 只，优先买入综合排名最高的股票
+          6. 输出 Top N 个股的每笔交易时的具体因子值与排名
 
         Args:
             codes:               股票池；None 时取全市场
-            max_screen_factors:  选股因子最大数量（默认 3）
-            max_signal_factors:  信号因子最大数量（默认 2）
+            max_screen_factors:  选股因子最大数量（默认 5）
+            max_signal_factors:  信号因子最大数量（默认 7）
             start_date:          回测起始日，None 取 end_date 前 90 天
             end_date:            回测截止日，None 取今日
             initial_cash:        初始资金（默认 100 万）
             warmup_days:         因子预热天数（默认 90）
             random_seed:         随机种子，None 不固定
             top_n_stocks:        输出详细交易记录的个股数量（默认 5）
+            max_pool_size:       最终候选池上限，超过时按综合得分截取（默认 30）
+            max_holdings:        最大同时持仓数，优先持有综合排名最高的股票（默认 5）
         """
-        self.track_logger.write(f"random_alpha_backtest(codes={codes!r}, max_screen_factors={max_screen_factors!r}, max_signal_factors={max_signal_factors!r}, start_date={start_date!r}, end_date={end_date!r}, initial_cash={initial_cash!r}, warmup_days={warmup_days!r}, random_seed={random_seed!r}, top_n_stocks={top_n_stocks!r})")
+        self.track_logger.write(f"random_alpha_backtest(codes={codes!r}, max_screen_factors={max_screen_factors!r}, max_signal_factors={max_signal_factors!r}, start_date={start_date!r}, end_date={end_date!r}, initial_cash={initial_cash!r}, warmup_days={warmup_days!r}, random_seed={random_seed!r}, top_n_stocks={top_n_stocks!r}, max_pool_size={max_pool_size!r}, max_holdings={max_holdings!r})")
         import random
         from datetime import datetime, timedelta
         import pandas as pd
@@ -3880,12 +3886,12 @@ class StockApi:
         all_names = list(dict.fromkeys(screen_names + signal_names))
         all_descs = {name: ALPHA_DESCRIPTIONS.get(name, '') for name in all_names}
 
-        # 选股因子：每个因子随机保留比例 [0.15, 0.35]
-        screen_top_pcts = {name: round(rng.uniform(0.15, 0.35), 2) for name in screen_names}
+        # 选股因子：每个因子随机保留比例 [0.05, 0.20]（更严格过滤，避免候选池过大）
+        screen_top_pcts = {name: round(rng.uniform(0.05, 0.20), 2) for name in screen_names}
 
         # 信号因子：综合横截面分位排名阈值
         signal_buy_thresh  = round(rng.uniform(0.55, 0.82), 2)
-        signal_sell_thresh = round(rng.uniform(0.10, 0.38), 2)
+        signal_sell_thresh = round(rng.uniform(0.30, 0.55), 2)
 
         # ── 4. 加载面板数据（含预热段）────────────────────────────────────────
         warmup_start = (
@@ -3955,6 +3961,27 @@ class StockApi:
                     'final_pool': [], 'final_pool_count': 0,
                     'error': '过滤后股票池为空，无法回测'}
 
+        # ── 二次裁剪：若候选池仍超过 max_pool_size，按各选股因子综合得分取 Top N ──
+        if max_pool_size > 0 and len(final_codes) > max_pool_size:
+            import numpy as np
+            score_map: Dict[str, float] = {c: 0.0 for c in final_codes}
+            for name in screen_names:
+                if name not in factor_panels:
+                    continue
+                fp = factor_panels[name]
+                if ref_date not in fp.index:
+                    continue
+                pool_cols = [c for c in final_codes if c in fp.columns]
+                snap = fp.loc[ref_date, pool_cols].dropna()
+                if snap.empty:
+                    continue
+                # 截面分位排名 0~1（越高越好）
+                ranked = snap.rank(pct=True)
+                for c, v in ranked.items():
+                    score_map[c] = score_map.get(c, 0.0) + float(v)
+            sorted_by_score = sorted(final_codes, key=lambda c: score_map.get(c, 0.0), reverse=True)
+            final_codes = sorted(sorted_by_score[:max_pool_size])
+
         # ── 7. 信号阶段：逐日模拟买卖 ─────────────────────────────────────────
         bt_mask    = (close_panel.index >= start_ts) & (close_panel.index <= end_ts)
         avail_codes = [c for c in final_codes if c in close_panel.columns]
@@ -3980,7 +4007,9 @@ class StockApi:
                     sig_panels[name] = fp.loc[bt_mask, sig_cols]
 
         fee_rate         = 0.001
-        per_stock_budget = initial_cash / len(avail_codes)
+        # 预算按最大持仓数分配，而非全部候选池数量
+        n_slots          = max(1, min(max_holdings, len(avail_codes)))
+        per_stock_budget = initial_cash / n_slots
         cash             = initial_cash
         positions: Dict[str, Dict] = {}   # code -> {shares, entry_price, entry_date, entry_value}
         equity_curve: List[float]  = [initial_cash]
@@ -4011,8 +4040,8 @@ class StockApi:
                 factor_day_ranks[code] = per_factor
                 composite_ranks[code]  = round(float(np.mean(rank_vals)), 4) if rank_vals else 0.5
 
-            # 执行买卖信号
-            for code in avail_codes:
+            # ── 先执行卖出信号 ──────────────────────────────────────────────────
+            for code in list(positions.keys()):
                 comp = composite_ranks.get(code, 0.5)
                 if code not in bt_close.columns:
                     continue
@@ -4020,8 +4049,46 @@ class StockApi:
                 if pd.isna(price_raw) or float(price_raw) <= 0:
                     continue
                 price = float(price_raw)
+                if comp <= signal_sell_thresh:
+                    pos      = positions[code]
+                    proceeds = pos['shares'] * price * (1 - fee_rate)
+                    pnl      = proceeds - pos['entry_value']
+                    pnl_pct  = (proceeds / pos['entry_value'] - 1) * 100
+                    hold_days = (date - pd.Timestamp(pos['entry_date'])).days
+                    cash += proceeds
+                    trade_log.append({
+                        'date': date_str, 'code': code, 'action': 'SELL',
+                        'price': round(price, 3), 'shares': pos['shares'],
+                        'amount': round(proceeds, 2),
+                        'composite_rank': comp,
+                        'factor_values': factor_day_ranks.get(code, {}),
+                        'signal_buy_thresh': signal_buy_thresh,
+                        'signal_sell_thresh': signal_sell_thresh,
+                        'hold_days': hold_days,
+                        'pnl': round(pnl, 2),
+                        'pnl_pct': round(pnl_pct, 4),
+                    })
+                    del positions[code]
 
-                if code not in positions and comp >= signal_buy_thresh:
+            # ── 再执行买入信号：候选排名最高、持仓数未满 max_holdings ────────────
+            slots_free = max_holdings - len(positions)
+            if slots_free > 0:
+                buy_candidates = []
+                for code in avail_codes:
+                    if code in positions:
+                        continue
+                    comp = composite_ranks.get(code, 0.5)
+                    if comp < signal_buy_thresh:
+                        continue
+                    if code not in bt_close.columns:
+                        continue
+                    price_raw = bt_close.loc[date, code]
+                    if pd.isna(price_raw) or float(price_raw) <= 0:
+                        continue
+                    buy_candidates.append((comp, code, float(price_raw)))
+                # 按综合排名从高到低排序，优先买入信号最强的股票
+                buy_candidates.sort(key=lambda x: x[0], reverse=True)
+                for comp, code, price in buy_candidates[:slots_free]:
                     budget = min(per_stock_budget, cash * 0.99)
                     if budget < price * 100:
                         continue
@@ -4042,27 +4109,6 @@ class StockApi:
                         'signal_buy_thresh': signal_buy_thresh,
                         'signal_sell_thresh': signal_sell_thresh,
                     })
-
-                elif code in positions and comp <= signal_sell_thresh:
-                    pos      = positions[code]
-                    proceeds = pos['shares'] * price * (1 - fee_rate)
-                    pnl      = proceeds - pos['entry_value']
-                    pnl_pct  = (proceeds / pos['entry_value'] - 1) * 100
-                    hold_days = (date - pd.Timestamp(pos['entry_date'])).days
-                    cash += proceeds
-                    trade_log.append({
-                        'date': date_str, 'code': code, 'action': 'SELL',
-                        'price': round(price, 3), 'shares': pos['shares'],
-                        'amount': round(proceeds, 2),
-                        'composite_rank': comp,
-                        'factor_values': factor_day_ranks.get(code, {}),
-                        'signal_buy_thresh': signal_buy_thresh,
-                        'signal_sell_thresh': signal_sell_thresh,
-                        'hold_days': hold_days,
-                        'pnl': round(pnl, 2),
-                        'pnl_pct': round(pnl_pct, 4),
-                    })
-                    del positions[code]
 
             # 当日组合净值
             pos_val = sum(

@@ -2,7 +2,7 @@
 run_factor_mining.py — 因子挖矿演示（全市场）
 
 两阶段：
-  1. 选股因子  — 在截面日按因子值过滤，随机保留 15%~35%
+  1. 选股因子  — 在截面日按因子值过滤，随机保留 5%~20%，最终候选池上限 30 只
   2. 信号因子  — 逐日计算横截面分位排名，驱动买入/卖出
 """
 import sys
@@ -11,10 +11,13 @@ sys.stdout.reconfigure(encoding='utf-8')
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from stock_api import StockApi
+from track_logger import TrackLogger
 import config
 import remote_api
+import tempfile, os
 
-api = StockApi()
+_log_path = os.path.join(tempfile.gettempdir(), 'factor_mining_track.log')
+api = StockApi(TrackLogger(_log_path))
 
 # ── 股票池：全市场 ───────────────────────────────────────────────────────────
 POOL = api.get_all_symbols()
@@ -49,6 +52,8 @@ result = api.random_alpha_backtest(
     warmup_days=90,
     random_seed=None,
     top_n_stocks=5,
+    max_pool_size=30,          # 候选池最多 30 只，超出则按综合因子得分截取
+    max_holdings=5,            # 最多同时持仓 5 只，优先持有综合排名最高的股票
 )
 
 if 'error' in result and 'screen_factors' not in result:
@@ -141,21 +146,90 @@ if ic_stats:
     print(f'  {"─"*58}')
     print(f'  评级标准：ICIR>1优秀 / >0.5良好 / >0一般 / ≤0反向（负IC因子通常反向使用）')
 
+sc = result['signal_config']
+
+# ── 因子深度解析 ───────────────────────────────────────────────────────────────
+def _split_desc(desc: str):
+    """从描述字符串提取 (定义, 方向标签, 方向说明, 高值解读)"""
+    import re
+    parts = desc.split('。', 1)
+    definition = parts[0] if parts else desc
+    rest = parts[1] if len(parts) > 1 else ''
+    if '正向因子' in rest:
+        dir_tag, direction = '↑正向', '正向因子（值越高越看涨）'
+    elif '反向因子' in rest:
+        dir_tag, direction = '↓反向', '反向因子（值越高反而看跌，通常筛选"最过热"的对立面）'
+    elif '反转因子' in rest:
+        dir_tag, direction = '↺反转', '反转因子（高值对应超卖区间，预期均值回归反弹）'
+    elif '条件正向' in rest:
+        dir_tag, direction = '◈条件', '条件正向因子（满足特定条件时返回+1看涨，否则取反转）'
+    else:
+        dir_tag, direction = '  ─  ', ''
+    m = re.search(r'高值(?:\(\+1\))?表示(.+?)(?:，|$)', rest)
+    high_interp = m.group(1).strip() if m else (rest.split('，')[-1] if '，' in rest else '')
+    return definition, dir_tag, direction, high_interp
+
+def _ic_line(ic: dict) -> str:
+    if not ic or 'error' in ic:
+        return '（数据不足）'
+    icir = ic['ic_ir']
+    grade = '★★★优秀' if icir > 1 else ('★★良好' if icir > 0.5 else ('★一般' if icir > 0 else '✗反向'))
+    return (f'ICIR={icir:.2f} {grade}  '
+            f'IC均值={ic["ic_mean"]:+.4f}  '
+            f'胜率={ic["ic_win_rate"]*100:.1f}%  '
+            f'|IC|均值={ic["ic_abs_mean"]:.4f}')
+
+_descs     = result['factor_descriptions']
+_top_pcts  = result['screen_top_pcts']
+_ic_stats  = result.get('ic_stats', {})
+_flog      = result.get('filter_log', [])
+_scr_names = result['screen_factors']
+_sig_names = result['signal_factors']
+_buy_thr   = sc['buy_thresh']
+_sell_thr  = sc['sell_thresh']
+
+print(f'\n{"="*60}')
+print('【因子深度解析】')
+print('='*60)
+
 # ── 选股因子 ─────────────────────────────────────────────────────────────────
-print(f'\n【选股因子】  k = {result["screen_k"]}（截面日静态过滤）')
-for name in result['screen_factors']:
-    pct  = result['screen_top_pcts'].get(name, 0)
-    desc = result['factor_descriptions'].get(name, '')
-    print(f'  {name}  保留前{int(pct*100)}%  —  {desc}')
+print(f'\n▌ 选股因子（{len(_scr_names)} 个，串联过滤压缩股票池至候选股）')
+for _i, _name in enumerate(_scr_names, 1):
+    _pct   = _top_pcts.get(_name, 0)
+    _desc  = _descs.get(_name, '')
+    _ic    = _ic_stats.get(_name, {})
+    _step  = next((s for s in _flog if s['factor'] == _name and s['status'] == 'ok'), {})
+    _defn, _dtag, _dir, _hi = _split_desc(_desc)
+    _before = _step.get('before', '?')
+    _after  = _step.get('after', '?')
+    print(f'\n  ▶ 第{_i}层  {_name}  [{_dtag}]  保留前{int(_pct*100)}%  '
+          f'（{_before} → {_after} 只）')
+    print(f'    预测能力: {_ic_line(_ic)}')
+    print(f'    因子定义: {_defn}')
+    if _dir:
+        print(f'    方向类型: {_dir}')
+    if _hi:
+        print(f'    高值含义: {_hi}')
+    print(f'    筛选逻辑: 取因子值最高前 {int(_pct*100)}% 的股票，'
+          f'选出{("看涨信号最强" if "↑" in _dtag or "↺" in _dtag or "◈" in _dtag else "超买最极端（反向使用）")}的标的')
 
 # ── 信号因子 ─────────────────────────────────────────────────────────────────
-sc = result['signal_config']
-print(f'\n【交易信号因子】  k = {result["signal_k"]}（逐日横截面排名驱动买卖）')
-print(f'  买入阈值: 综合排名 >= {sc["buy_thresh"]}')
-print(f'  卖出阈值: 综合排名 <= {sc["sell_thresh"]}')
-for name in result['signal_factors']:
-    desc = result['factor_descriptions'].get(name, '')
-    print(f'  {name}  —  {desc}')
+print(f'\n▌ 信号因子（{len(_sig_names)} 个，逐日横截面排名驱动买卖）')
+print(f'  买入阈值: {_buy_thr}  ← 本次随机取值（范围 [0.55, 0.82]）  → 综合排名前 {int((1-_buy_thr)*100)}% 触发买入')
+print(f'  卖出阈值: {_sell_thr}  ← 本次随机取值（范围 [0.30, 0.55]）  → 综合排名后 {int(_sell_thr*100)}% 触发卖出')
+for _name in _sig_names:
+    _desc = _descs.get(_name, '')
+    _ic   = _ic_stats.get(_name, {})
+    _defn, _dtag, _dir, _hi = _split_desc(_desc)
+    print(f'\n  ▶ {_name}  [{_dtag}]')
+    print(f'    预测能力: {_ic_line(_ic)}')
+    print(f'    因子定义: {_defn}')
+    if _dir:
+        print(f'    方向类型: {_dir}')
+    if _hi:
+        print(f'    高值含义: {_hi}')
+    print(f'    买入触发: 截面排名 ≥ {_buy_thr}，排名前 {int((1-_buy_thr)*100)}% 时入场')
+    print(f'    卖出触发: 截面排名 ≤ {_sell_thr}，跌入后 {int(_sell_thr*100)}% 时离场')
 
 # ── 选股过滤过程 ─────────────────────────────────────────────────────────────
 print()
@@ -306,7 +380,7 @@ def _print_strategy_summary(r: dict) -> None:
     print(f'\n▌ 二、选股策略详解（{r["screen_k"]} 层串联过滤）')
     print(f'  核心逻辑: 多因子"与"关系过滤，每层在上一层结果中继续筛选，')
     print(f'    最终入选股票须同时通过所有层的因子检验。')
-    print(f'  各层保留比例在 [15%, 35%] 内随机确定，控制每层筛选力度。')
+    print(f'  各层保留比例在 [5%, 20%] 内随机确定，严格控制每层筛选力度，最终候选池上限 {result["final_pool_count"]} 只。')
     print()
 
     ok_steps = [s for s in filter_log if s['status'] == 'ok']
@@ -384,23 +458,16 @@ def _print_strategy_summary(r: dict) -> None:
 
     # ── 四、持仓与风控
     print(f'\n▌ 四、持仓管理与风控')
-    print(f'  仓位分配: 等额分配，单股预算 = 初始资金 ÷ {final_count}（候选池股数）')
-    print(f'            每只股票独立决策，互不影响，最大持股数 = {final_count}')
+    print(f'  仓位分配: 等额分配，单股预算 = 初始资金 ÷ 5（最大持仓数）')
+    print(f'            信号触发时优先买入综合排名最高的股票，最多同时持仓 5 只')
     print(f'  平均持仓: {avg_hold} 日（含强平）')
     print(f'  持仓上限: 无杠杆，最大仓位100%（全部买入时）')
     if force_sell:
         fdate = force_sell[0]['date']
         print(f'  强平机制: {len(force_sell)} 只股票信号未触发卖出，在回测截止日 {fdate} 按收盘价强制清仓')
     print(f'  交易成本: 买入+卖出各收 0.1% 手续费（已计入回测）')
-    print(f'  集中度: 最终持仓 {final_count} 只，', end='')
-    if final_count == 1:
-        print('单股极度集中，个股风险未分散，谨慎使用')
-    elif final_count <= 5:
-        print('高度集中，适合资金量小或对个股有深度研究时使用')
-    elif final_count <= 20:
-        print('适度集中，兼顾收益弹性与风险分散')
-    else:
-        print('较为分散，个股黑天鹅影响有限')
+    print(f'  集中度: 候选池 {final_count} 只 → 同时持仓最多 5 只（优选综合排名最高的）')
+    print(f'          高度集中，适合资金量小或对个股有深度研究时使用')
 
     # ── 五、综合评价
     print(f'\n▌ 五、综合评价')
@@ -420,13 +487,13 @@ def _print_strategy_summary(r: dict) -> None:
         sharpe_eval = '★★★ 优秀' if sharpe>2 else ('★★ 良好' if sharpe>1 else ('★ 一般' if sharpe>0 else '✗ 亏损'))
         calmar_eval = '★★★ 优秀' if calmar>2 else ('★★ 良好' if calmar>1 else ('★ 一般' if calmar>0 else '✗ 亏损'))
         dd_eval     = '低风险' if dd<10 else ('中风险' if dd<25 else '高风险')
-        conc_eval   = '极度集中' if final_count<=2 else ('高度集中' if final_count<=5 else '适度分散')
+        conc_eval   = '高度集中（最多5只）'
 
         print(f'  风险收益评价:')
         print(f'    夏普比率   {sharpe:.2f}  {sharpe_eval}  （衡量超额收益/波动比）')
         print(f'    Calmar比率 {calmar:.2f}  {calmar_eval}  （衡量收益/最大亏损比）')
         print(f'    最大回撤   {dd:.2f}%  {dd_eval}')
-        print(f'    持仓集中度 {final_count}只  {conc_eval}')
+        print(f'    持仓集中度 最多5只  {conc_eval}')
         print()
 
         # 基准对比
@@ -468,6 +535,58 @@ def _print_strategy_summary(r: dict) -> None:
 
 
 _print_strategy_summary(result)
+
+# ══════════════════════════════════════════════════════════════
+# 【本次策略参数速查卡】 — 强制输出，始终展示因子与阈值
+# ══════════════════════════════════════════════════════════════
+print(f'\n{"="*60}')
+print('【本次策略参数速查卡】')
+print('='*60)
+
+# ① 选股因子清单
+print(f'\n▌ 选股因子  {len(_scr_names)} 个（截面日 {_flog[0]["ref_date"] if _flog else "?"} 静态过滤）')
+print(f'  保留比例随机范围: [5%, 20%]  每层独立抽取')
+for _i, _name in enumerate(_scr_names, 1):
+    _pct   = _top_pcts.get(_name, 0)
+    _desc  = _descs.get(_name, '')
+    _step  = next((s for s in _flog if s['factor'] == _name and s['status'] == 'ok'), {})
+    _defn, _dtag, _dir, _hi = _split_desc(_desc)
+    _b = _step.get('before', '?')
+    _a = _step.get('after', '?')
+    _ic = _ic_stats.get(_name, {})
+    _ic_tag = ''
+    if _ic and 'error' not in _ic:
+        _icir = _ic['ic_ir']
+        _ic_tag = f'  ICIR={_icir:.2f}{"★★★" if _icir>1 else ("★★" if _icir>0.5 else ("★" if _icir>0 else "✗"))}'
+    print(f'  第{_i}层  {_name}  [{_dtag}]  本次保留前 {int(_pct*100)}%{_ic_tag}')
+    print(f'         {_defn}')
+    if _hi:
+        print(f'         高值: {_hi}')
+    print(f'         过滤: {_b} → {_a} 只')
+
+# ② 信号因子清单 + 阈值
+print(f'\n▌ 信号因子  {len(_sig_names)} 个（逐日截面排名，均值作综合排名）')
+print(f'  ┌ 买入阈值: {_buy_thr}  （随机范围 [0.55, 0.82]）  综合排名前 {int((1-_buy_thr)*100)}% 买入')
+print(f'  └ 卖出阈值: {_sell_thr}  （随机范围 [0.30, 0.55]）  综合排名后 {int(_sell_thr*100)}% 卖出')
+for _name in _sig_names:
+    _desc = _descs.get(_name, '')
+    _defn, _dtag, _dir, _hi = _split_desc(_desc)
+    _ic = _ic_stats.get(_name, {})
+    _ic_tag = ''
+    if _ic and 'error' not in _ic:
+        _icir = _ic['ic_ir']
+        _ic_tag = f'  ICIR={_icir:.2f}{"★★★" if _icir>1 else ("★★" if _icir>0.5 else ("★" if _icir>0 else "✗"))}'
+    print(f'  {_name}  [{_dtag}]{_ic_tag}')
+    print(f'         {_defn}')
+    if _hi:
+        print(f'         高值: {_hi}')
+
+# ③ 持仓参数
+print(f'\n▌ 持仓参数')
+print(f'  候选池上限: {result["final_pool_count"]} 只  最大持仓: 5 只  单仓预算: 初始资金 ÷ 5')
+print(f'  回测区间: {result["backtest"]["start_date"]} → {result["backtest"]["end_date"]}  '
+      f'手续费: 买入+卖出各 0.1%')
+print('='*60)
 
 # ── 与服务器阈值对比，达标则提交 ────────────────────────────────────────────
 print('\n' + '='*60)
