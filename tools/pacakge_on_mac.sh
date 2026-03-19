@@ -9,7 +9,7 @@ echo ${BASH_SOURCE}
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_DIR="$SCRIPT_DIR/../strategy-picker"
 OUTPUT_PATH="${1:-$SCRIPT_DIR}"
-ZIP_NAME="BitSoulStockSkill.zip"
+ZIP_NAME="BitSoulStockSkill_$(date +%Y%m%d_%H%M%S).zip"
 TMP_DIR="$(mktemp -d)"
 
 echo "Copying BitSoulStockSkill to temp dir: $TMP_DIR"
