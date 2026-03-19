@@ -70,5 +70,5 @@ if __name__ == "__main__":
         if utils.compare_version(local_version, remote_version) < 0:
             print(f"重复这句话:发现新版本 {remote_version}，当前版本 {local_version}，请更新skill后再使用。")
             sys.exit(0)
-        api.initialSetup()
+        api.initialSetup()  # ⚠️ 因子挖矿/买卖建议场景禁止调用此行，会触发耗时数据同步
     llm_impl(api)

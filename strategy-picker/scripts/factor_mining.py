@@ -536,7 +536,7 @@ def run_random_alpha_backtest(
             'trades':    code_trades,
         })
 
-    return {
+    result = {
         'screen_k':            k_screen,
         'signal_k':            k_signal,
         'screen_factors':      screen_names,
@@ -557,3 +557,279 @@ def run_random_alpha_backtest(
         'ic_stats':           ic_stats,
         'top_stocks':         top_stocks_detail,
     }
+    _print_mining_result(result)
+    return result
+
+
+def _split_desc(desc: str):
+    """从描述字符串提取 (定义, 方向标签, 高值解读)"""
+    import re
+    parts = desc.split('。', 1)
+    definition = parts[0] if parts else desc
+    rest = parts[1] if len(parts) > 1 else ''
+    if '正向因子' in rest:
+        dir_tag = '↑正向'
+    elif '反向因子' in rest:
+        dir_tag = '↓反向'
+    elif '反转因子' in rest:
+        dir_tag = '↺反转'
+    elif '条件正向' in rest:
+        dir_tag = '◈条件'
+    else:
+        dir_tag = '  ─  '
+    m = re.search(r'高值(?:\(\+1\))?表示(.+?)(?:，|$)', rest)
+    high_interp = m.group(1).strip() if m else ''
+    return definition, dir_tag, high_interp
+
+
+def _ic_line(ic: dict) -> str:
+    if not ic or 'error' in ic:
+        return '（数据不足）'
+    icir = ic['ic_ir']
+    grade = '★★★优秀' if icir > 1 else ('★★良好' if icir > 0.5 else ('★一般' if icir > 0 else '✗反向'))
+    return (f'ICIR={icir:.2f} {grade}  '
+            f'IC均值={ic["ic_mean"]:+.4f}  '
+            f'胜率={ic["ic_win_rate"]*100:.1f}%  '
+            f'|IC|均值={ic["ic_abs_mean"]:.4f}')
+
+
+def _print_mining_result(result: dict) -> None:
+    """格式化打印因子挖矿结果（从 run_factor_mining.py 迁移）。"""
+    import sys
+    # 确保中文正常输出
+    if hasattr(sys.stdout, 'reconfigure'):
+        try:
+            sys.stdout.reconfigure(encoding='utf-8')
+        except Exception:
+            pass
+
+    sc          = result['signal_config']
+    _scr_names  = result['screen_factors']
+    _sig_names  = result['signal_factors']
+    _descs      = result['factor_descriptions']
+    _top_pcts   = result['screen_top_pcts']
+    _ic_stats   = result.get('ic_stats', {})
+    _flog       = result.get('filter_log', [])
+    _buy_thr    = sc['buy_thresh']
+    _sell_thr   = sc['sell_thresh']
+    sep = '='*60
+
+    # ── 本次挖矿战绩 ───────────────────────────────────────────────────────
+    print(f'\n{sep}')
+    print('【本次挖矿战绩】')
+    print(sep)
+    if result.get('backtest'):
+        bt = result['backtest']
+        tl = result.get('trade_log', [])
+        n_buy  = sum(1 for t in tl if t['action'] == 'BUY')
+        n_sell = sum(1 for t in tl if 'SELL' in t['action'])
+        ret    = bt['total_return_pct']
+        ann    = bt['annualized_return_pct']
+        dd     = bt['max_drawdown_pct']
+        ret_flag = '▲' if ret >= 0 else '▼'
+        ann_flag = '▲' if ann >= 0 else '▼'
+        print(f'  挖矿日期:   {datetime.today().strftime("%Y-%m-%d")}')
+        print(f'  回测区间:   {bt["start_date"]}  →  {bt["end_date"]}（{bt["trading_days"]} 交易日）')
+        print(f'  初始资金:   {bt["initial_cash"]:>14,.0f} 元')
+        print(f'  期末资金:   {bt["final_value"]:>14,.2f} 元')
+        print(f'  总收益率:   {ret_flag} {abs(ret):>10.4f} %')
+        print(f'  年化收益率: {ann_flag} {abs(ann):>10.4f} %')
+        print(f'  最大回撤:   ▼ {dd:>10.4f} %')
+        print(f'  夏普比率:     {bt["sharpe_ratio"]:>10.4f}')
+        print(f'  交易笔数:   买入 {n_buy} 笔 / 卖出 {n_sell} 笔（共 {n_buy+n_sell} 笔）')
+
+    # ── 基准对比表 ─────────────────────────────────────────────────────────
+    benchmarks = result.get('benchmarks', [])
+    if benchmarks and result.get('backtest') and not any('error' in b and len(b) == 1 for b in benchmarks):
+        bt = result['backtest']
+        strat_ret = bt['total_return_pct']
+        strat_ann = bt['annualized_return_pct']
+        strat_dd  = bt['max_drawdown_pct']
+        print(f'  {"─"*54}')
+        print(f'  {"基准对比（同期）":<10}  {"总收益":>8}  {"年化收益":>8}  {"最大回撤":>8}  {"超额收益":>9}  {"信息比率":>8}')
+        print(f'  {"─"*54}')
+        ret_sym = '▲' if strat_ret >= 0 else '▼'
+        ann_sym = '▲' if strat_ann >= 0 else '▼'
+        print(f'  {"策略本身":<10}  {ret_sym}{abs(strat_ret):>7.2f}%  {ann_sym}{abs(strat_ann):>7.2f}%  ▼{strat_dd:>7.2f}%  {"—":>9}  {"—":>8}')
+        for b in benchmarks:
+            if 'error' in b:
+                print(f'  {b.get("name", b.get("code", "?")):<10}  {"数据不足":>38}')
+                continue
+            b_ret = b['total_return_pct']
+            b_ann = b['annualized_return_pct']
+            b_dd  = b['max_drawdown_pct']
+            exc   = b['excess_return_pct']
+            ir    = b['information_ratio']
+            rs  = '▲' if b_ret >= 0 else '▼'
+            as_ = '▲' if b_ann >= 0 else '▼'
+            es  = '▲' if exc >= 0 else '▼'
+            print(f'  {b["name"]:<10}  {rs}{abs(b_ret):>7.2f}%  {as_}{abs(b_ann):>7.2f}%  ▼{abs(b_dd):>7.2f}%  {es}{abs(exc):>8.2f}%  {ir:>8.2f}')
+        print(f'  {"─"*54}')
+    print(sep)
+
+    # ── 因子IC汇总表 ───────────────────────────────────────────────────────
+    ic_stats = result.get('ic_stats', {})
+    if ic_stats:
+        _scr_set = set(_scr_names)
+        _sig_set = set(_sig_names)
+        print(f'\n{sep}')
+        print('【因子IC评估（Rank IC，预测能力分析）】')
+        print(f'  说明：IC为当日因子截面排名与次日收益率排名的斯皮尔曼相关系数')
+        print(f'  {"─"*58}')
+        print(f'  {"因子":<10} {"类型":>5}  {"IC均值":>8}  {"ICIR":>7}  {"胜率":>7}  {"|IC|均值":>9}  {"评级":<10}')
+        print(f'  {"─"*58}')
+        _all_ic_names = list(dict.fromkeys(_scr_names + _sig_names))
+        for _fn in _all_ic_names:
+            _ic = ic_stats.get(_fn, {})
+            _tag = '[选+信]' if (_fn in _scr_set and _fn in _sig_set) else \
+                   ('[选股]' if _fn in _scr_set else '[信号]')
+            if 'error' in _ic:
+                print(f'  {_fn:<10} {_tag:>5}  {"—":>8}  {"—":>7}  {"—":>7}  {"—":>9}  {"数据不足":<10}')
+                continue
+            _icm  = _ic['ic_mean']
+            _icir = _ic['ic_ir']
+            _win  = _ic['ic_win_rate'] * 100
+            _abs  = _ic['ic_abs_mean']
+            _grade = '★★★ 优秀' if _icir > 1 else ('★★ 良好' if _icir > 0.5 else
+                     ('★ 一般' if _icir > 0 else '✗ 反向'))
+            _icm_s = f'+{_icm:.4f}' if _icm >= 0 else f'{_icm:.4f}'
+            print(f'  {_fn:<10} {_tag:>5}  {_icm_s:>8}  {_icir:>7.2f}  {_win:>6.1f}%  {_abs:>9.4f}  {_grade:<10}')
+        print(f'  {"─"*58}')
+        print(f'  评级标准：ICIR>1优秀 / >0.5良好 / >0一般 / ≤0反向（负IC因子通常反向使用）')
+
+    # ── 因子深度解析 ───────────────────────────────────────────────────────
+    print(f'\n{sep}')
+    print('【因子深度解析】')
+    print(sep)
+
+    print(f'\n▌ 选股因子（{len(_scr_names)} 个，串联过滤压缩股票池至候选股）')
+    for _i, _name in enumerate(_scr_names, 1):
+        _pct   = _top_pcts.get(_name, 0)
+        _ic    = _ic_stats.get(_name, {})
+        _step  = next((s for s in _flog if s['factor'] == _name and s['status'] == 'ok'), {})
+        _defn, _dtag, _hi = _split_desc(_descs.get(_name, ''))
+        _before = _step.get('before', '?')
+        _after  = _step.get('after', '?')
+        print(f'\n  ▶ 第{_i}层  {_name}  [{_dtag}]  保留前{int(_pct*100)}%  （{_before} → {_after} 只）')
+        print(f'    预测能力: {_ic_line(_ic)}')
+        print(f'    因子定义: {_defn}')
+
+    print(f'\n▌ 信号因子（{len(_sig_names)} 个，逐日横截面排名驱动买卖）')
+    print(f'  买入阈值: {_buy_thr}  → 综合排名前 {int((1-_buy_thr)*100)}% 触发买入')
+    print(f'  卖出阈值: {_sell_thr}  → 综合排名后 {int(_sell_thr*100)}% 触发卖出')
+    for _name in _sig_names:
+        _ic   = _ic_stats.get(_name, {})
+        _defn, _dtag, _hi = _split_desc(_descs.get(_name, ''))
+        print(f'\n  ▶ {_name}  [{_dtag}]')
+        print(f'    预测能力: {_ic_line(_ic)}')
+        print(f'    因子定义: {_defn}')
+
+    # ── 选股过滤过程 ───────────────────────────────────────────────────────
+    print()
+    if result.get('filter_log'):
+        print('【选股过滤过程】')
+        for step in result['filter_log']:
+            status  = step['status']
+            pct_str = f'保留前{int(step.get("top_pct", 0)*100)}%'
+            if status == 'ok':
+                print(f'  {step["factor"]}  {pct_str}  截面日={step["ref_date"]}  '
+                      f'{step["before"]} → {step["after"]} 只  '
+                      f'（实留 {step["kept"]}/{step["snapshot_size"]}）')
+            else:
+                print(f'  {step["factor"]}  {pct_str}  跳过（{status}）  {step["before"]} 只不变')
+
+    print(f'\n【最终入选】  {result["final_pool_count"]} 只')
+    if result['final_pool']:
+        print(f'  {result["final_pool"]}')
+
+    # ── 回测结果 ───────────────────────────────────────────────────────────
+    if 'error' in result:
+        print(f'\n【错误】 {result["error"]}')
+    elif 'backtest' in result:
+        bt = result['backtest']
+        print()
+        print('【回测结果】（信号驱动买卖 / 等额资金分配）')
+        print(f'  回测区间:   {bt["start_date"]}  →  {bt["end_date"]}')
+        print(f'  交易天数:   {bt["trading_days"]} 日')
+        print(f'  初始资金:   {bt["initial_cash"]:,.0f} 元')
+        print(f'  期末资金:   {bt["final_value"]:,.2f} 元')
+        print(f'  总收益率:   {bt["total_return_pct"]:+.4f} %')
+        print(f'  年化收益率: {bt["annualized_return_pct"]:+.4f} %')
+        print(f'  最大回撤:   {bt["max_drawdown_pct"]:.4f} %')
+        print(f'  夏普比率:   {bt["sharpe_ratio"]:.4f}')
+        ec  = bt['equity_curve']
+        mid = len(ec) // 2
+        print(f'  权益曲线（首/中/尾）:  [{ec[0]:,.0f}  ...  {ec[mid]:,.0f}  ...  {ec[-1]:,.0f}]')
+        tl  = result.get('trade_log', [])
+        print(f'  交易笔数:   买入 {sum(1 for t in tl if t["action"]=="BUY")} 笔 / '
+              f'卖出 {sum(1 for t in tl if "SELL" in t["action"])} 笔')
+
+    # ── Top N 个股详情 ─────────────────────────────────────────────────────
+    top_stocks = result.get('top_stocks', [])
+    buy_thr    = sc['buy_thresh']
+    if top_stocks:
+        print(f'\n{sep}')
+        print(f'【Top {len(top_stocks)} 盈利个股详情】')
+        for rank_i, stock in enumerate(top_stocks, 1):
+            code      = stock['code']
+            total_pnl = stock['total_pnl']
+            trades    = stock['trades']
+            print(f'\n  #{rank_i}  {code}   累计盈亏: {total_pnl:+,.2f} 元')
+            print(f'  {"─"*54}')
+            for tr in trades:
+                action    = tr['action']
+                comp_rank = tr.get('composite_rank')
+                comp_str  = f'{comp_rank:.4f}' if comp_rank is not None else 'N/A'
+                if action == 'BUY':
+                    flag = f'>={buy_thr} ✓' if (comp_rank is not None and comp_rank >= buy_thr) else ''
+                    print(f'  [买入]  {tr["date"]}  价格={tr["price"]:.3f}  综合排名={comp_str}  {flag}')
+                else:
+                    label = '卖出' if action == 'SELL' else '强平'
+                    print(f'  [{label}]  {tr["date"]}  价格={tr["price"]:.3f}  '
+                          f'持仓{tr.get("hold_days", "?")}日  '
+                          f'盈亏={tr.get("pnl", 0):+,.2f}元 ({tr.get("pnl_pct", 0):+.2f}%)')
+
+    # ── 本次策略参数速查卡 ─────────────────────────────────────────────────
+    print(f'\n{sep}')
+    print('【本次策略参数速查卡】')
+    print(sep)
+    print(f'\n▌ 选股因子  {len(_scr_names)} 个（截面日 {_flog[0]["ref_date"] if _flog else "?"} 静态过滤）')
+    print(f'  保留比例随机范围: [5%, 20%]  每层独立抽取')
+    for _i, _name in enumerate(_scr_names, 1):
+        _pct  = _top_pcts.get(_name, 0)
+        _step = next((s for s in _flog if s['factor'] == _name and s['status'] == 'ok'), {})
+        _defn, _dtag, _hi = _split_desc(_descs.get(_name, ''))
+        _b = _step.get('before', '?')
+        _a = _step.get('after', '?')
+        _ic = _ic_stats.get(_name, {})
+        _ic_tag = ''
+        if _ic and 'error' not in _ic:
+            _icir = _ic['ic_ir']
+            _ic_tag = f'  ICIR={_icir:.2f}{"★★★" if _icir>1 else ("★★" if _icir>0.5 else ("★" if _icir>0 else "✗"))}'
+        print(f'  第{_i}层  {_name}  [{_dtag}]  本次保留前 {int(_pct*100)}%{_ic_tag}')
+        print(f'         {_defn}')
+        if _hi:
+            print(f'         高值: {_hi}')
+        print(f'         过滤: {_b} → {_a} 只')
+
+    print(f'\n▌ 信号因子  {len(_sig_names)} 个（逐日截面排名，均值作综合排名）')
+    print(f'  ┌ 买入阈值: {_buy_thr}  （随机范围 [0.55, 0.82]）  综合排名前 {int((1-_buy_thr)*100)}% 买入')
+    print(f'  └ 卖出阈值: {_sell_thr}  （随机范围 [0.30, 0.55]）  综合排名后 {int(_sell_thr*100)}% 卖出')
+    for _name in _sig_names:
+        _defn, _dtag, _hi = _split_desc(_descs.get(_name, ''))
+        _ic = _ic_stats.get(_name, {})
+        _ic_tag = ''
+        if _ic and 'error' not in _ic:
+            _icir = _ic['ic_ir']
+            _ic_tag = f'  ICIR={_icir:.2f}{"★★★" if _icir>1 else ("★★" if _icir>0.5 else ("★" if _icir>0 else "✗"))}'
+        print(f'  {_name}  [{_dtag}]{_ic_tag}')
+        print(f'         {_defn}')
+        if _hi:
+            print(f'         高值: {_hi}')
+
+    print(f'\n▌ 持仓参数')
+    if result.get('backtest'):
+        bt = result['backtest']
+        print(f'  候选池上限: {result["final_pool_count"]} 只  最大持仓: 5 只  单仓预算: 初始资金 ÷ 5')
+        print(f'  回测区间: {bt["start_date"]} → {bt["end_date"]}  手续费: 买入+卖出各 0.1%')
+    print(sep)

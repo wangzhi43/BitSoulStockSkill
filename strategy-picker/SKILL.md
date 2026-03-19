@@ -11,7 +11,7 @@ description: 给用户提供自定义交易策略的回测、自定义策略选�
 
 # 注意事项
 * api接口文档是scripts/stock_api.py和scripts/define.py，不要从其他文件中读取任何接口，可以使用python标准库提供的接口，不允许使用任何额外的三方库。
-* **因子挖矿**：用户说"因子挖矿"、"挖矿"、"随机挖因子"、"碰碰运气"、"随机推荐"、"挖金矿"、"随机策略"时，直接调用 `api.random_alpha_backtest()`，禁止自己写回测逻辑。返回结果直接 print 输出即可，无需二次处理。
+* **因子挖矿**：用户说"因子挖矿"、"挖矿"、"随机挖因子"、"碰碰运气"、"随机推荐"、"挖金矿"、"随机策略"时，直接调用 `api.random_alpha_backtest()`，禁止自己写回测逻辑。返回结果直接 print 输出即可，无需二次处理。⚠️ **因子挖矿和买卖建议场景禁止调用 `api.initialSetup()`**，否则会触发耗时的数据同步下载。
 * **买卖建议**：用户询问某只股票能不能买/卖/持有时，直接调用 `api.get_trade_signal(code)`，禁止自己计算指标做判断。
 * 将模板代码文件scripts/template.py复制一份到系统临时目录下，后续修改都是基于你拷贝的模板代码副本，副本文件名称固定为bitsoul_skill_tmp_strategy.py，将bitsoul_skill_tmp_strategy.py中的 {search_path} 占位符为当前skill的scripts目录的绝对路径
 * 任何你生成的逻辑都要放在 bitsoul_skill_tmp_strategy.py中的 llm_impl 函数中
@@ -32,6 +32,22 @@ description: 给用户提供自定义交易策略的回测、自定义策略选�
 * 所有任务执行完毕后，立刻结束回答。
 
 # 示例
+
+## 示例 0：因子挖矿
+
+**用户输入**：因子挖矿 / 挖矿 / 碰碰运气 / 随机推荐 / 挖金矿 / 随机策略
+
+**拷贝scripts/template.py到系统临时目录下，并以bitsoul_skill_tmp_strategy.py命名**：
+**修改bitsoul_skill_tmp_strategy.py，生成策略代码**：
+```python
+def llm_impl(api: StockApi):
+    codes = api.get_all_symbols()
+    result = api.random_alpha_backtest(codes=codes)
+    print(result)
+```
+**{mode} 替换为 `Mode.Token_rw`（因子挖矿禁止调用 initialSetup）**
+**执行命令**：python3 /xxxx/bitsoul_skill_tmp_strategy.py
+**结束思考，不再进行任何回答**
 
 ## 示例 1：
 

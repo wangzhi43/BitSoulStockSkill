@@ -3815,8 +3815,8 @@ class StockApi:
     def random_alpha_backtest(
         self,
         codes: Optional[List[str]] = None,
-        max_screen_factors: int = 5,
-        max_signal_factors: int = 7,
+        max_screen_factors: int = 3,
+        max_signal_factors: int = 3,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         initial_cash: float = 1_000_000.0,
