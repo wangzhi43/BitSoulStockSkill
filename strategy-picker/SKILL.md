@@ -43,9 +43,40 @@ description: 给用户提供自定义交易策略的回测、自定义策略选�
 def llm_impl(api: StockApi):
     codes = api.get_all_symbols()
     result = api.random_alpha_backtest(codes=codes)
-    print(result)
+    print(result['summary_text'])
 ```
 **{mode} 替换为 `Mode.Token_rw`（因子挖矿禁止调用 initialSetup）**
+**执行命令**：python3 /xxxx/bitsoul_skill_tmp_strategy.py
+**结束思考，不再进行任何回答**
+
+## 示例 0.5：MoE 买卖建议
+
+**触发关键字**：某只股票"能不能买"、"该不该卖"、"现在适合持有吗"、"操作建议"、"投资建议"、"买卖信号"、"值得买吗"、"要不要买"等，且用户指定了具体股票代码或名称。
+
+**拷贝scripts/template.py到系统临时目录下，并以bitsoul_skill_tmp_strategy.py命名**：
+**修改bitsoul_skill_tmp_strategy.py，生成策略代码**：
+```python
+def llm_impl(api: StockApi):
+    result = api.get_trade_signal('600519.SH')  # 替换为用户指定的股票代码
+    # 退市警告优先输出
+    if result.get('delist_warning'):
+        print(result['delist_warning'])
+    signal_map = {'BUY': '✅ 建议买入', 'SELL': '❌ 建议卖出', 'HOLD': '⏸ 建议持有观望'}
+    print(f'信号：{signal_map.get(result["signal"], result["signal"])}')
+    print(f'综合评分：{result["final_score"]:.4f}  置信度：{result["confidence"]}')
+    print(f'分析依据：{result["reason"]}')
+    experts = result.get('experts', {})
+    name_map = {'technical': '技术指标', 'alpha': 'Alpha因子', 'fundamental': '基本面', 'behavior': '量价行为'}
+    for k, info in experts.items():
+        label = name_map.get(k, k)
+        s = info.get('score')
+        note = info.get('note', '')
+        if s is None:
+            print(f'  {label}：{note}')
+        else:
+            print(f'  {label}：评分={s:.4f}  权重={info.get("weight", 0):.3f}')
+```
+**{mode} 替换为 `Mode.User_exec`（MoE分析禁止调用 initialSetup）**
 **执行命令**：python3 /xxxx/bitsoul_skill_tmp_strategy.py
 **结束思考，不再进行任何回答**
 

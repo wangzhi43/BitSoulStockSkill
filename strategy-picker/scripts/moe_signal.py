@@ -774,7 +774,7 @@ def _compute_final_score(
                 entry['details'] = active[k]['details']
             experts_out[k] = entry
         else:
-            experts_out[k] = {'score': None, 'weight': 0.0, 'note': '数据不足'}
+            experts_out[k] = {'score': None, 'weight': 0.0, 'note': '数据补充中，敬请期待'}
 
     return {
         'final_score': final_score,
@@ -793,6 +793,19 @@ def analyze(code: str, date: str) -> Dict[str, Any]:
     运行 4 个专家打分，门控网络汇总，输出 BUY/SELL/HOLD。
     """
     print(f'[MoE] 正在分析 {code}  日期={date}')
+
+    # 退市检查
+    try:
+        basics = query_stock_basic(ts_codes=[code])
+        if basics:
+            b = basics[0]
+            if getattr(b, 'list_status', None) == 'D':
+                delist_date = getattr(b, 'delist_date', None) or '未知'
+                name = getattr(b, 'name', code)
+                print(f'[MoE] ⚠️  {code}（{name}）已于 {delist_date} 退市，以下分析仅供参考，该股票已无法交易。')
+    except Exception:
+        pass
+
     weights = load_weights()
     expert_w = weights.get('expert_weights', _DEFAULT_WEIGHTS['expert_weights'])
     tech_w = weights.get('technical', {})
@@ -817,6 +830,22 @@ def analyze(code: str, date: str) -> Dict[str, Any]:
     result = _compute_final_score(tech, alpha, fund, behav, expert_w, buy_thresh, sell_thresh)
     result['code'] = code
     result['date'] = date
+
+    # 退市标记写入返回值
+    try:
+        basics = query_stock_basic(ts_codes=[code])
+        if basics:
+            b = basics[0]
+            if getattr(b, 'list_status', None) == 'D':
+                result['delisted'] = True
+                result['delist_date'] = getattr(b, 'delist_date', None) or '未知'
+                result['delist_warning'] = (
+                    f"⚠️ {code}（{getattr(b, 'name', code)}）已于 {result['delist_date']} 退市，"
+                    f"该股票已无法交易，以下分析仅供参考。"
+                )
+    except Exception:
+        pass
+
     return result
 
 
