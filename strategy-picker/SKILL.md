@@ -24,6 +24,9 @@ description: 给用户提供自定义交易策略的回测、自定义策略选�
     * 使用scripts/stock_api.py的set_user_token接口进行token设置，设置完后回复用户"token设置成功"。
 * 如果用户意图是查询当前的token:
     * bitsoul_skill_tmp_strategy.py中的 {mode} 占位符替换为 Token_rw
+* 如果用户意图是更新vip基础数据包:
+    * bitsoul_skill_tmp_strategy.py中的 {mode} 占位符替换为 Update_vip_basic_data
+    * 使用scripts/stock_api.py的update_vip_basic_data接口进行更新
 * 所有任务执行完毕后，立刻结束回答。
 
 # 示例

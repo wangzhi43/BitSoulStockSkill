@@ -242,6 +242,8 @@ class StockApi:
             token 设置的token
         """
         return config.set_token(token=token)
+    
+    
 
     # ============================================================
     # 初始化
@@ -254,6 +256,11 @@ class StockApi:
         init_indicators_db()
         init_signals_db()
 
+    def update_vip_basic_data():
+        """
+        更新vip基础数据包
+        """
+        data_fetcher.syn_vip_basic_data()
     # ============================================================
     # 股票基础信息类接口
     # ============================================================
