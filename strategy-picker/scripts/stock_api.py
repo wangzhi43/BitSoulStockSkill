@@ -4324,6 +4324,40 @@ class StockApi:
             'top_stocks':         top_stocks_detail,
         }
 
+    def crawl_bloggers(self, users: list[str], days: int = 3):
+        """
+        按博主抓取帖子，返回本次新增帖子总数。
+
+        Args:
+            users - 博主 ID 或用户名列表（雪球/微博/淘股吧/东方财富），
+                    可混用数字 ID 与昵称；
+                    自动在所有平台搜索，只抓取找到该用户的平台
+            days  - 抓取最近 N 天（默认 3）
+
+        Example:
+            api.crawl_bloggers(["ETF拯救世界", "大头投基金"], days=3)
+            api.crawl_bloggers(["5999183282", "闷得而蜜"], days=7)
+        """
+        from finance_crawler import crawl_once
+        return crawl_once(users=users, days=days)
+
+    def crawl_stock(self, stocks: list[str], days: int = 3) -> int:
+        """
+        按股票名称/代码搜索所有平台的相关讨论，返回本次新增帖子总数。
+
+        Args:
+            stocks - 股票列表，支持名称（"贵州茅台"）或代码（"600519"/"SH600519"），可混用
+            days   - 抓取最近 N 天（默认 3 天）
+
+        支持平台：东方财富股吧、雪球、微博
+
+        Example:
+            api.crawl_stock(["贵州茅台", "平安银行"], days=3)
+            api.crawl_stock(["600519", "SZ000001"], days=1)
+        """
+        from finance_crawler import crawl_stock
+        return crawl_stock(stocks=stocks, days=days)
+
 
     # ============================================================
     # ★ MoE 混合专家买卖决策接口（Agent 调用优先级最高）
