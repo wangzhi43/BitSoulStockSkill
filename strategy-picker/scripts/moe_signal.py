@@ -824,10 +824,10 @@ def analyze(code: str, date: str) -> Dict[str, Any]:
 # 功能二：遗传算法权重训练
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _get_trading_dates(start_date: str, end_date: str, codes: List[str]) -> List[str]:
-    """从数据库获取日期列表（按月采样，降低计算量）。"""
-    klines = query_daily_kline(codes=codes[:1], start_date=start_date, end_date=end_date,
-                               order_by='date ASC', limit=10000)
+def _get_trading_dates(start_date: str, end_date: str) -> List[str]:
+    """从数据库获取月度采样日期列表（用000001.SZ取交易日历，每月取第一个交易日）。"""
+    klines = query_daily_kline(codes=['000001.SZ'], start_date=start_date, end_date=end_date,
+                               order_by='date ASC', limit=None)
     dates = sorted(set(k.date for k in klines))
     monthly: Dict[str, str] = {}
     for d in dates:
@@ -837,70 +837,136 @@ def _get_trading_dates(start_date: str, end_date: str, codes: List[str]) -> List
     return list(monthly.values())
 
 
-def _simulate_return(
-    code: str,
-    signal_dates: List[Tuple[str, str]],
-    hold_days: int = 5,
-) -> float:
-    """模拟按 BUY 信号持有 hold_days 天后平仓的平均收益率。"""
-    total_return = 0.0
-    trade_count = 0
-    for date, signal in signal_dates:
-        if signal != 'BUY':
-            continue
-        buy_klines = query_daily_kline(codes=[code], end_date=date, limit=1, order_by='date DESC')
-        if not buy_klines:
-            continue
-        buy_price = buy_klines[0].close
-        future_date = (datetime.strptime(date, '%Y-%m-%d') + timedelta(days=hold_days * 2)).strftime('%Y-%m-%d')
-        sell_klines = query_daily_kline(codes=[code], start_date=date, end_date=future_date,
-                                        limit=hold_days + 1, order_by='date ASC')
-        if len(sell_klines) < 2:
-            continue
-        sell_price = sell_klines[-1].close
+# ── 训练缓存结构 ──────────────────────────────────────────────────────────────
+# cache[(code, date)] = {
+#   'tech_raw':  Dict[str, float],   # 技术指标原始分
+#   'fund_raw':  Dict[str, float],   # 基本面原始分
+#   'behav_raw': Dict[str, float],   # 行为原始分
+#   'future_ret': float,             # 5日后实际收益率（用于适应度）
+# }
+_TRAIN_CACHE: Dict[Tuple[str, str], Dict] = {}
+
+
+def _precompute_cache(train_codes: List[str], train_dates: List[str], hold_days: int = 5) -> None:
+    """
+    预计算阶段：一次性算好所有 (code, date) 的原始指标分和未来收益，
+    存入内存缓存。遗传算法迭代时只做纯内存加权，不再查DB。
+    """
+    global _TRAIN_CACHE
+    _TRAIN_CACHE = {}
+    total = len(train_codes) * len(train_dates)
+    done = 0
+    print(f'[预计算] 共 {len(train_codes)} 只股票 × {len(train_dates)} 个日期 = {total} 个样本点', flush=True)
+
+    # 批量预取未来收益：查询每只股票在训练区间内的K线，避免逐条查DB
+    # key: code -> {date -> (buy_price, sell_price)}
+    price_map: Dict[str, Dict[str, Tuple[float, float]]] = {}
+    print('[预计算] 批量加载K线价格...', flush=True)
+    start_dt = train_dates[0] if train_dates else '2025-09-01'
+    end_future = (datetime.strptime(train_dates[-1], '%Y-%m-%d') + timedelta(days=hold_days * 3)).strftime('%Y-%m-%d')
+
+    batch_size = 200
+    for i in range(0, len(train_codes), batch_size):
+        batch = train_codes[i:i+batch_size]
+        klines = query_daily_kline(codes=batch, start_date=start_dt, end_date=end_future,
+                                   order_by='date ASC', limit=None)
+        for kl in klines:
+            if kl.code not in price_map:
+                price_map[kl.code] = {}
+            price_map[kl.code][kl.date] = kl.close
+        if (i // batch_size) % 5 == 0:
+            print(f'  K线加载: {min(i+batch_size, len(train_codes))}/{len(train_codes)} 只...', flush=True)
+
+    def _future_ret(code: str, date: str) -> Optional[float]:
+        """取买入日后第 hold_days 个已有交易日的收盘价计算收益。"""
+        cdates = price_map.get(code)
+        if not cdates:
+            return None
+        sorted_dates = sorted(cdates.keys())
+        try:
+            idx = sorted_dates.index(date)
+        except ValueError:
+            # 找最近的日期
+            before = [d for d in sorted_dates if d <= date]
+            if not before:
+                return None
+            idx = sorted_dates.index(before[-1])
+        buy_price = cdates[sorted_dates[idx]]
+        sell_idx = min(idx + hold_days, len(sorted_dates) - 1)
+        if sell_idx == idx:
+            return None
+        sell_price = cdates[sorted_dates[sell_idx]]
         if buy_price > 0:
-            ret = (sell_price - buy_price) / buy_price
-            total_return += ret
-            trade_count += 1
-    return total_return / max(trade_count, 1) if trade_count > 0 else 0.0
+            return (sell_price - buy_price) / buy_price
+        return None
+
+    print('[预计算] 计算技术/基本面/行为指标...', flush=True)
+    for ci, code in enumerate(train_codes):
+        for date in train_dates:
+            key = (code, date)
+            try:
+                tech_r = _score_tech(code, date, weights=None)
+                fund_r = _score_fundamental(code, date, weights=None)
+                behav_r = _score_behavior(code, date, weights=None)
+                fret = _future_ret(code, date)
+                _TRAIN_CACHE[key] = {
+                    'tech_raw':  tech_r.get('_raw_scores', {}) if tech_r else {},
+                    'fund_raw':  fund_r.get('_raw_scores', {}) if fund_r else {},
+                    'behav_raw': behav_r.get('_raw_scores', {}) if behav_r else {},
+                    'future_ret': fret,
+                }
+            except Exception:
+                pass
+            done += 1
+        if (ci + 1) % 100 == 0 or ci == len(train_codes) - 1:
+            print(f'  指标预计算: {ci+1}/{len(train_codes)} 只，缓存={len(_TRAIN_CACHE)} 条', flush=True)
+
+    print(f'[预计算] 完成，共缓存 {len(_TRAIN_CACHE)} 个样本点', flush=True)
 
 
-def _evaluate_weights(
-    wconfig: Dict[str, Any],
-    train_codes: List[str],
-    train_dates: List[str],
-) -> float:
-    """适应度函数：评估一组权重在训练集上的平均收益。训练阶段跳过 Alpha（太慢）。"""
-    expert_w = wconfig['expert_weights']
-    tech_w = wconfig.get('technical', {})
-    fund_w = wconfig.get('fundamental', {})
+def _evaluate_weights_fast(wconfig: Dict[str, Any]) -> float:
+    """
+    快速适应度函数：直接从内存缓存读取指标原始分，
+    按当前权重重新加权，统计 BUY 信号命中率（预测准确率 × 平均收益）。
+    """
+    tech_w  = wconfig.get('technical', {})
+    fund_w  = wconfig.get('fundamental', {})
     behav_w = wconfig.get('behavior', {})
-    buy_thresh = wconfig.get('signal_thresholds', {}).get('buy', 0.65)
+    expert_w = {k: v for k, v in wconfig['expert_weights'].items()}
+    expert_w['alpha'] = 0.0  # 训练阶段不用 alpha
+    buy_thresh  = wconfig.get('signal_thresholds', {}).get('buy', 0.65)
     sell_thresh = wconfig.get('signal_thresholds', {}).get('sell', 0.35)
-    ew_no_alpha = {k: v for k, v in expert_w.items()}
-    ew_no_alpha['alpha'] = 0.0
 
     total_ret = 0.0
-    eval_count = 0
+    buy_count = 0
 
-    for code in train_codes:
-        signal_dates = []
-        for date in train_dates:
-            try:
-                tech = _score_tech(code, date, tech_w)
-                fund = _score_fundamental(code, date, fund_w)
-                behav = _score_behavior(code, date, behav_w)
-                r = _compute_final_score(tech, None, fund, behav, ew_no_alpha, buy_thresh, sell_thresh)
-                signal_dates.append((date, r.get('signal', 'HOLD')))
-            except Exception:
-                continue
+    for (code, date), cache in _TRAIN_CACHE.items():
+        future_ret = cache.get('future_ret')
+        if future_ret is None:
+            continue
 
-        if signal_dates:
-            ret = _simulate_return(code, signal_dates, hold_days=5)
-            total_ret += ret
-            eval_count += 1
+        # 纯内存加权
+        tech_score  = _weighted_mean(cache['tech_raw'],  tech_w)  if cache['tech_raw']  else None
+        fund_score  = _weighted_mean(cache['fund_raw'],  fund_w)  if cache['fund_raw']  else None
+        behav_score = _weighted_mean(cache['behav_raw'], behav_w) if cache['behav_raw'] else None
 
-    return total_ret / max(eval_count, 1)
+        experts = {}
+        if tech_score  is not None: experts['technical']   = tech_score
+        if fund_score  is not None: experts['fundamental'] = fund_score
+        if behav_score is not None: experts['behavior']    = behav_score
+        if not experts:
+            continue
+
+        total_ew = sum(expert_w.get(k, 0.0) for k in experts)
+        if total_ew <= 0:
+            continue
+        final = sum(expert_w.get(k, 0.0) / total_ew * s for k, s in experts.items())
+
+        if final >= buy_thresh:
+            total_ret += future_ret
+            buy_count += 1
+
+    return (total_ret / buy_count) if buy_count > 0 else 0.0
 
 
 def _mutate(wconfig: Dict[str, Any], mutation_rate: float = 0.15, mutation_strength: float = 0.3) -> Dict[str, Any]:
@@ -962,10 +1028,14 @@ def train_weights(
     population_size: int = 20,
     generations: int = 30,
     elite_count: int = 4,
-    train_stock_count: int = 30,
+    train_stock_count: int = 0,
 ) -> Dict[str, Any]:
     """
-    功能二：遗传算法训练最优权重，目标：最大化训练期内平均总收益。
+    功能二：遗传算法训练最优权重，目标：最大化 BUY 信号后5日平均收益。
+
+    架构：两阶段
+      1. 预计算阶段（一次性）：批量计算所有股票×日期的指标原始分 + 未来收益，存入内存
+      2. 迭代阶段（快速）：遗传算法每代只做纯内存加权，不再查DB，速度极快
 
     Args:
         start_date: 训练开始日期
@@ -973,26 +1043,36 @@ def train_weights(
         population_size: 种群大小（默认20）
         generations: 迭代代数（默认30）
         elite_count: 每代保留的精英数量
-        train_stock_count: 训练用股票数量（随机采样）
+        train_stock_count: 训练股票数量（0=全量）
 
     Returns:
         优化后的权重配置字典（已写入 moe_weights.json）
     """
     print(f'\n[遗传算法] 开始训练  {start_date} ~ {end_date}')
-    print(f'  种群={population_size}  代数={generations}  精英={elite_count}  股票数={train_stock_count}')
+    print(f'  种群={population_size}  代数={generations}  精英={elite_count}  股票数={"全量" if train_stock_count <= 0 else train_stock_count}')
 
     all_stocks = [b.ts_code for b in query_stock_basic() if b.ts_code]
     random.seed(42)
-    train_codes = random.sample(all_stocks, min(train_stock_count, len(all_stocks)))
+    if train_stock_count <= 0 or train_stock_count >= len(all_stocks):
+        train_codes = all_stocks
+    else:
+        train_codes = random.sample(all_stocks, train_stock_count)
     print(f'  训练股票: {train_codes[:5]}... 共{len(train_codes)}只')
 
-    train_dates = _get_trading_dates(start_date, end_date, train_codes)
-    print(f'  训练日期: {len(train_dates)}个采样点  {train_dates}')
+    train_dates = _get_trading_dates(start_date, end_date)
+    print(f'  训练日期: {len(train_dates)}个月度采样点  {train_dates}')
 
     if not train_dates:
         print('[遗传算法] 没有找到训练日期，退出')
         return load_weights()
 
+    # ── 阶段一：预计算（只跑一次）──────────────────────────────────────────────
+    _precompute_cache(train_codes, train_dates, hold_days=5)
+    if not _TRAIN_CACHE:
+        print('[遗传算法] 预计算缓存为空，退出')
+        return load_weights()
+
+    # ── 阶段二：遗传算法迭代（纯内存）──────────────────────────────────────────
     base = load_weights()
     population = [base]
     for _ in range(population_size - 1):
@@ -1007,11 +1087,11 @@ def train_weights(
         fitness_scores = []
         for i, wconfig in enumerate(population):
             try:
-                fit = _evaluate_weights(wconfig, train_codes, train_dates)
+                fit = _evaluate_weights_fast(wconfig)
             except Exception:
                 fit = -1.0
             fitness_scores.append(fit)
-            print(f'  个体{i+1:2d}: 平均收益={fit*100:.2f}%')
+            print(f'  个体{i+1:2d}: BUY平均收益={fit*100:.2f}%')
 
         ranked = sorted(zip(fitness_scores, population), key=lambda x: x[0], reverse=True)
         best_gen_fit, best_gen_cfg = ranked[0]
@@ -1034,7 +1114,7 @@ def train_weights(
             new_population.append(child)
         population = new_population
 
-    print(f'\n[遗传算法] 训练完成！最优平均收益: {best_fitness*100:.2f}%')
+    print(f'\n[遗传算法] 训练完成！最优BUY平均收益: {best_fitness*100:.2f}%')
     save_weights(best_config, train_period=f'{start_date}~{end_date}')
     return best_config
 
