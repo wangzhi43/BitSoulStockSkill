@@ -21,7 +21,8 @@ import pandas as pd
 import requests
 import os
 import decrypt_patch
-from sqlalchemy import create_engine, text, Engine
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Engine
 from typing import List, Optional
 from define import BASE_URL, HTTP_TIMEOUT, DB_PATH, StockBasic, DailyKline, HourKline, WeeklyKline, MonthlyKline, DailyBasic, Income, StockLimit, DailyLimitList, DailyBombList, SectorStockMap, TopList, TopInst, SectorFlowDaily, IndexBasic, IndexDaily, IndexWeekly, IndexMonthly
 import utils
