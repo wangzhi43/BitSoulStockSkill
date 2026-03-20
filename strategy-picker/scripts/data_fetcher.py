@@ -89,7 +89,16 @@ def init_db() -> None:
     """
     初始化本地 SQLite 数据库，创建 stock_basic 和 daily_kline 表（若不存在）。
     若检测到旧版本表结构（字段不匹配），自动删除旧库重建。
+    若 assets/data_1.0.bin 不存在，则从服务器下载。
     """
+    assets_dir = utils.get_skill_assets_dir()
+    base_data_file = os.path.join(assets_dir, "data_1.0.bin")
+    if not os.path.exists(base_data_file):
+        log(f"本地基础数据包 data_1.0.bin 不存在，正在从服务器下载...")
+        if not download_data_file("data_1.0.bin", base_data_file, max_retries=3):
+            log("错误:基础数据包下载失败，数据库初始化中止")
+            return
+
     with getEngine().connect() as conn:
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS stock_basic (
@@ -1612,13 +1621,6 @@ def syn_table_datas() -> List[str]:
         assets_dir = utils.get_skill_assets_dir()
         name = "data_1.0.bin"
         base_patch_zip = os.path.join(assets_dir, name)
-
-        if not os.path.exists(base_patch_zip):
-            log(f"本地基础数据包 {name} 不存在，正在从服务器下载...")
-            if not download_data_file(name, base_patch_zip, max_retries=3):
-                log("错误:基础数据包下载失败")
-                return
-
         base_patch_decrypt_zip = os.path.join(utils.get_skill_work_dir(), "data_1.0_decrypt.zip")
         decrypt_key = remote_api.request_decrypt_key(name, config.get_token())
         if len(decrypt_key) == 0:

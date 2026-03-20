@@ -5,13 +5,11 @@ from typing import Optional
 import utils
 
 def _load_config():
-    config_path = os.path.join(os.path.dirname(__file__), "config.dat")
+    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "config.json")
     if os.path.exists(config_path):
         try:
-            with open(config_path, "rb") as f:
-                content = f.read()
-                json_str = content.decode('utf-8')
-                data = json.loads(json_str)
+            with open(config_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
                 if "base_url" in data and data["base_url"]:
                     try:
                         data["base_url"] = base64.b64decode(data["base_url"]).decode()

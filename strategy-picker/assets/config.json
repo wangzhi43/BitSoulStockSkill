@@ -1,3 +1,5 @@
 {
-    "version":"1.0.0"
+    "version": "1.0.0",
+    "base_url": "aHR0cDovLzEzOS4yMjQuMjEwLjExMDo4MA==",
+    "http_timeout": 30
 }
