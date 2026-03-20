@@ -48,7 +48,7 @@ def init_indicators_db():
                 );
             """))
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_indicators_lookup ON cached_indicators(code, indicator_type, period, use_adjusted, date);"))
-        conn.execute(text("COMMIT"))
+        conn.commit()
 
 
 def _get_cached_indicator(code: str, indicator_type: str, period: int, date: str, use_adjusted: bool = True) -> Optional[str]:
@@ -89,7 +89,7 @@ def _save_indicator(code: str, indicator_type: str, period: int, date: str, valu
         conn.execute(text(
             "INSERT OR REPLACE INTO cached_indicators (code, indicator_type, period, use_adjusted, date, value) VALUES (:code, :indicator_type, :period, :use_adjusted, :date, :value)"
         ), {"code": code, "indicator_type": indicator_type, "period": period, "use_adjusted": 1 if use_adjusted else 0, "date": date, "value": value})
-        conn.execute(text("COMMIT"))
+        conn.commit()
 
 
 def _get_klines_before_date(code: str, date: str, limit: int) -> List[DailyKline]:
