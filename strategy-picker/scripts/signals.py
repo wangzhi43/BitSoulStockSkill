@@ -60,7 +60,7 @@ def init_signals_db() -> None:
             "CREATE INDEX IF NOT EXISTS idx_signals_lookup "
             "ON cached_signals(code, signal_type, param, use_adjusted, date)"
         ))
-        conn.commit()
+        conn.execute(text("COMMIT"))
 
 
 _signals_table_ready: bool = False
@@ -123,7 +123,7 @@ def _save_signal(
             "VALUES (:code, :st, :p, :adj, :d, :v)"
         ), {"code": code, "st": signal_type, "p": param,
             "adj": 1 if use_adjusted else 0, "d": date, "v": value})
-        conn.commit()
+        conn.execute(text("COMMIT"))
 
 
 # ── K 线获取与复权（与 indicators.py 保持一致）─────────────────────────────

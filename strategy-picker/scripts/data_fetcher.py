@@ -410,7 +410,7 @@ def init_db() -> None:
                 patch        TEXT NOT NULL
             )
         """))
-        conn.commit()
+        conn.execute(text("COMMIT"))
   
 # ============================================================
 # 本地 SQLite 查询接口
@@ -1542,7 +1542,7 @@ def syn_table_datas() -> List[str]:
         row = cursor.fetchone()
         if row:
             local_patch_ver = int(row[0])
-        conn.commit()
+        conn.execute(text("COMMIT"))
     
     log(f"本地数据patch ver:{local_patch_ver}")
     if local_patch_ver < 0:
@@ -1565,7 +1565,7 @@ def syn_table_datas() -> List[str]:
         with getEngine().connect() as conn:
             conn.execute(text("DELETE FROM table_patch"))
             conn.execute(text("INSERT INTO table_patch (patch) VALUES (0)"))
-            conn.commit()
+            conn.execute(text("COMMIT"))
             os.remove(base_patch_decrypt_zip)
             shutil.rmtree(base_patch_dir)
 
@@ -1603,7 +1603,7 @@ def request_and_import_remote_patch_by_name(patch_name:str, patch_ver: int):
         with getEngine().connect() as conn:
             conn.execute(text("DELETE FROM table_patch"))
             conn.execute(text(f"INSERT INTO table_patch (patch) VALUES ({patch_ver})"))
-            conn.commit()
+            conn.execute(text("COMMIT"))
             shutil.rmtree(tmp_patch_dir)
             os.remove(tmp_patch_zip)
             os.remove(tmp_patch_decrypt_zip)
@@ -1635,7 +1635,7 @@ def import_data_to_table(input_file:str, table_name:str):
         # 用 SQL INSERT OR REPLACE 从临时表合并到目标表
         conn.execute(text(f"INSERT OR REPLACE INTO {table_name} SELECT * FROM tmp_import"))
         # conn.execute(text("DROP TABLE tmp_import"))
-        conn.commit()
+        conn.execute(text("COMMIT"))
 
 def syn_vip_basic_data():
     """

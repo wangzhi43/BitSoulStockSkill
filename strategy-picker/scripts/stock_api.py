@@ -3672,7 +3672,7 @@ class StockApi:
                 conn.execute(text("DELETE FROM cached_indicators WHERE code=:code"), {"code": code})
             else:
                 conn.execute(text("DELETE FROM cached_indicators"))
-            conn.commit()
+            conn.execute(text("COMMIT"))
 
     # ── Alpha101 因子接口 ────────────────────────────────────────────────────
 
