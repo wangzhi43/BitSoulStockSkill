@@ -410,7 +410,6 @@ def init_db() -> None:
                 patch        TEXT NOT NULL
             )
         """))
-        conn.execute(text("COMMIT"))
   
 # ============================================================
 # 本地 SQLite 查询接口
@@ -1542,7 +1541,6 @@ def syn_table_datas() -> List[str]:
         row = cursor.fetchone()
         if row:
             local_patch_ver = int(row[0])
-        conn.execute(text("COMMIT"))
     
     log(f"本地数据patch ver:{local_patch_ver}")
     if local_patch_ver < 0:

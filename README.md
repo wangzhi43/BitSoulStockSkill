@@ -123,8 +123,8 @@ BitSoulStockSkill/
 
 | 依赖 | 版本要求 |
 | :--- | :--- |
-| Python | 3.6+ |
-| OpenClaw | 或国内各种云端/本地 Claw 环境 |
+| Python | 3.7+ |
+| OpenClaw | 目前已支持qClaw AutoClaw EasyClaw 飞书妙搭等多种环境
 
 ### Python 依赖
 
@@ -132,7 +132,7 @@ BitSoulStockSkill/
 requests
 pandas
 sqlalchemy
-pycryptodome
+numpy
 ```
 
 ---
