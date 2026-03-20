@@ -806,7 +806,8 @@ def _print_mining_result(result: dict) -> None:
     print(f'\n{sep}')
     print('【本次策略参数速查卡】')
     print(sep)
-    print(f'\n▌ 选股因子  {len(_scr_names)} 个（截面日 {_flog[0]["ref_date"] if _flog else "?"} 静态过滤）')
+    _ref_date_str = next((s['ref_date'] for s in _flog if 'ref_date' in s), '?')
+    print(f'\n▌ 选股因子  {len(_scr_names)} 个（截面日 {_ref_date_str} 静态过滤）')
     print(f'  保留比例随机范围: [5%, 20%]  每层独立抽取')
     for _i, _name in enumerate(_scr_names, 1):
         _pct  = _top_pcts.get(_name, 0)
