@@ -12,7 +12,7 @@ indicators.py - 技术指标计算模块
 - 使用data_fetcher.py获取基础数据
 - 默认使用复权价格，可通过参数控制
 """
-
+import json
 from typing import Optional, Dict, List, Tuple
 from sqlalchemy import text
 from data_fetcher import getEngine
@@ -82,7 +82,7 @@ def _save_indicator(code: str, indicator_type: str, period: int, date: str, valu
         indicator_type: 指标类型字符串
         period: 周期参数
         date: 计算日期
-        value: 指标值的字符串表示（float 用 str()，dict 用 str() 后 eval() 还原）
+        value: 指标值的字符串表示（float 用 str()，dict 用 str() 后 还原）
         use_adjusted: 是否为复权计算结果
     """
     with getEngine().connect() as conn:
@@ -283,7 +283,7 @@ def get_sma(code: str, date: str, period: int = 20, use_adjusted: bool = True) -
         klines = _adjust_klines(klines, adj_factors)
     
     sma = sum(k.close for k in klines) / period
-    _save_indicator(code, 'SMA', period, date, str(sma), use_adjusted)
+    _save_indicator(code, 'SMA', period, date, json.dumps(sma), use_adjusted)
     return sma
 
 
@@ -320,7 +320,7 @@ def get_ema(code: str, date: str, period: int = 12, use_adjusted: bool = True) -
     for price in prices[1:]:
         ema = (price - ema) * multiplier + ema
     
-    _save_indicator(code, 'EMA', period, date, str(ema), use_adjusted)
+    _save_indicator(code, 'EMA', period, date, json.dumps(ema), use_adjusted)
     return ema
 
 
@@ -355,7 +355,7 @@ def get_wma(code: str, date: str, period: int = 20, use_adjusted: bool = True) -
     weighted_sum = sum(k.close * w for k, w in zip(klines, weights))
     wma = weighted_sum / sum(weights)
     
-    _save_indicator(code, 'WMA', period, date, str(wma), use_adjusted)
+    _save_indicator(code, 'WMA', period, date, json.dumps(wma), use_adjusted)
     return wma
 
 
@@ -391,7 +391,7 @@ def get_tema(code: str, date: str, period: int = 20, use_adjusted: bool = True) 
         return None
     
     tema = 3 * ema1 - 3 * ema2 + ema3
-    _save_indicator(code, 'TEMA', period, date, str(tema), use_adjusted)
+    _save_indicator(code, 'TEMA', period, date, json.dumps(tema), use_adjusted)
     return tema
 
 
@@ -441,7 +441,7 @@ def get_rsi(code: str, date: str, period: int = 14, use_adjusted: bool = True) -
         rs = avg_gain / avg_loss
         rsi = 100 - (100 / (1 + rs))
     
-    _save_indicator(code, 'RSI', period, date, str(rsi), use_adjusted)
+    _save_indicator(code, 'RSI', period, date, json.dumps(rsi), use_adjusted)
     return rsi
 
 
@@ -466,7 +466,7 @@ def get_macd(code: str, date: str, fast: int = 12, slow: int = 26, signal: int =
     period_key = fast * 10000 + slow * 100 + signal
     cached = _get_cached_indicator(code, 'MACD', period_key, date, use_adjusted)
     if cached is not None:
-        return eval(cached)
+        return json.loads(cached)
     
     ema_fast = get_ema(code, date, fast, use_adjusted)
     ema_slow = get_ema(code, date, slow, use_adjusted)
@@ -477,7 +477,7 @@ def get_macd(code: str, date: str, fast: int = 12, slow: int = 26, signal: int =
     macd_line = ema_fast - ema_slow
     
     macd = {'macd': macd_line, 'signal': macd_line, 'histogram': 0}
-    _save_indicator(code, 'MACD', period_key, date, str(macd), use_adjusted)
+    _save_indicator(code, 'MACD', period_key, date, json.dumps(macd), use_adjusted)
     return macd
 
 
@@ -500,7 +500,7 @@ def get_bollinger_bands(code: str, date: str, period: int = 20, std_dev: int = 2
     """
     cached = _get_cached_indicator(code, 'BB', period, date, use_adjusted)
     if cached is not None:
-        return eval(cached)
+        return json.loads(cached)
     
     klines = _get_klines_before_date(code, date, period)
     if len(klines) < period:
@@ -520,7 +520,7 @@ def get_bollinger_bands(code: str, date: str, period: int = 20, std_dev: int = 2
         'middle': middle,
         'lower': middle - std_dev * std
     }
-    _save_indicator(code, 'BB', period, date, str(bb), use_adjusted)
+    _save_indicator(code, 'BB', period, date, json.dumps(bb), use_adjusted)
     return bb
 
 
@@ -560,7 +560,7 @@ def get_atr(code: str, date: str, period: int = 14, use_adjusted: bool = True) -
         tr_values.append(tr)
     
     atr = sum(tr_values) / period
-    _save_indicator(code, 'ATR', period, date, str(atr), use_adjusted)
+    _save_indicator(code, 'ATR', period, date, json.dumps(atr), use_adjusted)
     return atr
 
 def get_mom(code: str, date: str, period: int = 10, use_adjusted: bool = True) -> Optional[float]:
@@ -591,7 +591,7 @@ def get_mom(code: str, date: str, period: int = 10, use_adjusted: bool = True) -
         klines = _adjust_klines(klines, adj_factors)
     
     mom = klines[-1].close - klines[0].close
-    _save_indicator(code, 'MOM', period, date, str(mom), use_adjusted)
+    _save_indicator(code, 'MOM', period, date, json.dumps(mom), use_adjusted)
     return mom
 
 def get_roc(code: str, date: str, period: int = 10, use_adjusted: bool = True) -> Optional[float]:
@@ -625,7 +625,7 @@ def get_roc(code: str, date: str, period: int = 10, use_adjusted: bool = True) -
         return None
     
     roc = ((klines[-1].close - klines[0].close) / klines[0].close) * 100
-    _save_indicator(code, 'ROC', period, date, str(roc), use_adjusted)
+    _save_indicator(code, 'ROC', period, date, json.dumps(roc), use_adjusted)
     return roc
 
 def get_cci(code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
@@ -664,7 +664,7 @@ def get_cci(code: str, date: str, period: int = 20, use_adjusted: bool = True) -
     else:
         cci = (typical_prices[-1] - sma_tp) / (0.015 * mean_deviation)
     
-    _save_indicator(code, 'CCI', period, date, str(cci), use_adjusted)
+    _save_indicator(code, 'CCI', period, date, json.dumps(cci), use_adjusted)
     return cci
 
 def get_obv(code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
@@ -701,7 +701,7 @@ def get_obv(code: str, date: str, period: int = 20, use_adjusted: bool = True) -
         elif klines[i].close < klines[i-1].close:
             obv -= klines[i].volume
     
-    _save_indicator(code, 'OBV', period, date, str(obv), use_adjusted)
+    _save_indicator(code, 'OBV', period, date, json.dumps(obv), use_adjusted)
     return obv
 
 def get_volume(code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
@@ -722,7 +722,7 @@ def get_volume(code: str, date: str, period: int = 20, use_adjusted: bool = True
     """
     cached = _get_cached_indicator(code, 'VOLUME', period, date, use_adjusted)
     if cached is not None:
-        return eval(cached)
+        return json.loads(cached)
     
     klines = _get_klines_before_date(code, date, period)
     if len(klines) == 0:
@@ -736,7 +736,7 @@ def get_volume(code: str, date: str, period: int = 20, use_adjusted: bool = True
     sma_vol = sum(k.volume for k in klines) / len(klines)
     
     vol_data = {'current': current_vol, 'sma': sma_vol}
-    _save_indicator(code, 'VOLUME', period, date, str(vol_data), use_adjusted)
+    _save_indicator(code, 'VOLUME', period, date, json.dumps(vol_data), use_adjusted)
     return vol_data
 
 def get_kdj(code: str, date: str, n: int = 9, m1: int = 3, m2: int = 3, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
@@ -760,7 +760,7 @@ def get_kdj(code: str, date: str, n: int = 9, m1: int = 3, m2: int = 3, use_adju
     period_key = n * 10000 + m1 * 100 + m2
     cached = _get_cached_indicator(code, 'KDJ', period_key, date, use_adjusted)
     if cached is not None:
-        return eval(cached)
+        return json.loads(cached)
     
     klines = _get_klines_before_date(code, date, n)
     if len(klines) < n:
@@ -783,7 +783,7 @@ def get_kdj(code: str, date: str, n: int = 9, m1: int = 3, m2: int = 3, use_adju
     j = 3 * k - 2 * d
     
     kdj = {'k': k, 'd': d, 'j': j}
-    _save_indicator(code, 'KDJ', period_key, date, str(kdj), use_adjusted)
+    _save_indicator(code, 'KDJ', period_key, date, json.dumps(kdj), use_adjusted)
     return kdj
 
 def get_dmi(code: str, date: str, period: int = 14, use_adjusted: bool = True) -> Optional[Dict[str, float]]:
@@ -804,7 +804,7 @@ def get_dmi(code: str, date: str, period: int = 14, use_adjusted: bool = True) -
     """
     cached = _get_cached_indicator(code, 'DMI', period, date, use_adjusted)
     if cached is not None:
-        return eval(cached)
+        return json.loads(cached)
     
     klines = _get_klines_before_date(code, date, period + 1)
     if len(klines) < period + 1:
@@ -842,7 +842,7 @@ def get_dmi(code: str, date: str, period: int = 14, use_adjusted: bool = True) -
     adx = abs(pdi - mdi) / (pdi + mdi) * 100 if (pdi + mdi) > 0 else 0
     
     dmi = {'pdi': pdi, 'mdi': mdi, 'adx': adx}
-    _save_indicator(code, 'DMI', period, date, str(dmi), use_adjusted)
+    _save_indicator(code, 'DMI', period, date, json.dumps(dmi), use_adjusted)
     return dmi
 
 def get_trix(code: str, date: str, period: int = 12, use_adjusted: bool = True) -> Optional[float]:
@@ -883,7 +883,7 @@ def get_trix(code: str, date: str, period: int = 12, use_adjusted: bool = True) 
         return None
 
     trix = (ema3[-1] - ema3[-2]) / ema3[-2] * 100
-    _save_indicator(code, 'TRIX', period, date, str(trix), use_adjusted)
+    _save_indicator(code, 'TRIX', period, date, json.dumps(trix), use_adjusted)
     return trix
 
 
@@ -907,7 +907,7 @@ def get_sar(code: str, date: str, af_start: float = 0.02, af_max: float = 0.2, u
     period_key = int(af_start * 10000 + af_max)
     cached = _get_cached_indicator(code, 'SAR', period_key, date, use_adjusted)
     if cached is not None:
-        return eval(cached)
+        return json.loads(cached)
     
     klines = _get_klines_before_date(code, date, 10)
     if len(klines) < 2:
@@ -923,7 +923,7 @@ def get_sar(code: str, date: str, af_start: float = 0.02, af_max: float = 0.2, u
     af = af_start
     
     sar_data = {'sar': sar, 'trend': trend}
-    _save_indicator(code, 'SAR', period_key, date, str(sar_data), use_adjusted)
+    _save_indicator(code, 'SAR', period_key, date, json.dumps(sar_data), use_adjusted)
     return sar_data
 
 
@@ -962,7 +962,7 @@ def get_williams_r(code: str, date: str, period: int = 14, use_adjusted: bool = 
     else:
         wr = ((high_n - klines[-1].close) / (high_n - low_n)) * 100
     
-    _save_indicator(code, 'WR', period, date, str(wr), use_adjusted)
+    _save_indicator(code, 'WR', period, date, json.dumps(wr), use_adjusted)
     return wr
 
 def get_psycho(code: str, date: str, period: int = 12, use_adjusted: bool = True) -> Optional[float]:
@@ -998,7 +998,7 @@ def get_psycho(code: str, date: str, period: int = 12, use_adjusted: bool = True
             up_days += 1
     
     psy = (up_days / period) * 100
-    _save_indicator(code, 'PSY', period, date, str(psy), use_adjusted)
+    _save_indicator(code, 'PSY', period, date, json.dumps(psy), use_adjusted)
     return psy
 
 def get_bias(code: str, date: str, period: int = 20, use_adjusted: bool = True) -> Optional[float]:
@@ -1034,7 +1034,7 @@ def get_bias(code: str, date: str, period: int = 20, use_adjusted: bool = True) 
         return None
     
     bias = ((klines[-1].close - sma) / sma) * 100
-    _save_indicator(code, 'BIAS', period, date, str(bias), use_adjusted)
+    _save_indicator(code, 'BIAS', period, date, json.dumps(bias), use_adjusted)
     return bias
 
 def get_tr(code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
@@ -1068,7 +1068,7 @@ def get_tr(code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
     prev_close = klines[-2].close
     
     tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
-    _save_indicator(code, 'TR', 1, date, str(tr), use_adjusted)
+    _save_indicator(code, 'TR', 1, date, json.dumps(tr), use_adjusted)
     return tr
 
 
@@ -1102,7 +1102,7 @@ def get_natr(code: str, date: str, period: int = 14, use_adjusted: bool = True) 
         return None
     
     natr = (atr / klines[-1].close) * 100
-    _save_indicator(code, 'NATR', period, date, str(natr), use_adjusted)
+    _save_indicator(code, 'NATR', period, date, json.dumps(natr), use_adjusted)
     return natr
 
 
@@ -1145,7 +1145,7 @@ def get_vwap(code: str, date: str, period: int = 20, use_adjusted: bool = True) 
         return None
     
     vwap = total_pv / total_vol
-    _save_indicator(code, 'VWAP', period, date, str(vwap), use_adjusted)
+    _save_indicator(code, 'VWAP', period, date, json.dumps(vwap), use_adjusted)
     return vwap
 
 
@@ -1185,7 +1185,7 @@ def get_ad(code: str, date: str, period: int = 20, use_adjusted: bool = True) ->
             clv = ((k.close - k.low) - (k.high - k.close)) / high_low
         ad_line += clv * k.volume
     
-    _save_indicator(code, 'AD', period, date, str(ad_line), use_adjusted)
+    _save_indicator(code, 'AD', period, date, json.dumps(ad_line), use_adjusted)
     return ad_line
 
 
@@ -1217,7 +1217,7 @@ def get_adosc(code: str, date: str, fast: int = 3, slow: int = 10, use_adjusted:
         return None
     
     adosc = ad_fast - ad_slow
-    _save_indicator(code, 'ADOSC', period_key, date, str(adosc), use_adjusted)
+    _save_indicator(code, 'ADOSC', period_key, date, json.dumps(adosc), use_adjusted)
     return adosc
 
 
@@ -1267,7 +1267,7 @@ def get_mfi(code: str, date: str, period: int = 14, use_adjusted: bool = True) -
         mfr = positive_mf / negative_mf
         mfi = 100 - (100 / (1 + mfr))
     
-    _save_indicator(code, 'MFI', period, date, str(mfi), use_adjusted)
+    _save_indicator(code, 'MFI', period, date, json.dumps(mfi), use_adjusted)
     return mfi
 
 
@@ -1313,7 +1313,7 @@ def get_cmo(code: str, date: str, period: int = 14, use_adjusted: bool = True) -
     else:
         cmo = ((up_sum - down_sum) / (up_sum + down_sum)) * 100
     
-    _save_indicator(code, 'CMO', period, date, str(cmo), use_adjusted)
+    _save_indicator(code, 'CMO', period, date, json.dumps(cmo), use_adjusted)
     return cmo
 
 
@@ -1345,7 +1345,7 @@ def get_rocp(code: str, date: str, period: int = 10, use_adjusted: bool = True) 
         klines = _adjust_klines(klines, adj_factors)
 
     rocp = (klines[-1].close - klines[0].close) / klines[0].close
-    _save_indicator(code, 'ROCP', period, date, str(rocp), use_adjusted)
+    _save_indicator(code, 'ROCP', period, date, json.dumps(rocp), use_adjusted)
     return rocp
 
 
@@ -1377,7 +1377,7 @@ def get_rocr(code: str, date: str, period: int = 10, use_adjusted: bool = True) 
         klines = _adjust_klines(klines, adj_factors)
 
     rocr = klines[-1].close / klines[0].close
-    _save_indicator(code, 'ROCR', period, date, str(rocr), use_adjusted)
+    _save_indicator(code, 'ROCR', period, date, json.dumps(rocr), use_adjusted)
     return rocr
 
 
@@ -1400,7 +1400,7 @@ def get_aroon(code: str, date: str, period: int = 14, use_adjusted: bool = True)
     """
     cached = _get_cached_indicator(code, 'AROON', period, date, use_adjusted)
     if cached is not None:
-        return eval(cached)
+        return json.loads(cached)
     
     klines = _get_klines_before_date(code, date, period + 1)
     if len(klines) < period + 1:
@@ -1421,7 +1421,7 @@ def get_aroon(code: str, date: str, period: int = 14, use_adjusted: bool = True)
     aroon_osc = aroon_up - aroon_down
 
     aroon = {'up': aroon_up, 'down': aroon_down, 'osc': aroon_osc}
-    _save_indicator(code, 'AROON', period, date, str(aroon), use_adjusted)
+    _save_indicator(code, 'AROON', period, date, json.dumps(aroon), use_adjusted)
     return aroon
 def get_ultosc(code: str, date: str, period1: int = 7, period2: int = 14, period3: int = 28, use_adjusted: bool = True) -> Optional[float]:
     """终极振荡器 ULTOSC（Ultimate Oscillator，0-100）
@@ -1453,7 +1453,7 @@ def get_ultosc(code: str, date: str, period1: int = 7, period2: int = 14, period
         klines = _adjust_klines(klines, adj_factors)
 
     ultosc = 50.0
-    _save_indicator(code, 'ULTOSC', period_key, date, str(ultosc), use_adjusted)
+    _save_indicator(code, 'ULTOSC', period_key, date, json.dumps(ultosc), use_adjusted)
     return ultosc
 
 
@@ -1486,7 +1486,7 @@ def get_dema(code: str, date: str, period: int = 20, use_adjusted: bool = True) 
         return None
 
     dema = 2 * ema1 - ema2
-    _save_indicator(code, 'DEMA', period, date, str(dema), use_adjusted)
+    _save_indicator(code, 'DEMA', period, date, json.dumps(dema), use_adjusted)
     return dema
 
 
@@ -1518,7 +1518,7 @@ def get_kama(code: str, date: str, period: int = 10, use_adjusted: bool = True) 
         klines = _adjust_klines(klines, adj_factors)
 
     kama = klines[-1].close
-    _save_indicator(code, 'KAMA', period, date, str(kama), use_adjusted)
+    _save_indicator(code, 'KAMA', period, date, json.dumps(kama), use_adjusted)
     return kama
 
 
@@ -1552,7 +1552,7 @@ def get_midpoint(code: str, date: str, period: int = 14, use_adjusted: bool = Tr
     lowest = min(k.low for k in klines)
     
     midpoint = (highest + lowest) / 2
-    _save_indicator(code, 'MIDPOINT', period, date, str(midpoint), use_adjusted)
+    _save_indicator(code, 'MIDPOINT', period, date, json.dumps(midpoint), use_adjusted)
     return midpoint
 
 
@@ -1597,7 +1597,7 @@ def get_pvi(code: str, date: str, period: int = 20, use_adjusted: bool = True) -
         return None
     
     pvi = 100.0
-    _save_indicator(code, 'PVI', period, date, str(pvi), use_adjusted)
+    _save_indicator(code, 'PVI', period, date, json.dumps(pvi), use_adjusted)
     return pvi
 
 
@@ -1625,7 +1625,7 @@ def get_nvi(code: str, date: str, period: int = 20, use_adjusted: bool = True) -
         return None
     
     nvi = 100.0
-    _save_indicator(code, 'NVI', period, date, str(nvi), use_adjusted)
+    _save_indicator(code, 'NVI', period, date, json.dumps(nvi), use_adjusted)
     return nvi
 
 
@@ -1650,7 +1650,7 @@ def get_ppo(code: str, date: str, fast: int = 12, slow: int = 26, signal: int = 
     period_key = fast * 10000 + slow * 100 + signal
     cached = _get_cached_indicator(code, 'PPO', period_key, date, use_adjusted)
     if cached is not None:
-        return eval(cached)
+        return json.loads(cached)
     
     ema_fast = get_ema(code, date, fast, use_adjusted)
     ema_slow = get_ema(code, date, slow, use_adjusted)
@@ -1660,7 +1660,7 @@ def get_ppo(code: str, date: str, fast: int = 12, slow: int = 26, signal: int = 
 
     ppo_line = ((ema_fast - ema_slow) / ema_slow) * 100
     ppo = {'ppo': ppo_line, 'signal': ppo_line, 'histogram': 0}
-    _save_indicator(code, 'PPO', period_key, date, str(ppo), use_adjusted)
+    _save_indicator(code, 'PPO', period_key, date, json.dumps(ppo), use_adjusted)
     return ppo
 
 
@@ -1701,7 +1701,7 @@ def get_stoch(code: str, date: str, fastk_period: int = 14, slowk_period: int = 
     period_key = fastk_period * 10000 + slowk_period * 100 + slowd_period
     cached = _get_cached_indicator(code, 'STOCH', period_key, date, use_adjusted)
     if cached is not None:
-        return eval(cached)
+        return json.loads(cached)
     
     klines = _get_klines_before_date(code, date, fastk_period)
     if len(klines) < fastk_period:
@@ -1720,7 +1720,7 @@ def get_stoch(code: str, date: str, fastk_period: int = 14, slowk_period: int = 
         fastk = ((klines[-1].close - low_n) / (high_n - low_n)) * 100
     
     stoch = {'slowk': fastk, 'slowd': fastk}
-    _save_indicator(code, 'STOCH', period_key, date, str(stoch), use_adjusted)
+    _save_indicator(code, 'STOCH', period_key, date, json.dumps(stoch), use_adjusted)
     return stoch
 
 
@@ -1743,10 +1743,10 @@ def get_stochf(code: str, date: str, fastk_period: int = 14, fastd_period: int =
     period_key = fastk_period * 100 + fastd_period
     cached = _get_cached_indicator(code, 'STOCHF', period_key, date, use_adjusted)
     if cached is not None:
-        return eval(cached)
+        return json.loads(cached)
     
     stochf = {'fastk': 50.0, 'fastd': 50.0}
-    _save_indicator(code, 'STOCHF', period_key, date, str(stochf), use_adjusted)
+    _save_indicator(code, 'STOCHF', period_key, date, json.dumps(stochf), use_adjusted)
     return stochf
 
 
@@ -1769,10 +1769,10 @@ def get_stochrsi(code: str, date: str, rsi_period: int = 14, stoch_period: int =
     period_key = rsi_period * 100 + stoch_period
     cached = _get_cached_indicator(code, 'STOCHRSI', period_key, date, use_adjusted)
     if cached is not None:
-        return eval(cached)
+        return json.loads(cached)
     
     stochrsi = {'fastk': 50.0, 'fastd': 50.0}
-    _save_indicator(code, 'STOCHRSI', period_key, date, str(stochrsi), use_adjusted)
+    _save_indicator(code, 'STOCHRSI', period_key, date, json.dumps(stochrsi), use_adjusted)
     return stochrsi
 
 
@@ -1815,7 +1815,7 @@ def get_ma_channel(code: str, date: str, period: int = 20, multiplier: float = 2
     """
     cached = _get_cached_indicator(code, 'MA_CHANNEL', period, date, use_adjusted)
     if cached is not None:
-        return eval(cached)
+        return json.loads(cached)
     
     sma = get_sma(code, date, period, use_adjusted)
     atr = get_atr(code, date, period, use_adjusted)
@@ -1828,7 +1828,7 @@ def get_ma_channel(code: str, date: str, period: int = 20, multiplier: float = 2
         'middle': sma,
         'lower': sma - multiplier * atr
     }
-    _save_indicator(code, 'MA_CHANNEL', period, date, str(channel), use_adjusted)
+    _save_indicator(code, 'MA_CHANNEL', period, date, json.dumps(channel), use_adjusted)
     return channel
 
 
@@ -1850,7 +1850,7 @@ def get_donchian(code: str, date: str, period: int = 20, use_adjusted: bool = Tr
     """
     cached = _get_cached_indicator(code, 'DONCHIAN', period, date, use_adjusted)
     if cached is not None:
-        return eval(cached)
+        return json.loads(cached)
     
     klines = _get_klines_before_date(code, date, period)
     if len(klines) < period:
@@ -1865,7 +1865,7 @@ def get_donchian(code: str, date: str, period: int = 20, use_adjusted: bool = Tr
     middle = (upper + lower) / 2
     
     donchian = {'upper': upper, 'middle': middle, 'lower': lower}
-    _save_indicator(code, 'DONCHIAN', period, date, str(donchian), use_adjusted)
+    _save_indicator(code, 'DONCHIAN', period, date, json.dumps(donchian), use_adjusted)
     return donchian
 
 
@@ -1890,7 +1890,7 @@ def get_keltner(code: str, date: str, ma_period: int = 20, atr_period: int = 10,
     period_key = ma_period * 10000 + atr_period * 100 + int(multiplier * 10)
     cached = _get_cached_indicator(code, 'KELTNER', period_key, date, use_adjusted)
     if cached is not None:
-        return eval(cached)
+        return json.loads(cached)
     
     ema = get_ema(code, date, ma_period, use_adjusted)
     atr = get_atr(code, date, atr_period, use_adjusted)
@@ -1903,7 +1903,7 @@ def get_keltner(code: str, date: str, ma_period: int = 20, atr_period: int = 10,
         'middle': ema,
         'lower': ema - multiplier * atr
     }
-    _save_indicator(code, 'KELTNER', period_key, date, str(keltner), use_adjusted)
+    _save_indicator(code, 'KELTNER', period_key, date, json.dumps(keltner), use_adjusted)
     return keltner
 
 
@@ -1933,7 +1933,7 @@ def get_bbands_width(code: str, date: str, period: int = 20, std_dev: int = 2, u
         return None
 
     width = ((bb['upper'] - bb['lower']) / bb['middle']) * 100
-    _save_indicator(code, 'BBANDS_WIDTH', period_key, date, str(width), use_adjusted)
+    _save_indicator(code, 'BBANDS_WIDTH', period_key, date, json.dumps(width), use_adjusted)
     return width
 
 
@@ -1973,7 +1973,7 @@ def get_bbands_pct(code: str, date: str, period: int = 20, std_dev: int = 2, use
     else:
         pct = (klines[-1].close - bb['lower']) / (bb['upper'] - bb['lower'])
     
-    _save_indicator(code, 'BBANDS_PCT', period_key, date, str(pct), use_adjusted)
+    _save_indicator(code, 'BBANDS_PCT', period_key, date, json.dumps(pct), use_adjusted)
     return pct
 
 
@@ -2023,7 +2023,7 @@ def get_linearreg(code: str, date: str, period: int = 14, use_adjusted: bool = T
     intercept = mean_y - slope * mean_x
     linearreg = intercept + slope * (period - 1)
     
-    _save_indicator(code, 'LINEARREG', period, date, str(linearreg), use_adjusted)
+    _save_indicator(code, 'LINEARREG', period, date, json.dumps(linearreg), use_adjusted)
     return linearreg
 
 
@@ -2068,7 +2068,7 @@ def get_linearreg_angle(code: str, date: str, period: int = 14, use_adjusted: bo
     slope = numerator / denominator
     angle = math.degrees(math.atan(slope))
     
-    _save_indicator(code, 'LINEARREG_ANGLE', period, date, str(angle), use_adjusted)
+    _save_indicator(code, 'LINEARREG_ANGLE', period, date, json.dumps(angle), use_adjusted)
     return angle
 
 
@@ -2113,7 +2113,7 @@ def get_linearreg_intercept(code: str, date: str, period: int = 14, use_adjusted
     slope = numerator / denominator
     intercept = mean_y - slope * mean_x
     
-    _save_indicator(code, 'LINEARREG_INTERCEPT', period, date, str(intercept), use_adjusted)
+    _save_indicator(code, 'LINEARREG_INTERCEPT', period, date, json.dumps(intercept), use_adjusted)
     return intercept
 
 
@@ -2156,7 +2156,7 @@ def get_linearreg_slope(code: str, date: str, period: int = 14, use_adjusted: bo
         return None
     
     slope = numerator / denominator
-    _save_indicator(code, 'LINEARREG_SLOPE', period, date, str(slope), use_adjusted)
+    _save_indicator(code, 'LINEARREG_SLOPE', period, date, json.dumps(slope), use_adjusted)
     return slope
 
 
@@ -2194,7 +2194,7 @@ def get_stddev(code: str, date: str, period: int = 20, nbdev: int = 1, use_adjus
     variance = sum((p - mean) ** 2 for p in prices) / period
     stddev = (variance ** 0.5) * nbdev
     
-    _save_indicator(code, 'STDDEV', period_key, date, str(stddev), use_adjusted)
+    _save_indicator(code, 'STDDEV', period_key, date, json.dumps(stddev), use_adjusted)
     return stddev
 
 
@@ -2249,7 +2249,7 @@ def get_var(code: str, date: str, period: int = 20, nbdev: int = 1, use_adjusted
     variance = sum((p - mean) ** 2 for p in prices) / period
     var = variance * nbdev * nbdev
     
-    _save_indicator(code, 'VAR', period_key, date, str(var), use_adjusted)
+    _save_indicator(code, 'VAR', period_key, date, json.dumps(var), use_adjusted)
     return var
 
 
@@ -2273,7 +2273,7 @@ def get_correl(code: str, date: str, period: int = 20, use_adjusted: bool = True
         return float(cached)
     
     correl = 1.0
-    _save_indicator(code, 'CORREL', period, date, str(correl), use_adjusted)
+    _save_indicator(code, 'CORREL', period, date, json.dumps(correl), use_adjusted)
     return correl
 
 
@@ -2297,7 +2297,7 @@ def get_beta(code: str, date: str, period: int = 20, use_adjusted: bool = True) 
         return float(cached)
     
     beta = 1.0
-    _save_indicator(code, 'BETA', period, date, str(beta), use_adjusted)
+    _save_indicator(code, 'BETA', period, date, json.dumps(beta), use_adjusted)
     return beta
 
 
@@ -2320,7 +2320,7 @@ def get_ht_dcperiod(code: str, date: str, use_adjusted: bool = True) -> Optional
         return float(cached)
     
     ht_dcperiod = 10.0
-    _save_indicator(code, 'HT_DCPERIOD', 1, date, str(ht_dcperiod), use_adjusted)
+    _save_indicator(code, 'HT_DCPERIOD', 1, date, json.dumps(ht_dcperiod), use_adjusted)
     return ht_dcperiod
 
 
@@ -2343,7 +2343,7 @@ def get_ht_dcphase(code: str, date: str, use_adjusted: bool = True) -> Optional[
         return float(cached)
     
     ht_dcphase = 0.0
-    _save_indicator(code, 'HT_DCPHASE', 1, date, str(ht_dcphase), use_adjusted)
+    _save_indicator(code, 'HT_DCPHASE', 1, date, json.dumps(ht_dcphase), use_adjusted)
     return ht_dcphase
 
 
@@ -2363,10 +2363,10 @@ def get_ht_phasor(code: str, date: str, use_adjusted: bool = True) -> Optional[D
     """
     cached = _get_cached_indicator(code, 'HT_PHASOR', 1, date, use_adjusted)
     if cached is not None:
-        return eval(cached)
+        return json.loads(cached)
     
     ht_phasor = {'inphase': 0.0, 'quadrature': 0.0}
-    _save_indicator(code, 'HT_PHASOR', 1, date, str(ht_phasor), use_adjusted)
+    _save_indicator(code, 'HT_PHASOR', 1, date, json.dumps(ht_phasor), use_adjusted)
     return ht_phasor
 
 
@@ -2386,10 +2386,10 @@ def get_ht_sine(code: str, date: str, use_adjusted: bool = True) -> Optional[Dic
     """
     cached = _get_cached_indicator(code, 'HT_SINE', 1, date, use_adjusted)
     if cached is not None:
-        return eval(cached)
+        return json.loads(cached)
     
     ht_sine = {'sine': 0.0, 'leadsine': 0.0}
-    _save_indicator(code, 'HT_SINE', 1, date, str(ht_sine), use_adjusted)
+    _save_indicator(code, 'HT_SINE', 1, date, json.dumps(ht_sine), use_adjusted)
     return ht_sine
 
 
@@ -2412,7 +2412,7 @@ def get_ht_trendmode(code: str, date: str, use_adjusted: bool = True) -> Optiona
         return int(float(cached))
     
     ht_trendmode = 1
-    _save_indicator(code, 'HT_TRENDMODE', 1, date, str(ht_trendmode), use_adjusted)
+    _save_indicator(code, 'HT_TRENDMODE', 1, date, json.dumps(ht_trendmode), use_adjusted)
     return ht_trendmode
 
 
@@ -2447,7 +2447,7 @@ def get_typical_price(code: str, date: str, use_adjusted: bool = True) -> Option
         klines = _adjust_klines(klines, adj_factors)
 
     tp = (klines[-1].high + klines[-1].low + klines[-1].close) / 3
-    _save_indicator(code, 'TYPICAL', 1, date, str(tp), use_adjusted)
+    _save_indicator(code, 'TYPICAL', 1, date, json.dumps(tp), use_adjusted)
     return tp
 
 
@@ -2478,7 +2478,7 @@ def get_median_price(code: str, date: str, use_adjusted: bool = True) -> Optiona
         klines = _adjust_klines(klines, adj_factors)
 
     mp = (klines[-1].high + klines[-1].low) / 2
-    _save_indicator(code, 'MEDIAN', 1, date, str(mp), use_adjusted)
+    _save_indicator(code, 'MEDIAN', 1, date, json.dumps(mp), use_adjusted)
     return mp
 
 
@@ -2509,7 +2509,7 @@ def get_weighted_close(code: str, date: str, use_adjusted: bool = True) -> Optio
         klines = _adjust_klines(klines, adj_factors)
 
     wcl = (klines[-1].high + klines[-1].low + 2 * klines[-1].close) / 4
-    _save_indicator(code, 'WCL', 1, date, str(wcl), use_adjusted)
+    _save_indicator(code, 'WCL', 1, date, json.dumps(wcl), use_adjusted)
     return wcl
 
 
@@ -2540,7 +2540,7 @@ def get_avgp(code: str, date: str, use_adjusted: bool = True) -> Optional[float]
         klines = _adjust_klines(klines, adj_factors)
 
     avgp = (klines[-1].open + klines[-1].high + klines[-1].low + klines[-1].close) / 4
-    _save_indicator(code, 'AVGP', 1, date, str(avgp), use_adjusted)
+    _save_indicator(code, 'AVGP', 1, date, json.dumps(avgp), use_adjusted)
     return avgp
 
 
@@ -2595,7 +2595,7 @@ def get_asi(code: str, date: str, period: int = 26, use_adjusted: bool = True) -
         si = (50.0 * X / R) if R != 0 else 0.0
         asi += si
 
-    _save_indicator(code, 'ASI', period, date, str(asi), use_adjusted)
+    _save_indicator(code, 'ASI', period, date, json.dumps(asi), use_adjusted)
     return asi
 
 
@@ -2642,7 +2642,7 @@ def get_vr(code: str, date: str, period: int = 26, use_adjusted: bool = True) ->
         return None
 
     vr = (avs + cvs / 2.0) / denominator * 100.0
-    _save_indicator(code, 'VR', period, date, str(vr), use_adjusted)
+    _save_indicator(code, 'VR', period, date, json.dumps(vr), use_adjusted)
     return vr
 
 
@@ -2681,7 +2681,7 @@ def get_ar(code: str, date: str, period: int = 26, use_adjusted: bool = True) ->
         return None
 
     ar = sum_ho / sum_ol * 100.0
-    _save_indicator(code, 'AR', period, date, str(ar), use_adjusted)
+    _save_indicator(code, 'AR', period, date, json.dumps(ar), use_adjusted)
     return ar
 
 
@@ -2723,7 +2723,7 @@ def get_br(code: str, date: str, period: int = 26, use_adjusted: bool = True) ->
         return None
 
     br = sum_hpc / sum_pcl * 100.0
-    _save_indicator(code, 'BR', period, date, str(br), use_adjusted)
+    _save_indicator(code, 'BR', period, date, json.dumps(br), use_adjusted)
     return br
 
 
@@ -2745,7 +2745,7 @@ def get_brar(code: str, date: str, period: int = 26, use_adjusted: bool = True) 
     """
     cached = _get_cached_indicator(code, 'BRAR', period, date, use_adjusted)
     if cached is not None:
-        return eval(cached)
+        return json.loads(cached)
 
     ar = get_ar(code, date, period, use_adjusted)
     br = get_br(code, date, period, use_adjusted)
@@ -2754,7 +2754,7 @@ def get_brar(code: str, date: str, period: int = 26, use_adjusted: bool = True) 
         return None
 
     result = {'ar': ar, 'br': br}
-    _save_indicator(code, 'BRAR', period, date, str(result), use_adjusted)
+    _save_indicator(code, 'BRAR', period, date, json.dumps(result), use_adjusted)
     return result
 
 
@@ -2793,7 +2793,7 @@ def get_dpo(code: str, date: str, period: int = 20, use_adjusted: bool = True) -
     sma_old = sum(k.close for k in sma_klines) / period
 
     dpo = klines[-1].close - sma_old
-    _save_indicator(code, 'DPO', period, date, str(dpo), use_adjusted)
+    _save_indicator(code, 'DPO', period, date, json.dumps(dpo), use_adjusted)
     return dpo
 
 
@@ -2831,7 +2831,7 @@ def get_bbi(code: str, date: str, use_adjusted: bool = True) -> Optional[float]:
     ma24 = sum(closes[-24:]) / 24
 
     bbi = (ma3 + ma6 + ma12 + ma24) / 4.0
-    _save_indicator(code, 'BBI', 24, date, str(bbi), use_adjusted)
+    _save_indicator(code, 'BBI', 24, date, json.dumps(bbi), use_adjusted)
     return bbi
 
 
@@ -2874,7 +2874,7 @@ def get_mass(code: str, date: str, period: int = 25, use_adjusted: bool = True) 
         return None
 
     mass = sum(ratios[-period:])
-    _save_indicator(code, 'MASS', period, date, str(mass), use_adjusted)
+    _save_indicator(code, 'MASS', period, date, json.dumps(mass), use_adjusted)
     return mass
 
 
@@ -2898,7 +2898,7 @@ def get_xue_channel(code: str, date: str, period: int = 20, pct: float = 3.0, us
     period_key = period * 1000 + int(pct * 10)
     cached = _get_cached_indicator(code, 'XUE', period_key, date, use_adjusted)
     if cached is not None:
-        return eval(cached)
+        return json.loads(cached)
 
     klines = _get_klines_before_date(code, date, period)
     if len(klines) < period:
@@ -2913,7 +2913,7 @@ def get_xue_channel(code: str, date: str, period: int = 20, pct: float = 3.0, us
     lower  = middle * (1.0 - pct / 100.0)
 
     result = {'upper': upper, 'middle': middle, 'lower': lower}
-    _save_indicator(code, 'XUE', period_key, date, str(result), use_adjusted)
+    _save_indicator(code, 'XUE', period_key, date, json.dumps(result), use_adjusted)
     return result
 
 
@@ -3014,7 +3014,7 @@ def get_bomb_board(code: str, date: str) -> Optional[int]:
     bombs = query_daily_bomb_list(ts_codes=[code], trade_date=date, bomb_type='U')
     result = 1 if bombs else 0
 
-    _save_indicator(code, 'BOMB_BOARD', 0, date, str(result), False)
+    _save_indicator(code, 'BOMB_BOARD', 0, date, json.dumps(result), False)
     return result
 
 
@@ -3048,7 +3048,7 @@ def get_bomb_board_count(code: str, date: str, period: int = 20) -> Optional[int
     bombs = query_daily_bomb_list(ts_codes=[code], start_date=start_date, end_date=date, bomb_type='U')
     result = len(bombs)
 
-    _save_indicator(code, 'BOMB_BOARD_COUNT', period, date, str(result), False)
+    _save_indicator(code, 'BOMB_BOARD_COUNT', period, date, json.dumps(result), False)
     return result
 
 
@@ -3087,7 +3087,7 @@ def get_consecutive_limit_up(code: str, date: str) -> Optional[int]:
     records = query_daily_limit_list(ts_codes=[code], trade_date=date, limit_type='U')
     result = records[0].limit_streak if records else 0
 
-    _save_indicator(code, 'CONSEC_LIMIT_UP', 0, date, str(result), False)
+    _save_indicator(code, 'CONSEC_LIMIT_UP', 0, date, json.dumps(result), False)
     return result
 
 
