@@ -15,6 +15,10 @@ TMP_DIR="$(mktemp -d)"
 echo "Copying BitSoulStockSkill to temp dir: $TMP_DIR"
 cp -r "$SOURCE_DIR" "$TMP_DIR/BitSoulStockSkill"
 
+echo "Copying documentation files..."
+cp "$SCRIPT_DIR/../API_FOR_LLM.md" "$TMP_DIR/BitSoulStockSkill/"
+cp "$SCRIPT_DIR/../README.md" "$TMP_DIR/BitSoulStockSkill/"
+
 echo "Removing hidden files..."
 find "$TMP_DIR/BitSoulStockSkill" -name ".*" -delete
 
