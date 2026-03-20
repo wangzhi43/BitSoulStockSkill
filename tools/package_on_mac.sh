@@ -16,6 +16,7 @@ echo "Copying BitSoulStockSkill to temp dir: $TMP_DIR"
 cp -r "$SOURCE_DIR" "$TMP_DIR/BitSoulStockSkill"
 
 echo "Copying documentation files..."
+mkdir -p "$TMP_DIR/BitSoulStockSkill/references"
 cp "$SCRIPT_DIR/../API_FOR_LLM.md" "$TMP_DIR/BitSoulStockSkill/references/API_FOR_LLM.md"
 
 echo "Removing hidden files..."
