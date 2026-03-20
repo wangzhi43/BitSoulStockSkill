@@ -39,8 +39,8 @@ def process_file(input_path, output_path, key, is_encrypt=True):
             if not chunk:
                 break
             
-            # Generate mask (compatible with Python 3.7+)
-            mask = bytes(random.getrandbits(8) for _ in range(len(chunk)))
+            # Generate mask (compatible with Python < 3.9, same as encrypt)
+            mask = rng.getrandbits(len(chunk) * 8).to_bytes(len(chunk), 'little')
             
             # Fast XOR using integers
             chunk_int = int.from_bytes(chunk, 'little')
