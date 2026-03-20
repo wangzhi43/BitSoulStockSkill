@@ -48,6 +48,34 @@ def request_decrypt_key(file_name:str, token_key:str) -> str:
     except Exception as e:
         return ""
 
+def request_download_url(file_name: str, token_key: str) -> str:
+    """
+    获取文件的下载链接。
+
+    参数:
+        file_name:  文件名（如 data_1.0.bin）
+        token_key: API 访问令牌
+
+    返回:
+        str: 下载链接，失败返回空字符串
+    """
+    url = f"{define.BASE_URL}/api/download_file"
+    params = {
+        "file_name": file_name,
+        "token_key": token_key
+    }
+    try:
+        response = requests.get(url, params=params)
+        if response.status_code == 200:
+            data = response.json()
+            download_url = data.get("download_url", "")
+            return download_url
+        else:
+            return ""
+    except Exception as e:
+        print(f"request_download_url error: {e}")
+        return ""
+
 def request_version() -> AppVersion:
     url = f"{define.BASE_URL}/api/get_latest_version"
     try:

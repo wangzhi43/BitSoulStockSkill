@@ -1517,6 +1517,68 @@ def get_local_patch_ver() -> int:
     print(int(row[0]) if row else -1)
     return int(row[0]) if row else -1
 
+def download_data_file(file_name: str, output_path: str, max_retries: int = 3) -> bool:
+    """
+    从服务器下载数据文件。
+
+    参数:
+        file_name:   要下载的文件名（如 data_1.0.bin）
+        output_path: 保存路径
+        max_retries: 最大重试次数
+
+    返回:
+        bool: 下载成功返回 True，否则返回 False
+    """
+    token = config.get_token()
+    if not token:
+        log("错误:未设置 Token，无法下载数据文件")
+        return False
+
+    for retry in range(max_retries):
+        try:
+            download_url = remote_api.request_download_url(file_name, token)
+            if not download_url:
+                log(f"错误:获取 {file_name} 下载链接失败，请检查 Token 是否有效")
+                return False
+
+            log(f"开始下载 {file_name} ...")
+            log(f"下载地址: {download_url}")
+
+            with requests.get(download_url, stream=True, timeout=300) as response:
+                if response.status_code != 200:
+                    log(f"下载失败，HTTP 状态码: {response.status_code}")
+                    if retry < max_retries - 1:
+                        log(f"重试 {retry + 1}/{max_retries} ...")
+                        continue
+                    return False
+
+                total_size = int(response.headers.get('content-length', 0))
+                downloaded = 0
+                chunk_size = 1024 * 1024
+
+                with open(output_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=chunk_size):
+                        if chunk:
+                            f.write(chunk)
+                            downloaded += len(chunk)
+                            if total_size > 0:
+                                pct = (downloaded / total_size) * 100
+                                if downloaded % (10 * chunk_size) < chunk_size:
+                                    log(f"下载进度: {pct:.1f}%")
+
+            log(f"文件下载完成: {output_path}")
+            return True
+
+        except Exception as e:
+            log(f"下载出错: {str(e)}")
+            if retry < max_retries - 1:
+                log(f"重试 {retry + 1}/{max_retries} ...")
+            else:
+                log(f"下载失败，已达到最大重试次数")
+                return False
+
+    return False
+
 def syn_table_datas() -> List[str]:
     """
     根据表名，获取需要下载的 patch 列表。
@@ -1550,6 +1612,13 @@ def syn_table_datas() -> List[str]:
         assets_dir = utils.get_skill_assets_dir()
         name = "data_1.0.bin"
         base_patch_zip = os.path.join(assets_dir, name)
+
+        if not os.path.exists(base_patch_zip):
+            log(f"本地基础数据包 {name} 不存在，正在从服务器下载...")
+            if not download_data_file(name, base_patch_zip, max_retries=3):
+                log("错误:基础数据包下载失败")
+                return
+
         base_patch_decrypt_zip = os.path.join(utils.get_skill_work_dir(), "data_1.0_decrypt.zip")
         decrypt_key = remote_api.request_decrypt_key(name, config.get_token())
         if len(decrypt_key) == 0:
