@@ -1780,10 +1780,6 @@ def syn_vip_basic_data():
 
 
 if __name__ == "__main__":
-    
-    import os
-    os.environ["BITSOUL_TOKEN"] = "zhRYn2H-rBNoWlpFK8JiNHIJx9x7mX4MZEbW4gSvXf8"
-    
     log(f"数据库路径:{DB_PATH}")
     init_db()
     syn_table_datas()
