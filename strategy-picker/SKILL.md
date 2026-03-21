@@ -54,6 +54,7 @@ token 可前往 <https://www.aicodingyard.com> 免费注册申请，并配置在
 
 * `BITSOUL_TOKEN_ENV_FILE`：指向包含 `BITSOUL_TOKEN` 的 env 文件
 
+
 ## 配置方式
 
 1. **方式一：直接设置环境变量**
@@ -69,6 +70,8 @@ token 可前往 <https://www.aicodingyard.com> 免费注册申请，并配置在
    ```
    BITSOUL_TOKEN=你的令牌
    ```
+**注意**：如果同时设置了环境变量和 env 文件，环境变量优先。
+
 ## 运行时描述：
 - 从环境变量读取 `BITSOUL_TOKEN`
 - 只有在显式提供 `BITSOUL_TOKEN_ENV_FILE` 时，才会从文件中读取 `BITSOUL_TOKEN`
