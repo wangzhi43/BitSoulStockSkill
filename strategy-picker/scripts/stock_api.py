@@ -229,7 +229,7 @@ class StockApi:
     def get_user_token() -> str:
         """
         获取用户当前token
-        返回值: 用户token
+        返回值: 用户token（从环境变量 BITSOUL_TOKEN 或 BITSOUL_TOKEN_ENV_FILE 获取）
         """
         return config.get_token()
 
@@ -3008,7 +3008,7 @@ class StockApi:
             print(f"夏普比率: {report['sharpe_ratio']:.2f}")
         """
         self.track_logger.write(f"calculate_metrics(equity_curve={equity_curve!r}, trades={trades!r}, initial_cash={initial_cash!r}, days={days!r})")
-        return generate_report(equity_curve, trades, initial_cash, days)
+        return generate_report(equity_curve, trades, initial_cash, days, self.track_logger)
 
     # ============================================================
     # 回测工具类接口

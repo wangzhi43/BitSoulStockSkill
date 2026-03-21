@@ -58,7 +58,8 @@ def fail(name, reason):
     ERRORS.append(f'{name}: {reason}')
     print(f'  FAIL  {name}  ->  {reason}')
 
-api = StockApi()
+mock_logger = MagicMock()
+api = StockApi(mock_logger)
 
 def _run(fn, **kw):
     with patch.object(api, 'load_alpha_data', return_value=FAKE_PANEL):

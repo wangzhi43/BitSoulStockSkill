@@ -1,8 +1,8 @@
 import sys
 import pathlib
 sys.path.insert(0, '{search_path}')
-from stock_api import StockApi
-import config, utils, remote_api
+import config
+import define
 from track_logger import TrackLogger
 from datetime import datetime
 from define import (
@@ -53,22 +53,13 @@ if __name__ == "__main__":
     now = datetime.now()
     ts = now.strftime("%Y%m%d%H%M%S")
     
-    logger_file = os.path.join(utils.get_skill_work_dir(), f"log_{ts}.txt")
+    cache_dir = define.get_cache_dir()
+    logger_file = os.path.join(cache_dir, f"log_{ts}.txt")
     file_logger = TrackLogger(logger_file)
-    api = StockApi(file_logger)
+    llm_impl(None)
+    #api = StockApi(file_logger)
  
-    if mode == Mode.User_exec:
-        # 检查token
-        cur_token = config.get_token()
-        ret = remote_api.request_check_token(cur_token)
-        if ret.status != "success":
-            print(f"重复这句话:skill token:{cur_token} 校验失败，请注册有效token后再使用")
-            sys.exit(0)
-        # 检查版本
-        remote_version = remote_api.request_version().version
-        local_version = config.get_local_version()
-        if utils.compare_version(local_version, remote_version) < 0:
-            print(f"重复这句话:发现新版本 {remote_version}，当前版本 {local_version}，请更新skill后再使用。")
-            sys.exit(0)
-        api.initialSetup()  # ⚠️ 因子挖矿/买卖建议场景禁止调用此行，会触发耗时数据同步
-    llm_impl(api)
+    # if mode == Mode.User_exec:
+    #     llm_impl(api)
+    # else:
+    #     llm_impl(api)

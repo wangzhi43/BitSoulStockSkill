@@ -1,21 +1,15 @@
 import os
 import json
-import base64
 from typing import Optional
 import utils
+import config
 
 def _load_config():
     config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets", "config.json")
     if os.path.exists(config_path):
         try:
             with open(config_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if "base_url" in data and data["base_url"]:
-                    try:
-                        data["base_url"] = base64.b64decode(data["base_url"]).decode()
-                    except Exception:
-                        data["base_url"] = ""
-                return data
+                return json.load(f)
         except Exception:
             pass
     return {"base_url": "", "http_timeout": 30}
@@ -28,7 +22,10 @@ _config = _load_config()
 
 BASE_URL = _config.get("base_url", "")
 HTTP_TIMEOUT = _config.get("http_timeout", 30)
-DB_PATH = os.path.join(utils.get_skill_work_dir(), "data.db")
+DB_PATH = os.path.join(config.get_cache_dir(), "data.db")
+
+def get_cache_dir() -> str:
+    return config.get_cache_dir()
 
 # ============================================================
 # 数据模型
@@ -36,7 +33,7 @@ DB_PATH = os.path.join(utils.get_skill_work_dir(), "data.db")
 
 class RealtimeStockQuote:
     """
-    实时股票报价信息，由新浪行情接口获取。
+    实时股票报价信息
 
     字段说明:
         ts_code       股票代码（如 000001.SZ）

@@ -1,131 +1,124 @@
 ---
-name: strategy-picker
-description: 给用户提供自定义交易策略的回测、自定义策略选股、查询股票实时信息(包括当前价格、涨跌幅、成交量、开盘价、最高价、最低价等)。触发场景：1、用户询问股票价格、股票行情、查询股票当前的价格、获取股票的实时信息等。2、用户描述了一段策略后，请求使用该策略进行股票筛选。3、用户描述了一段交易策略后，请求使用该策略进行回测。4、其他任何情况用户指定要用BitSoulStockSkill时，强制使用该skill进行任务执行。
+name: BitSoulStockSkill
+description: 定位A股市场，向用户提供股票筛选策略，基于MOE混合因子专家模型的股票买卖点计算判断，个股风险判定，关键指标计算，数据回测，提供准确全面的股票价格与股票历史信息，板块信息与相关交易数据
+version: 1.0.0
+metadata:
+  openclaw:
+    emoji: "📈"
+    homepage: https://www.aicodingyard.com
+    requires:
+      env:
+        - BITSOUL_TOKEN
+      bins:
+        - python3
+    optional:
+      env:
+        - BITSOUL_TOKEN_ENV_FILE
+        - BITSOUL_CACHE_DIR
+      pythonPackages:
+        - pandas
+        - numpy
+        - requests
+        - sqlalchemy
+      network:
+        - info.aicodingyard.com
+        - https://finance.sina.com.cn/
+    primaryEnv: BITSOUL_TOKEN
 ---
 
-# 执行步骤
-- 理解用户意图，生成符合要求的python逻辑代码。
-- 向用户展示生成的逻辑代码，说明逻辑。
-- 将逻辑代码写入临时文件并执行。
-- 结束回答.
+
+# Token 配置
+
+本 skill 需要有效的 `BITSOUL_TOKEN` 才能使用功能
+
+## 必需的环境变量
+
+* `BITSOUL_TOKEN`：用户令牌，用于远程服务器权限验证
+
+## 可选的环境变量
+
+* `BITSOUL_TOKEN_ENV_FILE`：指向包含 `BITSOUL_TOKEN` 的 env 文件
+
+## 配置方式
+
+1. **方式一：直接设置环境变量**
+   ```bash
+   export BITSOUL_TOKEN="你的令牌"
+   ```
+
+2. **方式二：使用 env 文件**
+   ```bash
+   export BITSOUL_TOKEN_ENV_FILE="/path/to/token.env"
+   ```
+   其中 `token.env` 文件内容格式为：
+   ```
+   BITSOUL_TOKEN=你的令牌
+   ```
+
+**注意**：如果同时设置了环境变量和 env 文件，环境变量优先。
+
+运行时描述：
+- 从环境变量读取 `BITSOUL_TOKEN`
+- 只有在显式提供 `BITSOUL_TOKEN_ENV_FILE` 时，才会从文件中读取 `BITSOUL_TOKEN`
+- 从自然语言中自动选择更合适的股票接口
+- 对“分析 / 估值 / 基本面 / 趋势 / 风险”等请求自动切到综合分析,需要moe因子计算，返回详细信息
+- 对“交易观察 / 技术分析 / 均线 / 动量 / RSI / KDJ / 布林线 / MACD”等请求需要进行moe因子计算，同时需要调用calculate_metrics进行数据回测
+- 返回结构化 JSON；查询场景优先给原始数据，分析场景给结论和支撑数据
+
+## 安全与运行边界
+
+- 技能所需环境变量已经在本文件 frontmatter 中显式声明
+- 策略回测、因子挖矿、实时行情查询等功能会访问 `info.aicodingyard.com` 服务器
+- 技能只读取声明过的 token 相关环境变量，以及显式指定的 env 文件路径
+- 技能不会主动扫描其他本地凭证文件，也不会写入 token 缓存文件
+
+## 安装
+
+使用前先安装 Python 依赖：
+
+```bash
+pip install -r assets/requirements.txt
+```
+首次安装需要执行初始化操作，在设置好BITSOUL_TOKEN后，请运行scripts/data_fetcher.py
 
 # 注意事项
-* api接口文档是scripts/stock_api.py和scripts/define.py，不要从其他文件中读取任何接口，可以使用python标准库提供的接口，不允许使用任何额外的三方库。
-* **因子挖矿**：用户说"因子挖矿"、"挖矿"、"随机挖因子"、"碰碰运气"、"随机推荐"、"挖金矿"、"随机策略"时，直接调用 `api.random_alpha_backtest()`，禁止自己写回测逻辑。返回结果调用 `print(result['summary_text'])` 输出，禁止自行整理摘要。⚠️ **因子挖矿和买卖建议场景禁止调用 `api.initialSetup()`**，否则会触发耗时的数据同步下载。
+* api接口文档主要参考 references/API_FOR_LLM.md 对应的代码文件是scripts/stock_api.py 和 scripts/define.py
+* **凭证说明**：本skill需要用户Token用于数据访问权限验证。Token通过环境变量 `BITSOUL_TOKEN` 或 `BITSOUL_TOKEN_ENV_FILE` 传入。Token在数据访问时需要保持有效（请自行确保token未过期）。
+* **缓存目录**：`BITSOUL_CACHE_DIR`，可选，用于指定缓存目录和数据存储路径。默认值为系统临时目录下的 `BitSoulStockSkill` 子目录
+* **本地持久化文件**：
+  * `{缓存目录}/data.db` - 股票行情、指标缓存
+  * `{缓存目录}/logs/` - 日志目录
+  * `assets/config.json` - 配置文件
+* **因子挖矿**：用户说"因子挖矿"、"挖矿"、"随机挖因子"、"碰碰运气"、"随机推荐"、"挖金矿"、"随机策略"时，直接调用 `api.random_alpha_backtest()`，禁止自己写回测逻辑。返回结果调用 `print(result['summary_text'])` 输出，禁止自行整理摘要。
 * **因子挖矿结束后**：在 `print(result['summary_text'])` 之后，用自然语言向用户逐一解释本次使用的每个因子是什么含义、在策略中起什么作用。解释来源是 `result['factor_descriptions']`，格式示例：`alpha022：高价量5日相关的5日变化 × 收盘波动率，用于衡量量价相关动量的衰减程度，在本次策略中作为选股因子使用。`
 * **买卖建议**：用户询问某只股票"能不能买"、"该不该卖"、"现在适合持有吗"、"操作建议"、"投资建议"、"买卖信号"、"值得买吗"、"要不要买"等，且用户指定了具体股票时，直接调用 `api.get_trade_signal(code)`，禁止自己计算指标做判断。
 * **股票显示格式**：任何场景下输出股票代码时，必须同时附上股票名称，使用 `api.get_symbol_basic_infomation(code).name` 获取，格式如 `600519.SH（贵州茅台）`，禁止只输出代码。
-* 将模板代码文件scripts/template.py复制一份到系统临时目录下，后续修改都是基于你拷贝的模板代码副本，副本文件名称固定为bitsoul_skill_tmp_strategy.py，将bitsoul_skill_tmp_strategy.py中的 {search_path} 占位符为当前skill的scripts目录的绝对路径
-* 任何你生成的逻辑都要放在 bitsoul_skill_tmp_strategy.py中的 llm_impl 函数中
-* 如果用户意图是自定义交易策略回测功能:
-    * bitsoul_skill_tmp_strategy.py中的 {mode} 占位符替换为 User_exec
-    * 策略逻辑执行完成后需要调用scripts/stock_api.py中的calculate_metrics接口生成回测报告。
-* 如果用户意图是查询实时信息:
-    * bitsoul_skill_tmp_strategy.py中的 {mode} 占位符替换为 User_exec
-    * 使用scripts/stock_api.py中的get_realtime_xxx系列接口以获取实时信息。
-* 如果用户意图是设置token:
-    * bitsoul_skill_tmp_strategy.py中的 {mode} 占位符替换为 Token_rw
-    * 使用scripts/stock_api.py的set_user_token接口进行token设置，设置完后回复用户"token设置成功"。
-* 如果用户意图是查询当前的token:
-    * bitsoul_skill_tmp_strategy.py中的 {mode} 占位符替换为 Token_rw
-* 如果用户意图是更新vip基础数据包:
-    * bitsoul_skill_tmp_strategy.py中的 {mode} 占位符替换为 Update_vip_basic_data
-    * 使用scripts/stock_api.py的update_vip_basic_data接口进行更新
-* 所有任务执行完毕后，立刻结束回答。
 
-# 示例
 
-## 示例 0：因子挖矿
 
-**用户输入**：因子挖矿 / 挖矿 / 碰碰运气 / 随机推荐 / 挖金矿 / 随机策略
 
-**拷贝scripts/template.py到系统临时目录下，并以bitsoul_skill_tmp_strategy.py命名**：
-**修改bitsoul_skill_tmp_strategy.py，生成策略代码**：
-```python
-def llm_impl(api: StockApi):
-    codes = api.get_all_symbols()
-    result = api.random_alpha_backtest(codes=codes)
-    print(result['summary_text'])
-```
-**{mode} 替换为 `Mode.Token_rw`（因子挖矿禁止调用 initialSetup）**
-**执行命令**：python3 /xxxx/bitsoul_skill_tmp_strategy.py
-**结束思考，不再进行任何回答**
+## 输出行为
 
-## 示例 0.5：MoE 买卖建议
+- 面向用户的输出默认使用简体中文
+- 查询类请求优先返回原始数据，再补详细解释
+- 分析类请求默认返回结论、关键指标、风险提示与支撑摘要
+- 交易观察优先输出趋势、量价、资金流、龙虎榜和技术指标信号
+- 请求不明确时，先用中文追问一句，不要盲猜
 
-**触发关键字**：某只股票"能不能买"、"该不该卖"、"现在适合持有吗"、"操作建议"、"投资建议"、"买卖信号"、"值得买吗"、"要不要买"等，且用户指定了具体股票代码或名称。
+## 示例请求
 
-**拷贝scripts/template.py到系统临时目录下，并以bitsoul_skill_tmp_strategy.py命名**：
-**修改bitsoul_skill_tmp_strategy.py，生成策略代码**：
-```python
-def llm_impl(api: StockApi):
-    result = api.get_trade_signal('600519.SH')  # 替换为用户指定的股票代码
-    # 退市警告优先输出
-    if result.get('delist_warning'):
-        print(result['delist_warning'])
-    signal_map = {'BUY': '✅ 建议买入', 'SELL': '❌ 建议卖出', 'HOLD': '⏸ 建议持有观望'}
-    print(f'信号：{signal_map.get(result["signal"], result["signal"])}')
-    print(f'综合评分：{result["final_score"]:.4f}  置信度：{result["confidence"]}')
-    print(f'分析依据：{result["reason"]}')
-    experts = result.get('experts', {})
-    name_map = {'technical': '技术指标', 'alpha': 'Alpha因子', 'fundamental': '基本面', 'behavior': '量价行为'}
-    for k, info in experts.items():
-        label = name_map.get(k, k)
-        s = info.get('score')
-        note = info.get('note', '')
-        if s is None:
-            print(f'  {label}：{note}')
-        else:
-            print(f'  {label}：评分={s:.4f}  权重={info.get("weight", 0):.3f}')
-```
-**{mode} 替换为 `Mode.User_exec`（MoE分析禁止调用 initialSetup）**
-**执行命令**：python3 /xxxx/bitsoul_skill_tmp_strategy.py
-**结束思考，不再进行任何回答**
+- `贵州茅台近一个月股价走势`
+- `最近30天龙虎榜机构交易`
+- `分析宁德时代的估值和成长性`
+- `看看招商银行的基本面和趋势`
+- `贵州茅台当前有哪些风险信号`
+- `看看贵州茅台的交易观察`
+- `看看贵州茅台的快档交易观察`
+- `深度看看贵州茅台交易观察，带龙虎榜和机构席位`
+- `分析宁德时代均线、RSI 和布林线`
+- `贵州茅台技术分析`
 
-## 示例 1：
+## 参考资料
 
-**用户输入**：回测交易策略:获取2026年3月份任意一天收盘价高于5元的股票并打印出对应股票的交易代码
+- 机器可读目录：`references/API_FOR_LLM.dm`
 
-**拷贝scripts/template.py到系统临时目录下，并以bitsoul_skill_tmp_strategy.py命名**：
-**修改bitsoul_skill_tmp_strategy.py，生成策略代码**：
-```python
-import sys
-sys.path.insert(0, '/xxx/xxxx/xxx')
-from stock_api import StockApi
-import config, utils, remote_api
-def llm_impl(api: StockApi):
-    """
-    大模型生成业务逻辑的函数
-    
-    参数说明：
-        api 提供给大模型可调用的业务接口句柄
-    """
-    # 此处是llm实现逻辑的地方
-    """回测交易策略:获取2026年3月份任意一天收盘价高于5元的股票并打印出对应股票的交易代码"""
-    date_symbols_klines = api.get_kline([], "2026-03-01", "2026-03-31")
-    for kline in date_symbols_klines:
-        if kline.close > 5:
-            print(kline.code)
-
-if __name__ == "__main__":
-    # 检查token
-    cur_token = config.get_token()
-    ret = remote_api.request_check_token(cur_token)
-    if ret.status != "success":
-        print(f"skill token:{cur_token} 校验失败，请注册有效token后再使用")
-        sys.exit(0)
-
-    # 检查版本
-    remote_version = remote_api.request_version().version
-    local_version = config.get_local_version()
-    if utils.compare_version(local_version, remote_version) < 0:
-        print(f"发现新版本 {remote_version}，当前版本 {local_version}，请更新skill后再使用。")
-        sys.exit(0)
-
-    api = StockApi()
-    api.initialSetup()
-    llm_impl(api)
-
-```
-**执行命令**：python3 /xxxx/bitsoul_skill_tmp_strategy.py
-**结束思考，不再进行任何回答**

@@ -89,7 +89,7 @@ def init_db() -> None:
     """
     初始化本地 SQLite 数据库，创建 stock_basic 和 daily_kline 表（若不存在）。
     若检测到旧版本表结构（字段不匹配），自动删除旧库重建。
-    若 assets/data_1.0.bin 不存在，则从服务器下载。
+    若 assets/data_1.0.bin 不存在，则从 GitHub 下载。
     """
     assets_dir = utils.get_skill_assets_dir()
     base_data_file = os.path.join(assets_dir, "data_1.0.bin")
@@ -1588,6 +1588,50 @@ def download_data_file(file_name: str, output_path: str, max_retries: int = 3) -
 
     return False
 
+def download_from_url(url: str, output_path: str, timeout: int = 300) -> bool:
+    """
+    从指定 URL 下载文件到指定路径。
+
+    参数:
+        url:         下载链接
+        output_path: 保存路径
+        timeout:     超时时间（秒）
+
+    返回:
+        bool: 下载成功返回 True，否则返回 False
+    """
+    try:
+        log(f"从 URL 下载文件: {url}")
+        log(f"保存路径: {output_path}")
+
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+        with requests.get(url, stream=True, timeout=timeout) as response:
+            if response.status_code != 200:
+                log(f"下载失败，HTTP 状态码: {response.status_code}")
+                return False
+
+            total_size = int(response.headers.get('content-length', 0))
+            downloaded = 0
+            chunk_size = 1024 * 1024
+
+            with open(output_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=chunk_size):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total_size > 0:
+                            pct = downloaded / total_size * 100
+                            if downloaded % (10 * chunk_size) < chunk_size:
+                                log(f"下载进度: {pct:.1f}%")
+
+        log(f"文件下载完成: {output_path}")
+        return True
+
+    except Exception as e:
+        log(f"下载出错: {str(e)}")
+        return False
+
 def syn_table_datas() -> List[str]:
     """
     根据表名，获取需要下载的 patch 列表。
@@ -1699,14 +1743,16 @@ def import_data_to_table(input_file:str, table_name:str):
     else:
         assert False
 
-    # 先写入临时表
-    df.to_sql("tmp_import", getEngine(), if_exists="replace", index=False)
-
-    with getEngine().connect() as conn:
-        # 用 SQL INSERT OR REPLACE 从临时表合并到目标表
-        conn.execute(text(f"INSERT OR REPLACE INTO {table_name} SELECT * FROM tmp_import"))
-        # conn.execute(text("DROP TABLE tmp_import"))
-        conn.commit()
+    engine = getEngine()
+    raw_conn = engine.raw_connection()
+    try:
+        df.to_sql("tmp_import", raw_conn, if_exists="replace", index=False)
+        cursor = raw_conn.cursor()
+        cursor.execute(f"INSERT OR REPLACE INTO {table_name} SELECT * FROM tmp_import")
+        raw_conn.commit()
+        cursor.close()
+    finally:
+        raw_conn.close()
 
 def syn_vip_basic_data():
     """
@@ -1735,6 +1781,10 @@ def syn_vip_basic_data():
 
 
 if __name__ == "__main__":
+    
+    import os
+    os.environ["BITSOUL_TOKEN"] = "zhRYn2H-rBNoWlpFK8JiNHIJx9x7mX4MZEbW4gSvXf8"
+    
     log(f"数据库路径:{DB_PATH}")
     init_db()
     syn_table_datas()
