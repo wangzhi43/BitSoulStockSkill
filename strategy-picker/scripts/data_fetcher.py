@@ -89,7 +89,6 @@ def init_db() -> None:
     """
     初始化本地 SQLite 数据库，创建 stock_basic 和 daily_kline 表（若不存在）。
     若检测到旧版本表结构（字段不匹配），自动删除旧库重建。
-    若 assets/data_1.0.bin 不存在，则从 GitHub 下载。
     """
     assets_dir = utils.get_skill_assets_dir()
     base_data_file = os.path.join(assets_dir, "data_1.0.bin")

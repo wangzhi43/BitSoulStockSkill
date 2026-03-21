@@ -110,15 +110,6 @@ klines = api.get_daily_kline(['600519.SH'], '2026-01-01', '2026-03-01')
 
 ---
 
-### 获取股票小时线行情，按日期和时间升序
-
-```python
-klines = api.get_hour_kline(['600519.SH'], '2026-01-01', '2026-03-01')
-# get_hour_kline(symbols: List[str], start_date: str, end_date: str) -> List[HourKline]
-```
-
----
-
 ### 获取股票周线行情，按日期升序
 
 ```python
@@ -302,6 +293,79 @@ atr = api.get_atr('600519.SH', '2026-03-01', 14)
 ```
 
 ---
+
+---
+
+## ★ 因子挖矿（优先使用）
+
+### 随机因子挖矿 + 回测
+
+**触发场景**：用户说"因子挖矿"、"挖矿"、"随机挖因子"、"碰碰运气"、"随机推荐"、"挖金矿"、"随机策略"时，**必须**调用此接口，禁止自己写回测逻辑。
+
+```python
+result = api.random_alpha_backtest()
+print(result['summary_text'])  # 必须调用此行输出报告，禁止自行整理摘要
+
+# 指定股票池和回测区间
+result = api.random_alpha_backtest(
+    codes=None,               # 股票池，None 表示全市场
+    start_date='2025-12-01', # 回测起始日，None 默认取 end_date 前 90 天
+    end_date='2026-03-19',   # 回测截止日，None 默认今天
+    initial_cash=1_000_000,  # 初始资金
+    max_pool_size=30,         # 候选池上限，超过时按综合得分截取
+    max_holdings=5,           # 最大同时持仓数
+    random_seed=None,         # 随机种子，None 不固定
+)
+print(result['summary_text'])  # 必须调用此行输出报告，禁止自行整理摘要
+# random_alpha_backtest(codes, max_screen_factors, max_signal_factors,
+#                       start_date, end_date, initial_cash, warmup_days,
+#                       random_seed, top_n_stocks, max_pool_size, max_holdings) -> Dict
+```
+
+| 返回字段 | 说明 |
+|----------|------|
+| `screen_factors` | 本次使用的选股因子列表，如 `['alpha043', 'alpha099']` |
+| `signal_factors` | 本次使用的信号因子列表，如 `['alpha008', 'alpha094']` |
+| `factor_descriptions` | 每个因子的文字描述 `{name: str}` |
+| `signal_config` | 买卖阈值 `{'buy_thresh': 0.71, 'sell_thresh': 0.55}` |
+| `screen_top_pcts` | 每个选股因子本次随机保留比例 `{name: float}` |
+| `filter_log` | 逐层过滤日志，含 before/after 数量 |
+| `final_pool` | 最终候选股票代码列表 |
+| `final_pool_count` | 候选池股票数量 |
+| `trade_log` | 每笔交易记录（含因子值、排名、阈值） |
+| `backtest` | 回测绩效 `{total_return_pct, annualized_return_pct, max_drawdown_pct, sharpe_ratio, equity_curve, ...}` |
+| `benchmarks` | 四条基准线对比（上证/沪深300/中证500/创业板指） |
+| `ic_stats` | 每个因子的 Rank IC 统计 `{ic_mean, ic_ir, ic_win_rate, ...}` |
+| `top_stocks` | Top N 盈利个股详情（含每笔交易的因子值） |
+| `summary_text` | 完整格式化报告文本，**直接 `print(result['summary_text'])` 输出给用户，禁止自行整理摘要** |
+
+---
+
+## ★ MoE 买卖时机分析（优先使用）
+
+### 分析单只股票当前买卖信号
+
+**触发场景**：用户询问某只股票"能不能买"、"该不该卖"、"现在适合持有吗"、"当前信号"、"操作建议"时，**必须**调用此接口。
+
+```python
+result = api.get_trade_signal('000001.SZ')
+result = api.get_trade_signal('600519.SH', date='2026-01-15')
+# get_trade_signal(code: str, date: str = None) -> Dict
+```
+
+| 返回字段 | 说明 |
+|----------|------|
+| `signal` | `"BUY"` 买入 / `"SELL"` 卖出 / `"HOLD"` 持有 |
+| `final_score` | 综合评分 0~1，越高越看多 |
+| `confidence` | 置信度：`"高"` / `"中"` / `"低"` |
+| `reason` | 各专家评分描述，如 `"技术面看多(0.71)，Alpha因子看多(0.73)"` |
+| `experts` | 四个专家详情：`technical` / `alpha` / `fundamental` / `behavior` |
+| `code` | 股票代码 |
+| `date` | 分析日期 |
+
+---
+
+
 
 ## 性能指标
 
@@ -571,7 +635,6 @@ drawdowns = api.calculate_drawdown([1000000, 1100000, 950000])
 ---
 
 
-
 ## 回测引擎控制
 
 ### 初始化回测环境，返回含现金、持仓、订单、交易记录的状态字典
@@ -742,76 +805,6 @@ prices = api.get_prices_at_dates('600519.SH', ['2026-01-01', '2026-01-02'])
 
 ---
 
----
-
-## ★ 因子挖矿（优先使用）
-
-### 随机因子挖矿 + 回测
-
-**触发场景**：用户说"因子挖矿"、"挖矿"、"随机挖因子"、"碰碰运气"、"随机推荐"、"挖金矿"、"随机策略"时，**必须**调用此接口，禁止自己写回测逻辑。
-
-```python
-result = api.random_alpha_backtest()
-print(result['summary_text'])  # 必须调用此行输出报告，禁止自行整理摘要
-
-# 指定股票池和回测区间
-result = api.random_alpha_backtest(
-    codes=None,               # 股票池，None 表示全市场
-    start_date='2025-12-01', # 回测起始日，None 默认取 end_date 前 90 天
-    end_date='2026-03-19',   # 回测截止日，None 默认今天
-    initial_cash=1_000_000,  # 初始资金
-    max_pool_size=30,         # 候选池上限，超过时按综合得分截取
-    max_holdings=5,           # 最大同时持仓数
-    random_seed=None,         # 随机种子，None 不固定
-)
-print(result['summary_text'])  # 必须调用此行输出报告，禁止自行整理摘要
-# random_alpha_backtest(codes, max_screen_factors, max_signal_factors,
-#                       start_date, end_date, initial_cash, warmup_days,
-#                       random_seed, top_n_stocks, max_pool_size, max_holdings) -> Dict
-```
-
-| 返回字段 | 说明 |
-|----------|------|
-| `screen_factors` | 本次使用的选股因子列表，如 `['alpha043', 'alpha099']` |
-| `signal_factors` | 本次使用的信号因子列表，如 `['alpha008', 'alpha094']` |
-| `factor_descriptions` | 每个因子的文字描述 `{name: str}` |
-| `signal_config` | 买卖阈值 `{'buy_thresh': 0.71, 'sell_thresh': 0.55}` |
-| `screen_top_pcts` | 每个选股因子本次随机保留比例 `{name: float}` |
-| `filter_log` | 逐层过滤日志，含 before/after 数量 |
-| `final_pool` | 最终候选股票代码列表 |
-| `final_pool_count` | 候选池股票数量 |
-| `trade_log` | 每笔交易记录（含因子值、排名、阈值） |
-| `backtest` | 回测绩效 `{total_return_pct, annualized_return_pct, max_drawdown_pct, sharpe_ratio, equity_curve, ...}` |
-| `benchmarks` | 四条基准线对比（上证/沪深300/中证500/创业板指） |
-| `ic_stats` | 每个因子的 Rank IC 统计 `{ic_mean, ic_ir, ic_win_rate, ...}` |
-| `top_stocks` | Top N 盈利个股详情（含每笔交易的因子值） |
-| `summary_text` | 完整格式化报告文本，**直接 `print(result['summary_text'])` 输出给用户，禁止自行整理摘要** |
-
----
-
-## ★ MoE 买卖时机分析（优先使用）
-
-### 分析单只股票当前买卖信号
-
-**触发场景**：用户询问某只股票"能不能买"、"该不该卖"、"现在适合持有吗"、"当前信号"、"操作建议"时，**必须**调用此接口。
-
-```python
-result = api.get_trade_signal('000001.SZ')
-result = api.get_trade_signal('600519.SH', date='2026-01-15')
-# get_trade_signal(code: str, date: str = None) -> Dict
-```
-
-| 返回字段 | 说明 |
-|----------|------|
-| `signal` | `"BUY"` 买入 / `"SELL"` 卖出 / `"HOLD"` 持有 |
-| `final_score` | 综合评分 0~1，越高越看多 |
-| `confidence` | 置信度：`"高"` / `"中"` / `"低"` |
-| `reason` | 各专家评分描述，如 `"技术面看多(0.71)，Alpha因子看多(0.73)"` |
-| `experts` | 四个专家详情：`technical` / `alpha` / `fundamental` / `behavior` |
-| `code` | 股票代码 |
-| `date` | 分析日期 |
-
----
 
 ### 训练 MoE 权重（遗传算法优化）
 
