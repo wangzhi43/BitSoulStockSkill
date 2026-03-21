@@ -28,6 +28,9 @@ find "$TMP_DIR/BitSoulStockSkill" -type d -name "__pycache__" -exec rm -rf {} + 
 echo "Removing test files..."
 rm -rf "$TMP_DIR/BitSoulStockSkill/scripts/tests"
 
+echo "Removing large data files..."
+find "$TMP_DIR/BitSoulStockSkill" -name "data_1.0.bin" -delete
+
 if [ "$MINIFY" = "true" ]; then
   echo "需要加密"
 fi
