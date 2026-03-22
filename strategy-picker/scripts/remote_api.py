@@ -18,7 +18,8 @@ def request_patch_list() -> List[PatchItem]:
         value: 所有可用patch列表
     """
     ret: List[PatchItem] = []
-    response = requests.get(f"{define.BASE_URL}/api/patch_list/all")
+    token = config.get_token()
+    response = requests.get(f"{define.BASE_URL}/api/patch_list/all", params={"token": token})
     if response.status_code == 200:
         rsp = response.json()
         datas_json = rsp["data"]
