@@ -220,7 +220,11 @@ class StockApi:
     - 性能指标计算
     - 回测工具函数
     """
-    def __init__(self, logger:TrackLogger):
+    def __init__(self, logger:TrackLogger = None):
+        if logger is None:
+            import os as _os
+            _log_path = _os.path.join(config.get_cache_dir(), 'track.log')
+            logger = TrackLogger(_log_path)
         self.track_logger = logger
     # ============================================================
     # 工具类
