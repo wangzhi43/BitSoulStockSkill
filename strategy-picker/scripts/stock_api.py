@@ -260,6 +260,15 @@ class StockApi:
         更新vip基础数据包
         """
         data_fetcher.syn_vip_basic_data()
+
+    def update_data(self):
+        """
+        更新本地数据库，获取最新的增量数据。
+        会对比服务器上的 patch 列表，下载并导入缺失的数据。
+        """
+        self.track_logger.write("update_data()")
+        data_fetcher.syn_table_datas()
+
     # ============================================================
     # 股票基础信息类接口
     # ============================================================
