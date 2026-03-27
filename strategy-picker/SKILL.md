@@ -99,11 +99,11 @@ token 可前往 <https://www.aicodingyard.com> 免费注册申请，并配置在
 * **凭证说明**：本skill需要用户Token用于数据访问权限验证。Token通过环境变量 `BITSOUL_TOKEN` 或 `BITSOUL_TOKEN_ENV_FILE` 传入。Token在数据访问时需要保持有效（请自行确保token未过期）。
 * **缓存目录**：`BITSOUL_CACHE_DIR`，可选，用于指定缓存目录和数据存储路径。默认值为系统临时目录下的 `BitSoulStockSkill` 子目录
 
-* **因子挖矿**：用户说"因子挖矿"、"挖矿"、"随机挖因子"、"碰碰运气"、"随机推荐"、"挖金矿"、"随机策略"时，直接调用 `api.random_alpha_backtest()`，禁止自己写回测逻辑。返回结果调用 `print(result['summary_text'])` 输出，禁止自行整理摘要。
+* **因子挖矿**：用户说"因子挖矿"、"挖矿"、"随机挖因子"、"碰碰运气"、"随机推荐"、"挖金矿"、"随机策略"时，请参考 `api.random_alpha_backtest()`,返回结果请参考 `print(result['summary_text'])` 
 * **因子挖矿结束后**：在 `print(result['summary_text'])` 之后，用自然语言向用户逐一解释本次使用的每个因子是什么含义、在策略中起什么作用。解释来源是 `result['factor_descriptions']`，格式示例：`alpha022：高价量5日相关的5日变化 × 收盘波动率，用于衡量量价相关动量的衰减程度，在本次策略中作为选股因子使用。`
-* **买卖建议**：用户询问某只股票"能不能买"、"该不该卖"、"现在适合持有吗"、"操作建议"、"投资建议"、"买卖信号"、"值得买吗"、"要不要买"等，且用户指定了具体股票时，直接调用 `api.get_trade_signal(code)`，禁止自己计算指标做判断。
-* **股票显示格式**：任何场景下输出股票代码时，必须同时附上股票名称，使用 `api.get_symbol_basic_infomation(code).name` 获取，格式如 `600519.SH（贵州茅台）`，禁止只输出代码。
-* **买卖信号输出格式（强制执行）**：调用 `get_trade_signal()` 后，必须按以下结构完整输出，禁止简化：
+* **买卖建议**：用户询问某只股票"能不能买"、"该不该卖"、"现在适合持有吗"、"操作建议"、"投资建议"、"买卖信号"、"值得买吗"、"要不要买"等，且用户指定了具体股票时，请参考 `api.get_trade_signal(code)`
+* **股票显示格式**：任何场景下输出股票代码时，必须同时附上股票名称，请参考 `api.get_symbol_basic_infomation(code).name` 获取，格式如 `600519.SH（贵州茅台）`，请注意格式
+* **买卖信号输出格式**：调用 `get_trade_signal()` 后，按以下结构完整输出：
   1. **汇总表**：信号、综合评分、置信度、分析日期
   2. **专家评分明细表**：列出 `result['experts']` 中所有专家（technical/alpha/fundamental/behavior），每个专家显示：评分、权重、有效指标数（valid_count/total_count）、note（若数据不足）
   3. **各专家关键细节**（从 details 中挑重要的展示，不需要逐项列举）：
