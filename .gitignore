@@ -25,6 +25,8 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+claw_pool/account/
+claw_pool/ranking/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template

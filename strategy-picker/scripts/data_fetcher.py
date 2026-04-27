@@ -60,6 +60,48 @@ def getEngine() -> Engine:
         _g_engine = create_engine(f"sqlite:///{DB_PATH}")
     return _g_engine
 
+
+def _to_compact_date(date_text: Optional[str]) -> Optional[str]:
+    """将 YYYY-MM-DD / YYYYMMDD 统一转换为 YYYYMMDD，空值保持 None。"""
+    if date_text is None:
+        return None
+    normalized = str(date_text).strip().replace("-", "")
+    return normalized or None
+
+
+def _append_trade_date_filters(
+    conditions: List[str],
+    params: dict,
+    column: str,
+    trade_date: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> None:
+    """
+    为 trade_date 风格字段追加查询条件。
+
+    本地库当前同时可能存在 YYYYMMDD / YYYY-MM-DD 两种存储形式，
+    因此统一使用 REPLACE(column, '-', '') 与归一化后的 YYYYMMDD 比较。
+    """
+    compact_trade_date = _to_compact_date(trade_date)
+    compact_start_date = _to_compact_date(start_date)
+    compact_end_date = _to_compact_date(end_date)
+
+    if compact_trade_date is not None:
+        param_name = f"{column}_exact"
+        conditions.append(f"REPLACE({column}, '-', '') = :{param_name}")
+        params[param_name] = compact_trade_date
+        return
+
+    if compact_start_date is not None:
+        param_name = f"{column}_start"
+        conditions.append(f"REPLACE({column}, '-', '') >= :{param_name}")
+        params[param_name] = compact_start_date
+    if compact_end_date is not None:
+        param_name = f"{column}_end"
+        conditions.append(f"REPLACE({column}, '-', '') <= :{param_name}")
+        params[param_name] = compact_end_date
+
 class TablePatch:
     """
     各个表目前应用的是哪个补丁的数据
@@ -777,14 +819,14 @@ def query_daily_basic(
         conditions.append(f"ts_code IN ({placeholders})")
         for k, v in zip(keys, ts_codes):
             params[k] = v
-    if trade_date is not None:
-        conditions.append("DATE(trade_date) = :trade_date")
-        params["trade_date"] = trade_date
-    else:
-        if start_date is not None:
-            conditions.append("DATE(trade_date) >= DATE('{0}')".format(start_date))
-        if end_date is not None:
-            conditions.append("DATE(trade_date) <= DATE('{0}')".format(end_date))
+    _append_trade_date_filters(
+        conditions,
+        params,
+        "trade_date",
+        trade_date=trade_date,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
     sql = "SELECT * FROM daily_basic"
     if conditions:
@@ -905,14 +947,14 @@ def query_stock_limit(
         conditions.append(f"ts_code IN ({placeholders})")
         for k, v in zip(keys, ts_codes):
             params[k] = v
-    if trade_date is not None:
-        conditions.append("DATE(trade_date) = :trade_date")
-        params["trade_date"] = trade_date
-    else:
-        if start_date is not None:
-            conditions.append("DATE(trade_date) >= DATE('{0}')".format(start_date))
-        if end_date is not None:
-            conditions.append("DATE(trade_date) <= DATE('{0}')".format(end_date))
+    _append_trade_date_filters(
+        conditions,
+        params,
+        "trade_date",
+        trade_date=trade_date,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
     sql = "SELECT * FROM stock_limit"
     if conditions:
@@ -969,14 +1011,14 @@ def query_daily_limit_list(
         conditions.append(f"ts_code IN ({placeholders})")
         for k, v in zip(keys, ts_codes):
             params[k] = v
-    if trade_date is not None:
-        conditions.append("DATE(trade_date) = :trade_date")
-        params["trade_date"] = trade_date
-    else:
-        if start_date is not None:
-            conditions.append("DATE(trade_date) >= DATE('{0}')".format(start_date))
-        if end_date is not None:
-            conditions.append("DATE(trade_date) <= DATE('{0}')".format(end_date))
+    _append_trade_date_filters(
+        conditions,
+        params,
+        "trade_date",
+        trade_date=trade_date,
+        start_date=start_date,
+        end_date=end_date,
+    )
     if limit_type is not None:
         conditions.append("limit_type = :limit_type")
         params["limit_type"] = limit_type
@@ -1036,14 +1078,14 @@ def query_daily_bomb_list(
         conditions.append(f"ts_code IN ({placeholders})")
         for k, v in zip(keys, ts_codes):
             params[k] = v
-    if trade_date is not None:
-        conditions.append("DATE(trade_date) = :trade_date")
-        params["trade_date"] = trade_date
-    else:
-        if start_date is not None:
-            conditions.append("DATE(trade_date) >= DATE('{0}')".format(start_date))
-        if end_date is not None:
-            conditions.append("DATE(trade_date) <= DATE('{0}')".format(end_date))
+    _append_trade_date_filters(
+        conditions,
+        params,
+        "trade_date",
+        trade_date=trade_date,
+        start_date=start_date,
+        end_date=end_date,
+    )
     if bomb_type is not None:
         conditions.append("bomb_type = :bomb_type")
         params["bomb_type"] = bomb_type
@@ -1153,14 +1195,14 @@ def query_top_list(
         conditions.append(f"ts_code IN ({placeholders})")
         for k, v in zip(keys, ts_codes):
             params[k] = v
-    if trade_date is not None:
-        conditions.append("DATE(trade_date) = :trade_date")
-        params["trade_date"] = trade_date
-    else:
-        if start_date is not None:
-            conditions.append("DATE(trade_date) >= DATE('{0}')".format(start_date))
-        if end_date is not None:
-            conditions.append("DATE(trade_date) <= DATE('{0}')".format(end_date))
+    _append_trade_date_filters(
+        conditions,
+        params,
+        "trade_date",
+        trade_date=trade_date,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
     sql = "SELECT * FROM top_list"
     if conditions:
@@ -1214,14 +1256,14 @@ def query_top_inst(
         conditions.append(f"ts_code IN ({placeholders})")
         for k, v in zip(keys, ts_codes):
             params[k] = v
-    if trade_date is not None:
-        conditions.append("DATE(trade_date) = :trade_date")
-        params["trade_date"] = trade_date
-    else:
-        if start_date is not None:
-            conditions.append("DATE(trade_date) >= DATE('{0}')".format(start_date))
-        if end_date is not None:
-            conditions.append("DATE(trade_date) <= DATE('{0}')".format(end_date))
+    _append_trade_date_filters(
+        conditions,
+        params,
+        "trade_date",
+        trade_date=trade_date,
+        start_date=start_date,
+        end_date=end_date,
+    )
     if side is not None:
         conditions.append("side = :side")
         params["side"] = side
@@ -1276,14 +1318,14 @@ def query_sector_flow_daily(
         conditions.append(f"ts_code IN ({placeholders})")
         for k, v in zip(keys, ts_codes):
             params[k] = v
-    if trade_date is not None:
-        conditions.append("DATE(trade_date) = :trade_date")
-        params["trade_date"] = trade_date
-    else:
-        if start_date is not None:
-            conditions.append("DATE(trade_date) >= DATE('{0}')".format(start_date))
-        if end_date is not None:
-            conditions.append("DATE(trade_date) <= DATE('{0}')".format(end_date))
+    _append_trade_date_filters(
+        conditions,
+        params,
+        "trade_date",
+        trade_date=trade_date,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
     sql = "SELECT * FROM sector_flow_daily"
     if conditions:
@@ -1384,14 +1426,14 @@ def query_index_daily(
         conditions.append(f"ts_code IN ({placeholders})")
         for k, v in zip(keys, ts_codes):
             params[k] = v
-    if trade_date is not None:
-        conditions.append("DATE(trade_date) = :trade_date")
-        params["trade_date"] = trade_date
-    else:
-        if start_date is not None:
-            conditions.append("DATE(trade_date) >= DATE('{0}')".format(start_date))
-        if end_date is not None:
-            conditions.append("DATE(trade_date) <= DATE('{0}')".format(end_date))
+    _append_trade_date_filters(
+        conditions,
+        params,
+        "trade_date",
+        trade_date=trade_date,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
     sql = "SELECT * FROM index_daily"
     if conditions:
@@ -1440,14 +1482,14 @@ def query_index_weekly(
         conditions.append(f"ts_code IN ({placeholders})")
         for k, v in zip(keys, ts_codes):
             params[k] = v
-    if trade_date is not None:
-        conditions.append("DATE(trade_date) = :trade_date")
-        params["trade_date"] = trade_date
-    else:
-        if start_date is not None:
-            conditions.append("DATE(trade_date) >= DATE('{0}')".format(start_date))
-        if end_date is not None:
-            conditions.append("DATE(trade_date) <= DATE('{0}')".format(end_date))
+    _append_trade_date_filters(
+        conditions,
+        params,
+        "trade_date",
+        trade_date=trade_date,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
     sql = "SELECT * FROM index_weekly"
     if conditions:
@@ -1496,14 +1538,14 @@ def query_index_monthly(
         conditions.append(f"ts_code IN ({placeholders})")
         for k, v in zip(keys, ts_codes):
             params[k] = v
-    if trade_date is not None:
-        conditions.append("DATE(trade_date) = :trade_date")
-        params["trade_date"] = trade_date
-    else:
-        if start_date is not None:
-            conditions.append("DATE(trade_date) >= DATE('{0}')".format(start_date))
-        if end_date is not None:
-            conditions.append("DATE(trade_date) <= DATE('{0}')".format(end_date))
+    _append_trade_date_filters(
+        conditions,
+        params,
+        "trade_date",
+        trade_date=trade_date,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
     sql = "SELECT * FROM index_monthly"
     if conditions:

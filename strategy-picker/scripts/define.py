@@ -27,6 +27,16 @@ DB_PATH = os.path.join(config.get_cache_dir(), "data.db")
 def get_cache_dir() -> str:
     return config.get_cache_dir()
 
+
+def _normalize_trade_date(value: Optional[str]) -> str:
+    """将 trade_date 风格字段统一为 YYYY-MM-DD，空值返回空字符串。"""
+    if value is None:
+        return ""
+    normalized = str(value).strip()
+    if len(normalized) == 8 and normalized.isdigit():
+        return f"{normalized[0:4]}-{normalized[4:6]}-{normalized[6:8]}"
+    return normalized
+
 # ============================================================
 # 数据模型
 # ============================================================
@@ -516,7 +526,7 @@ class DailyBasic:
                 return 0.0
 
         return cls(
-            trade_date=d.get("trade_date") or "",
+            trade_date=_normalize_trade_date(d.get("trade_date")),
             ts_code=d.get("ts_code") or "",
             close=_f(d.get("close")),
             turnover_rate=_f(d.get("turnover_rate")),
@@ -718,7 +728,7 @@ class StockLimit:
                 return 0.0
 
         return cls(
-            trade_date=d.get("trade_date") or "",
+            trade_date=_normalize_trade_date(d.get("trade_date")),
             ts_code=d.get("ts_code") or "",
             pre_close=_f(d.get("pre_close")),
             up_limit=_f(d.get("up_limit")),
@@ -779,7 +789,7 @@ class DailyLimitList:
                 return 0
 
         return cls(
-            trade_date=d.get("trade_date") or "",
+            trade_date=_normalize_trade_date(d.get("trade_date")),
             ts_code=d.get("ts_code") or "",
             name=d.get("name") or "",
             limit_type=d.get("limit_type") or "",
@@ -893,7 +903,7 @@ class TopList:
 
         return cls(
             id=_i(d.get("id")),
-            trade_date=d.get("trade_date") or "",
+            trade_date=_normalize_trade_date(d.get("trade_date")),
             ts_code=d.get("ts_code") or "",
             name=d.get("name") or "",
             close=_f(d.get("close")),
@@ -967,7 +977,7 @@ class TopInst:
 
         return cls(
             id=_i(d.get("id")),
-            trade_date=d.get("trade_date") or "",
+            trade_date=_normalize_trade_date(d.get("trade_date")),
             ts_code=d.get("ts_code") or "",
             exalter=d.get("exalter") or "",
             side=d.get("side") or "",
@@ -1059,7 +1069,7 @@ class SectorFlowDaily:
                 return 0
 
         return cls(
-            trade_date=d.get("trade_date") or "",
+            trade_date=_normalize_trade_date(d.get("trade_date")),
             ts_code=d.get("ts_code") or "",
             name=d.get("name") or "",
             content_type=d.get("content_type") or "",
@@ -1201,7 +1211,7 @@ class IndexDaily:
                 return 0.0
 
         return cls(
-            trade_date=d.get("trade_date") or "",
+            trade_date=_normalize_trade_date(d.get("trade_date")),
             ts_code=d.get("ts_code") or "",
             open=_f(d.get("open")),
             high=_f(d.get("high")),
@@ -1264,7 +1274,7 @@ class IndexWeekly:
                 return 0.0
 
         return cls(
-            trade_date=d.get("trade_date") or "",
+            trade_date=_normalize_trade_date(d.get("trade_date")),
             ts_code=d.get("ts_code") or "",
             open=_f(d.get("open")),
             high=_f(d.get("high")),
@@ -1327,7 +1337,7 @@ class IndexMonthly:
                 return 0.0
 
         return cls(
-            trade_date=d.get("trade_date") or "",
+            trade_date=_normalize_trade_date(d.get("trade_date")),
             ts_code=d.get("ts_code") or "",
             open=_f(d.get("open")),
             high=_f(d.get("high")),
@@ -1386,7 +1396,7 @@ class DailyBombList:
                 return 0.0
 
         return cls(
-            trade_date=d.get("trade_date") or "",
+            trade_date=_normalize_trade_date(d.get("trade_date")),
             ts_code=d.get("ts_code") or "",
             name=d.get("name") or "",
             bomb_type=d.get("bomb_type") or "",
