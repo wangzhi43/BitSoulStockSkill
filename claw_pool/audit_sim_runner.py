@@ -8,6 +8,12 @@
 2. 成交价是否等于当日开盘价
 3. 是否误买入一字涨停 / 误卖出一字跌停
 4. 数据库中是否存在大幅价格跳变样本
+5. T+1 违规：当日买入的股票当日卖出
+6. 停牌日交易：成交量为 0 的日期产生了买卖
+7. ST/创业板/科创板/北交所涨跌幅阈值是否正确区分
+8. 收盘价超出理论涨跌停价范围（数据异常）
+9. 卖出股数超过持仓（空卖）
+10. 佣金最低 5 元检查
 """
 
 import os
@@ -69,6 +75,15 @@ def is_one_word_limit(row, limit_price):
     return all(abs(price - limit_price) <= tolerance for price in prices)
 
 
+def _get_stock_info(cur, code: str):
+    """查询股票基础信息，返回 (name, list_date)"""
+    row = cur.execute(
+        "SELECT name, list_date FROM stock_basic WHERE ts_code = ? LIMIT 1",
+        (code,),
+    ).fetchone()
+    return (row[0] if row else "", row[1] if row else "")
+
+
 def audit_ranking_dir(ranking_dir: str):
     conn = get_db_connection()
     cur = conn.cursor()
@@ -85,6 +100,10 @@ def audit_ranking_dir(ranking_dir: str):
         with open(trade_file, "r", encoding="utf-8") as f:
             rows = list(csv.DictReader(f))
 
+        # 按账户追踪持仓和当日买入记录，用于 T+1 和空卖检查
+        positions = {}  # code -> shares
+        daily_buys = {}  # (date, code) -> True
+
         for row in rows:
             result["trade_count"] += 1
             code = row["股票代码"]
@@ -92,7 +111,9 @@ def audit_ranking_dir(ranking_dir: str):
             action = row["动作"]
             shares = int(row["数量"])
             price = float(row["价格"])
+            amount = shares * price
 
+            # --- 检查 1: 买入股数 100 整数倍 ---
             if action == "BUY" and shares % 100 != 0:
                 result["issues"].append({
                     "type": "buy_lot_not_100",
@@ -100,8 +121,43 @@ def audit_ranking_dir(ranking_dir: str):
                     "row": row,
                 })
 
+            # --- 检查 5: T+1 违规 ---
+            if action == "BUY":
+                daily_buys[(trade_date, code)] = True
+                positions[code] = positions.get(code, 0) + shares
+            if action == "SELL":
+                if (trade_date, code) in daily_buys:
+                    result["issues"].append({
+                        "type": "t_plus_1_violation",
+                        "file": os.path.basename(trade_file),
+                        "row": row,
+                    })
+
+            # --- 检查 9: 卖出股数超过持仓（空卖） ---
+            if action == "SELL":
+                held = positions.get(code, 0)
+                if shares > held:
+                    result["issues"].append({
+                        "type": "oversell_no_position",
+                        "file": os.path.basename(trade_file),
+                        "row": row,
+                        "held_shares": held,
+                    })
+                positions[code] = max(0, held - shares)
+
+            # --- 检查 10: 佣金最低 5 元 ---
+            fee = amount * 0.0003
+            if fee < 5.0:
+                result["issues"].append({
+                    "type": "commission_below_minimum",
+                    "file": os.path.basename(trade_file),
+                    "row": row,
+                    "calculated_fee": round(fee, 2),
+                    "minimum_fee": 5.0,
+                })
+
             market_row = cur.execute(
-                "SELECT open, high, low, close, pre_close FROM daily_kline WHERE code = ? AND date = ?",
+                "SELECT open, high, low, close, pre_close, volume FROM daily_kline WHERE code = ? AND date = ?",
                 (code, trade_date),
             ).fetchone()
             if not market_row:
@@ -112,7 +168,9 @@ def audit_ranking_dir(ranking_dir: str):
                 })
                 continue
 
-            open_price, high_price, low_price, close_price, pre_close = market_row
+            open_price, high_price, low_price, close_price, pre_close, volume = market_row
+
+            # --- 检查 2: 成交价是否等于当日开盘价 ---
             if abs(price - float(open_price)) > 1e-6:
                 result["issues"].append({
                     "type": "trade_price_not_open",
@@ -121,15 +179,19 @@ def audit_ranking_dir(ranking_dir: str):
                     "market_open": open_price,
                 })
 
+            # --- 检查 6: 停牌日交易（成交量为 0） ---
+            if volume is not None and float(volume) <= 0:
+                result["issues"].append({
+                    "type": "trade_on_suspended_day",
+                    "file": os.path.basename(trade_file),
+                    "row": row,
+                })
+
             if pre_close:
-                info_row = cur.execute(
-                    "SELECT name, list_date FROM stock_basic WHERE ts_code = ?",
-                    (code,),
-                ).fetchone()
-                stock_name = info_row[0] if info_row else ""
-                list_date = info_row[1] if info_row else ""
+                stock_name, list_date = _get_stock_info(cur, code)
                 up_limit = resolve_limit_price(cur, code, trade_date, pre_close, "up", stock_name, list_date)
                 down_limit = resolve_limit_price(cur, code, trade_date, pre_close, "down", stock_name, list_date)
+
                 if up_limit is not None and down_limit is not None:
                     market_dict = {
                         "open": open_price,
@@ -137,6 +199,8 @@ def audit_ranking_dir(ranking_dir: str):
                         "low": low_price,
                         "close": close_price,
                     }
+
+                    # --- 检查 3: 一字涨停买入 / 一字跌停卖出 ---
                     if action == "BUY" and is_one_word_limit(market_dict, up_limit):
                         result["issues"].append({
                             "type": "buy_on_one_word_up_limit",
@@ -148,6 +212,19 @@ def audit_ranking_dir(ranking_dir: str):
                             "type": "sell_on_one_word_down_limit",
                             "file": os.path.basename(trade_file),
                             "row": row,
+                        })
+
+                    # --- 检查 8: 收盘价超出理论涨跌停价范围（数据异常） ---
+                    close_f = float(close_price)
+                    tolerance = max(0.01, abs(up_limit) * 0.002)
+                    if close_f > up_limit + tolerance or close_f < down_limit - tolerance:
+                        result["issues"].append({
+                            "type": "close_price_out_of_limit_range",
+                            "file": os.path.basename(trade_file),
+                            "row": row,
+                            "close": close_f,
+                            "up_limit": up_limit,
+                            "down_limit": down_limit,
                         })
 
     result["issue_count"] = len(result["issues"])
@@ -171,6 +248,7 @@ def scan_db_anomalies(sample_limit: int = 20):
             f"SELECT MIN({date_col}), MAX({date_col}), COUNT(*) FROM {table}"
         ).fetchone()
 
+    # 检查 4: 单日价格跳变 >30%
     price_gap_rows = cur.execute(
         """
         SELECT code, date, close, pre_close, pctChg
@@ -184,9 +262,49 @@ def scan_db_anomalies(sample_limit: int = 20):
         (sample_limit,),
     ).fetchall()
 
+    # 检查 7: 涨跌幅阈值分布统计（按板块）
+    limit_pct_distribution = {}
+    for label, prefix_cond in (
+        ("主板_10pct", "code NOT LIKE '300%' AND code NOT LIKE '301%' AND code NOT LIKE '688%' AND code NOT LIKE '689%' AND code NOT LIKE '%.BJ'"),
+        ("创业板_20pct", "code LIKE '300%' OR code LIKE '301%'"),
+        ("科创板_20pct", "code LIKE '688%' OR code LIKE '689%'"),
+    ):
+        row = cur.execute(
+            f"SELECT COUNT(*) FROM daily_kline WHERE ({prefix_cond}) AND pre_close > 0 AND ABS(close/pre_close - 1) > 0.105"
+        ).fetchone()
+        limit_pct_distribution[label + "_exceed_10pct"] = row[0] if row else 0
+
+    # 检查 8: 收盘价超出涨跌停价的全局扫描
+    close_out_of_range = cur.execute(
+        """
+        SELECT k.code, k.date, k.close, k.pre_close, sl.up_limit, sl.down_limit
+        FROM daily_kline k
+        JOIN stock_limit sl ON k.code = sl.ts_code AND REPLACE(k.date, '-', '') = REPLACE(sl.trade_date, '-', '')
+        WHERE sl.up_limit > 0 AND sl.down_limit > 0
+          AND (k.close > sl.up_limit * 1.002 OR k.close < sl.down_limit * 0.998)
+        LIMIT ?
+        """,
+        (sample_limit,),
+    ).fetchall()
+
+    # 停牌日有成交记录的异常
+    suspended_with_trades = cur.execute(
+        """
+        SELECT code, date, volume, close
+        FROM daily_kline
+        WHERE (volume IS NULL OR volume = 0)
+          AND (close IS NOT NULL AND close > 0)
+        LIMIT ?
+        """,
+        (sample_limit,),
+    ).fetchall()
+
     result = {
         "table_counts": table_counts,
         "price_gap_samples": price_gap_rows,
+        "limit_pct_distribution": limit_pct_distribution,
+        "close_out_of_range_samples": close_out_of_range,
+        "suspended_with_price_samples": suspended_with_trades,
     }
     conn.close()
     return result
