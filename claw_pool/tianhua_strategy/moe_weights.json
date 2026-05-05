@@ -1,0 +1,43 @@
+{
+  "_version": 2,
+  "_note": "针对突破后强势持续型股票优化，弱化量比依赖，强化动量和突破持续",
+  "seed": 300390,
+  "max_holdings": 3,
+  "hold_days_min": 5,
+  "industry_filter": ["电气设备", "新型电力"],
+  "name_keywords": ["锂", "电池", "储能", "天华", "裕能", "翔丰", "嘉元", "科达利", "欣旺达", "当升", "振华新材", "豪鹏", "光伏", "组件", "硅料", "逆变", "隆基", "通威", "晶科", "阳光电源", "风电", "风能", "金风", "明阳", "氢能", "燃料电池", "比亚迪", "宁德", "蔚来", "特高压", "电网", "国电"],
+  "expert_weights": {
+    "technical": 0.3,
+    "alpha": 0.5,
+    "fundamental": 0.1,
+    "behavior": 0.1
+  },
+  "signal_thresholds": {
+    "buy": 0.65,
+    "sell": 0.72,
+    "add": 0.85
+  },
+  "technical": {
+    "ma5": 0.3,
+    "ma10": 1.0,
+    "ma20": 2.0,
+    "rsi": 0.5,
+    "macd": 0.5,
+    "kdj": 0.3,
+    "boll": 0.5
+  },
+  "alpha": {
+    "momentum": 2.0,
+    "reversal": 0.5,
+    "volume": 2.0
+  },
+  "fundamental": {
+    "pe": 0.2,
+    "pb": 0.5,
+    "vol": 0.5
+  },
+  "behavior": {
+    "turnover": 0.3,
+    "block": 0.5
+  }
+}
